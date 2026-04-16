@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>微分方程方向场工具 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="微分方程">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="模拟">
+  <meta name="desc" content="dy/dx=f(x,y)的方向场可视化，点击设置初值画解曲线，理解ODE几何意义">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:crosshair;}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:10px;}
+    .fn-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .fn-btn{padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);transition:all .2s;text-align:center;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .btn-clear{padding:8px 16px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);align-self:flex-start;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 微分方程 · 认知动作：模拟</div>
+  <h1>微分方程方向场工具</h1>
+  <p class="sub">每个箭头 = 解曲线在该点的斜率——点击画布设置初值，看解曲线沿方向场流动</p>
+</header>
+<main>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="fn-row">
+      <button class="fn-btn active" onclick="setFn(0,this)">dy/dx = y</button>
+      <button class="fn-btn" onclick="setFn(1,this)">dy/dx = -x/y</button>
+      <button class="fn-btn" onclick="setFn(2,this)">dy/dx = x−y</button>
+      <button class="fn-btn" onclick="setFn(3,this)">dy/dx = sin(x)</button>
+      <button class="fn-btn" onclick="setFn(4,this)">dy/dx = y(1−y)</button>
+      <button class="fn-btn" onclick="setFn(5,this)">dy/dx = x²+y²</button>
+    </div>
+    <button class="btn-clear" onclick="clearPaths()">清除解曲线</button>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 方向场的"流"感只有动态绘制才能体验
+// PEDAGOGY V3 分步揭示: 先看方向场，点击后看解曲线跟随方向场
+// PEDAGOGY V5 操作先于符号: 先点击看曲线，再理解初值问题
+// PEDAGOGY V6 动作-数学一致: 点击位置=(x0,y0)=初始条件
+// PEDAGOGY V7 单一认知动作: 模拟（不同初值→不同解曲线）
+// PEDAGOGY V8 概念反馈: 揭示"解曲线处处与方向场切线吻合"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=400;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+const FNS=[
+  {label:'dy/dx = y',    fn:(x,y)=>y,       desc:'指数增长/衰减，y=Ce^x，初值决定常数C'},
+  {label:'dy/dx = -x/y', fn:(x,y)=>-x/y,    desc:'圆族x²+y²=C，解曲线为同心圆'},
+  {label:'dy/dx = x-y',  fn:(x,y)=>x-y,     desc:'有一条特殊直线解y=x-1，其他解趋近于它'},
+  {label:'dy/dx = sin(x)',fn:(x,y)=>Math.sin(x), desc:'y=C-cos(x)，一族竖直平移的余弦曲线'},
+  {label:'dy/dx = y(1-y)',fn:(x,y)=>y*(1-y),desc:'逻辑斯蒂增长，y=0和y=1为平衡解'},
+  {label:'dy/dx = x²+y²',fn:(x,y)=>x*x+y*y,desc:'Riccati方程，解曲线向右爆炸'},
+];
+
+let fnIdx=0;
+let paths=[]; // [[{x,y},...],...]
+const RANGE=4;
+const STEPS=20;
+const STEP_SIZE=0.05;
+const MAX_STEPS=200;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setFn(i,btn){
+  fnIdx=i;
+  paths=[];
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function clearPaths(){paths=[];draw();}
+
+function getXY(W,px,py){
+  const margin={left:44,right:20,top:16,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const x=(px-margin.left)/plotW*(2*RANGE)-RANGE;
+  const y=RANGE-(py-margin.top)/plotH*(2*RANGE);
+  return {x,y};
+}
+function xToP(x,W){
+  const margin={left:44,right:20,top:16,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  return margin.left+(x+RANGE)/(2*RANGE)*plotW;
+}
+function yToP(y){
+  const margin={left:44,right:20,top:16,bottom:36};
+  const plotH=H-margin.top-margin.bottom;
+  return margin.top+(RANGE-y)/(2*RANGE)*plotH;
+}
+
+function integrateRK4(x0,y0,fn,h,steps){
+  let pts=[{x:x0,y:y0}];
+  let x=x0,y=y0;
+  for(let i=0;i<steps;i++){
+    const k1=fn(x,y);
+    const k2=fn(x+h/2,y+h/2*k1);
+    const k3=fn(x+h/2,y+h/2*k2);
+    const k4=fn(x+h,y+h*k3);
+    y+=h*(k1+2*k2+2*k3+k4)/6;
+    x+=h;
+    if(Math.abs(y)>RANGE*3||!isFinite(y)) break;
+    pts.push({x,y});
+  }
+  return pts;
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const margin={left:44,right:20,top:16,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const fn=FNS[fnIdx].fn;
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let i=-RANGE;i<=RANGE;i++){
+    ctx.beginPath();ctx.moveTo(xToP(i,W),margin.top);ctx.lineTo(xToP(i,W),margin.top+plotH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(i));ctx.lineTo(margin.left+plotW,yToP(i));ctx.stroke();
+  }
+
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(0));ctx.lineTo(margin.left+plotW,yToP(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(0,W),margin.top);ctx.lineTo(xToP(0,W),margin.top+plotH);ctx.stroke();
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+  for(let i=-RANGE;i<=RANGE;i++){if(i!==0)ctx.fillText(String(i),xToP(i,W),yToP(0)+3);}
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let i=-RANGE;i<=RANGE;i++){if(i!==0)ctx.fillText(String(i),margin.left-3,yToP(i));}
+
+  // Direction field
+  const N=STEPS;
+  const dx=2*RANGE/N,dy=2*RANGE/N;
+  const arLen=Math.min(dx,dy)*0.38;
+  for(let i=0;i<=N;i++){
+    for(let j=0;j<=N;j++){
+      const x=-RANGE+i*dx,y=-RANGE+j*dy;
+      let slope;
+      try{slope=fn(x,y);}catch(e){continue;}
+      if(!isFinite(slope)||Math.abs(slope)>50) continue;
+      const angle=Math.atan(slope);
+      const px=xToP(x,W),py=yToP(y);
+      const ex=Math.cos(angle)*arLen*(plotW/(2*RANGE));
+      const ey=-Math.sin(angle)*arLen*(plotH/(2*RANGE));
+      // Color by slope magnitude
+      const mag=Math.min(Math.abs(slope)/3,1);
+      const alpha=0.4+mag*0.4;
+      ctx.strokeStyle=`rgba(42,92,143,${alpha})`;ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(px-ex/2,py-ey/2);ctx.lineTo(px+ex/2,py+ey/2);ctx.stroke();
+      // Arrowhead
+      ctx.fillStyle=`rgba(42,92,143,${alpha})`;
+      ctx.save();ctx.translate(px+ex/2,py+ey/2);ctx.rotate(angle+(ey<0?0:Math.PI));
+      ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-5,-3);ctx.lineTo(-5,3);ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Solution curves
+  const colors=[C.amberD,'#7b3f9e',C.teal,'#b84040','#0a7a8a','#5a7a2a'];
+  paths.forEach((path,pi)=>{
+    ctx.strokeStyle=colors[pi%colors.length];ctx.lineWidth=2.5;ctx.setLineDash([]);
+    ctx.beginPath();let first=true;
+    path.forEach(({x,y})=>{
+      if(Math.abs(y)>RANGE*2){first=true;return;}
+      const px=xToP(x,W),py=yToP(y);
+      first?(ctx.moveTo(px,py),first=false):ctx.lineTo(px,py);
+    });
+    ctx.stroke();
+    // Start dot
+    if(path.length>0){
+      const {x,y}=path[0];
+      ctx.fillStyle=colors[pi%colors.length];ctx.beginPath();ctx.arc(xToP(x,W),yToP(y),5,0,Math.PI*2);ctx.fill();
+    }
+  });
+
+  // Label
+  ctx.fillStyle=C.blue;ctx.font=`bold 13px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(FNS[fnIdx].label,margin.left+4,margin.top+4);
+
+  // PEDAGOGY V8
+  document.getElementById('fb').innerHTML=
+    `<strong>${FNS[fnIdx].label}</strong>：${FNS[fnIdx].desc}<br>` +
+    `<strong>方向场</strong>：每个箭头表示 dy/dx 在该点的值（解曲线在此点的切线方向）。<br>` +
+    `<strong>初值问题</strong>：点击画布选择初始点 (x₀, y₀)，RK4 数值积分画出过该点的解曲线。<br>` +
+    `不同初值 → 不同解曲线，但所有曲线都与方向场<strong>处处相切</strong>。已画 ${paths.length} 条曲线。`;
+}
+
+cvs.addEventListener('pointerdown',e=>{
+  const rect=cvs.getBoundingClientRect();
+  const px=e.clientX-rect.left;
+  const py=e.clientY-rect.top;
+  const W=rect.width;
+  const {x:x0,y:y0}=getXY(W,px,py);
+  if(Math.abs(x0)>RANGE||Math.abs(y0)>RANGE) return;
+  const fn=FNS[fnIdx].fn;
+  // Integrate forward and backward
+  const fwd=integrateRK4(x0,y0,fn,STEP_SIZE,MAX_STEPS);
+  const bwd=integrateRK4(x0,y0,fn,-STEP_SIZE,MAX_STEPS);
+  bwd.reverse();
+  const path=[...bwd,...fwd.slice(1)];
+  if(paths.length>=6) paths.shift();
+  paths.push(path);
+  draw();
+});
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

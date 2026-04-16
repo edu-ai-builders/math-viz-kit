@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>小数数轴放大镜 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="小数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="缩放">
+  <meta name="desc" content="用局部放大数轴理解小数的位置，感受0到1之间的结构">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;
+      --blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;
+      --teal:#0f6e56;--teal-light:#e1f5ee;
+      --amber:#854f0b;--amber-light:#faeeda;
+      --radius:12px;--radius-sm:8px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:700px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:700px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:crosshair;}
+    .value-display{background:var(--blue-light);border:2px solid var(--blue);border-radius:var(--radius);padding:12px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+    .val-big{font-size:36px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    .val-labels{display:flex;flex-direction:column;gap:2px;}
+    .val-label{font-size:12px;color:var(--ink2);}
+    .val-eq{font-size:15px;font-weight:600;color:var(--teal);}
+    .zoom-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;}
+    .zoom-title{font-size:13px;color:var(--ink2);margin-bottom:6px;}
+    .zoom-canvas{width:100%;height:80px;display:block;border-radius:var(--radius-sm);background:var(--bg);border:1px solid var(--border);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 小数 · 认知动作：缩放</div>
+  <h1>小数数轴放大镜</h1>
+  <p class="sub">点击数轴上任意位置，放大镜帮你看清小数在哪里</p>
+</header>
+<main>
+  <canvas id="cvs" height="140"></canvas>
+  <div class="value-display">
+    <div class="val-big" id="valBig">0.50</div>
+    <div class="val-labels">
+      <div class="val-label">当前位置</div>
+      <div class="val-eq" id="valEq">= 5个0.1 = 50个0.01</div>
+    </div>
+  </div>
+  <div class="zoom-panel">
+    <div class="zoom-title" id="zoomTitle">放大镜：0.4 ~ 0.6 之间的细节</div>
+    <canvas class="zoom-canvas" id="zoomCvs" height="80"></canvas>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：缩放
+// V1 动态跃迁：点击数轴 → 放大镜立即展开局部，静态图无法表达这种"钻进去"的感觉
+// V2 表征桥接：数值 + 数轴位置 + 放大区域三联动
+// V6 动作-数学一致：点越靠右=值越大
+// V7 单一认知动作：缩放（局部放大）
+// V8 概念反馈：揭示小数的"密度"——任意两个小数之间还有无数小数
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const zCvs=document.getElementById('zoomCvs');
+const zCtx=zCvs.getContext('2d');
+
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let selectedVal=0.5;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=140*dpr; ctx.scale(dpr,dpr); cvs.style.height='140px';
+  const zr=zCvs.getBoundingClientRect();
+  zCvs.width=zr.width*dpr; zCvs.height=80*dpr; zCtx.scale(dpr,dpr); zCvs.style.height='80px';
+}
+
+function valToX(val,W,margin,range){
+  return margin+(val-range[0])/(range[1]-range[0])*(W-2*margin);
+}
+function xToVal(x,W,margin,range){
+  return range[0]+(x-margin)/(W-2*margin)*(range[1]-range[0]);
+}
+
+function drawAxis(context,W,H,range,selected,showLabels,tickInterval,labelInterval,height){
+  const margin=24;
+  const y=height||H/2+10;
+
+  // Axis line
+  context.strokeStyle=C.ink2; context.lineWidth=2;
+  context.beginPath(); context.moveTo(margin,y); context.lineTo(W-margin,y); context.stroke();
+
+  // Ticks
+  const n=Math.round((range[1]-range[0])/tickInterval);
+  for(let i=0;i<=n;i++){
+    const v=range[0]+i*tickInterval;
+    const x=valToX(v,W,margin,range);
+    const isMajor=(i%(Math.round(labelInterval/tickInterval))===0);
+    context.strokeStyle=isMajor?C.ink:C.ink3; context.lineWidth=isMajor?1.5:1;
+    context.beginPath(); context.moveTo(x,y-(isMajor?10:5)); context.lineTo(x,y+(isMajor?10:5)); context.stroke();
+    if(isMajor&&showLabels){
+      context.fillStyle=C.ink2; context.font=`11px 'JetBrains Mono',monospace`; context.textAlign='center'; context.textBaseline='top';
+      context.fillText(v.toFixed(v===Math.round(v)?0:1),x,y+14);
+    }
+  }
+
+  // Highlight selected
+  if(selected!==null){
+    const sx=valToX(selected,W,margin,range);
+    context.fillStyle=C.blue;
+    context.beginPath(); context.arc(sx,y,7,0,Math.PI*2); context.fill();
+    context.fillStyle='#fff';
+    context.beginPath(); context.arc(sx,y,3,0,Math.PI*2); context.fill();
+    // Label above
+    context.fillStyle=C.blue; context.font=`bold 13px 'JetBrains Mono',monospace`; context.textAlign='center'; context.textBaseline='bottom';
+    context.fillText(selected.toFixed(2),sx,y-14);
+    // Drop line
+    context.strokeStyle=C.blue+'55'; context.lineWidth=1; context.setLineDash([3,3]);
+    context.beginPath(); context.moveTo(sx,y-11); context.lineTo(sx,y+11); context.stroke();
+    context.setLineDash([]);
+  }
+  return margin;
+}
+
+function drawZoomBracket(W,H,range,zoomRange){
+  const margin=24,y=H/2+10;
+  const x0=valToX(zoomRange[0],W,margin,range);
+  const x1=valToX(zoomRange[1],W,margin,range);
+  ctx.fillStyle=C.teal+'22';
+  ctx.fillRect(x0,y-18,x1-x0,36);
+  ctx.strokeStyle=C.teal; ctx.lineWidth=1.5;
+  ctx.strokeRect(x0,y-18,x1-x0,36);
+  // Bracket label
+  ctx.fillStyle=C.teal; ctx.font=`11px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('放大区域',(x0+x1)/2,y-20);
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=140;
+  ctx.clearRect(0,0,W,H);
+  // Title
+  ctx.fillStyle=C.ink2; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('点击数轴上任意位置',W/2,6);
+  // Main axis: 0 to 1
+  drawAxis(ctx,W,H,[0,1],selectedVal,true,0.1,0.1);
+  // Zoom bracket
+  const zHalf=0.2;
+  const zRange=[Math.max(0,selectedVal-zHalf),Math.min(1,selectedVal+zHalf)];
+  drawZoomBracket(W,H,[0,1],zRange);
+  drawZoom(zRange);
+}
+
+function drawZoom(zRange){
+  const W=zCvs.getBoundingClientRect().width, H=80;
+  zCtx.clearRect(0,0,W,H);
+  // Zoom axis showing 0.01 ticks
+  const span=zRange[1]-zRange[0];
+  const tickInterval=span>0.15?0.02:0.01;
+  drawAxis(zCtx,W,H,zRange,selectedVal,true,tickInterval,tickInterval*5,48);
+  // Connector lines (indicate this is zoomed region)
+  zCtx.strokeStyle=C.teal+'66'; zCtx.lineWidth=1; zCtx.setLineDash([3,3]);
+  zCtx.beginPath(); zCtx.moveTo(20,4); zCtx.lineTo(20,20); zCtx.stroke();
+  zCtx.beginPath(); zCtx.moveTo(W-20,4); zCtx.lineTo(W-20,20); zCtx.stroke();
+  zCtx.setLineDash([]);
+  document.getElementById('zoomTitle').textContent=`放大镜：${zRange[0].toFixed(2)} ~ ${zRange[1].toFixed(2)} 之间的细节`;
+}
+
+function updateDisplay(v){
+  selectedVal=Math.round(v*100)/100;
+  const tenths=Math.round(v*10);
+  const hundredths=Math.round(v*100);
+  document.getElementById('valBig').textContent=selectedVal.toFixed(2);
+  document.getElementById('valEq').textContent=`= ${tenths}个0.1 = ${hundredths}个0.01`;
+  // V8 feedback
+  const fb=document.getElementById('fb');
+  const t=Math.floor(v*10), h=Math.round(v*100)%10;
+  fb.innerHTML=`<strong>${selectedVal.toFixed(2)}</strong>：十分位是 <strong>${t}</strong>，百分位是 <strong>${h}</strong>。<br>`;
+  if(v<0.1) fb.innerHTML+=`非常接近0，比0.1还小。`;
+  else if(v<0.5) fb.innerHTML+=`在0和0.5之间，小于一半。`;
+  else if(v===0.5) fb.innerHTML+=`恰好是正中间，等于 1/2。`;
+  else if(v<1) fb.innerHTML+=`在0.5和1之间，大于一半。`;
+  fb.innerHTML+=`<br>放大镜里你看到，就算是 ${zoomSpan(v)} 这么小的区间，里面还有很多小数！`;
+  draw();
+}
+
+function zoomSpan(v){
+  const z0=Math.max(0,Math.round((v-0.2)*10)/10);
+  const z1=Math.min(1,Math.round((v+0.2)*10)/10);
+  return `${z0.toFixed(1)} ~ ${z1.toFixed(1)}`;
+}
+
+cvs.addEventListener('click',e=>{
+  const rect=cvs.getBoundingClientRect();
+  const x=e.clientX-rect.left;
+  const W=rect.width, margin=24;
+  const v=Math.max(0,Math.min(1,(x-margin)/(W-2*margin)));
+  updateDisplay(v);
+});
+cvs.addEventListener('pointermove',e=>{
+  if(e.buttons!==1)return;
+  const rect=cvs.getBoundingClientRect();
+  const x=e.clientX-rect.left;
+  const W=rect.width, margin=24;
+  const v=Math.max(0,Math.min(1,(x-margin)/(W-2*margin)));
+  updateDisplay(v);
+});
+
+window.addEventListener('resize',()=>{setup();draw();updateDisplay(selectedVal);});
+setup(); updateDisplay(0.5);
+</script>
+</body>
+</html>

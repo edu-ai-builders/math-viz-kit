@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>梯度与方向导数实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="多元微积分">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="等高线图上拖动点，梯度箭头实时更新，方向导数随角度变化的极坐标图">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:crosshair;}
+    .fn-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .fn-btn{padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);font-weight:700;transition:all .2s;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .ctrl-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--blue);margin-bottom:4px;}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 多元微积分 · 认知动作：变换</div>
+  <h1>梯度与方向导数实验室</h1>
+  <p class="sub">在等高线图上拖动点，梯度箭头指向最速上升方向；旋转方向向量，观察方向导数的变化</p>
+</header>
+<main>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn(0,this)">x²+y²（圆形）</button>
+    <button class="fn-btn" onclick="setFn(1,this)">x²-y²（马鞍）</button>
+    <button class="fn-btn" onclick="setFn(2,this)">sin(x)cos(y)</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="ctrl-box">
+    <div class="ctrl-label">方向角 θ（方向导数的方向）</div>
+    <div class="ctrl-val" id="thetaVal">θ = 0°</div>
+    <input type="range" id="thetaSlider" min="0" max="360" step="2" value="0" oninput="update()">
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 梯度箭头垂直于等高线只有动态才能感受
+// PEDAGOGY V2 表征桥接: 等高线图 + 梯度箭头 + 方向导数数值三联动
+// PEDAGOGY V6 动作-数学一致: 拖动点 = 换位置，旋转滑杆 = 改变方向
+// PEDAGOGY V7 单一认知动作: 变换（改变点或方向 → 观察梯度/方向导数变化）
+// PEDAGOGY V8 概念反馈: "梯度方向=方向导数最大的方向，大小=最大变化率"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 360;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+const FNS = [
+  {
+    label:'f(x,y) = x²+y²',
+    f: (x,y) => x*x+y*y,
+    gx: (x,y) => 2*x,
+    gy: (x,y) => 2*y,
+    domain: 2,
+  },
+  {
+    label:'f(x,y) = x²−y²',
+    f: (x,y) => x*x-y*y,
+    gx: (x,y) => 2*x,
+    gy: (x,y) => -2*y,
+    domain: 2,
+  },
+  {
+    label:'f(x,y) = sin(x)·cos(y)',
+    f: (x,y) => Math.sin(x)*Math.cos(y),
+    gx: (x,y) => Math.cos(x)*Math.cos(y),
+    gy: (x,y) => -Math.sin(x)*Math.sin(y),
+    domain: Math.PI,
+  },
+];
+
+let fnIdx = 0;
+let px = 0.8, py = 0.6; // Current point in math coords
+let dragging = false;
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setFn(i, btn) {
+  fnIdx = i;
+  document.querySelectorAll('.fn-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  px = FNS[i].domain * 0.4; py = FNS[i].domain * 0.3;
+  update();
+}
+
+function update() {
+  draw();
+  updateFeedback();
+}
+
+function mathToCanvas(mx, my, W) {
+  const d = FNS[fnIdx].domain;
+  const pad = 20;
+  const cw = W - 2*pad, ch = H - 2*pad;
+  return [pad + (mx/d*0.5+0.5)*cw, pad + (0.5-my/d*0.5)*ch];
+}
+
+function canvasToMath(cx, cy, W) {
+  const d = FNS[fnIdx].domain;
+  const pad = 20;
+  const cw = W - 2*pad, ch = H - 2*pad;
+  const mx = ((cx-pad)/cw - 0.5) * 2 * d;
+  const my = (0.5 - (cy-pad)/ch) * 2 * d;
+  return [mx, my];
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+  const fn = FNS[fnIdx];
+  const d = fn.domain;
+  const theta = parseFloat(document.getElementById('thetaSlider').value) * Math.PI / 180;
+
+  // Compute function range for color mapping
+  const N = 80;
+  const fVals = [];
+  for (let i=0; i<N; i++) for (let j=0; j<N; j++) {
+    const x = -d + i/N*2*d, y = -d + j/N*2*d;
+    fVals.push(fn.f(x, y));
+  }
+  const fMin = Math.min(...fVals), fMax = Math.max(...fVals);
+
+  // Draw heatmap
+  const pad = 20;
+  const cw = W - 2*pad, ch = H - 2*pad;
+  const cellW = cw/N, cellH = ch/N;
+  for (let i=0; i<N; i++) {
+    for (let j=0; j<N; j++) {
+      const x = -d + i/N*2*d, y = d - j/N*2*d;
+      const f = fn.f(x, y);
+      const t = (f - fMin) / (fMax - fMin);
+      // Blue-white-amber color
+      let r_, g_, b_;
+      if (t < 0.5) {
+        const s = t*2;
+        r_ = Math.round(42 + s*(255-42));
+        g_ = Math.round(92 + s*(250-92));
+        b_ = Math.round(143 + s*(250-143));
+      } else {
+        const s = (t-0.5)*2;
+        r_ = Math.round(255 + s*(133-255));
+        g_ = Math.round(250 + s*(88-250));
+        b_ = Math.round(250 + s*(11-250));
+      }
+      ctx.fillStyle = `rgb(${r_},${g_},${b_})`;
+      ctx.fillRect(pad + i*cellW, pad + j*cellH, cellW+1, cellH+1);
+    }
+  }
+
+  // Contour lines (approximate)
+  const nContours = 8;
+  for (let ci=1; ci<nContours; ci++) {
+    const fVal = fMin + ci/nContours*(fMax-fMin);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1;
+    // Simple scanline approach
+    for (let i=0; i<N-1; i++) {
+      for (let j=0; j<N-1; j++) {
+        const x0 = -d+i/N*2*d, y0 = d-j/N*2*d;
+        const x1 = -d+(i+1)/N*2*d;
+        const y1 = d-(j+1)/N*2*d;
+        const v00 = fn.f(x0,y0), v10 = fn.f(x1,y0), v01 = fn.f(x0,y1);
+        const cross = (v00-fVal)*(v10-fVal)<0 || (v00-fVal)*(v01-fVal)<0;
+        if (cross) {
+          const px1 = pad+(i+0.5)*cellW, py1 = pad+(j+0.5)*cellH;
+          ctx.beginPath(); ctx.arc(px1, py1, 0.6, 0, Math.PI*2); ctx.fill();
+        }
+      }
+    }
+  }
+
+  // Current point
+  const [ppx, ppy] = mathToCanvas(px, py, W);
+  const gx_ = fn.gx(px, py), gy_ = fn.gy(px, py);
+  const gradMag = Math.sqrt(gx_*gx_ + gy_*gy_);
+
+  // Draw gradient arrow (perpendicular to contours, towards higher f)
+  const scale = Math.min(cw, ch) * 0.12 / (gradMag + 1e-9);
+  const arrowLen = Math.min(gradMag * scale, cw*0.15);
+  const gdx = gx_/gradMag, gdy = gy_/gradMag;
+  // In canvas coords: x increases right, y increases DOWN, so math y = canvas -y
+  const arrEndX = ppx + gdx * arrowLen;
+  const arrEndY = ppy - gdy * arrowLen; // flip y for canvas
+
+  drawArrow(ppx, ppy, arrEndX, arrEndY, C.amber, 3);
+
+  // Direction vector arrow
+  const du = Math.cos(theta), dv = Math.sin(theta);
+  const dirEndX = ppx + du * arrowLen * 0.8;
+  const dirEndY = ppy - dv * arrowLen * 0.8;
+  drawArrow(ppx, ppy, dirEndX, dirEndY, C.teal, 2.5);
+
+  // Point
+  ctx.fillStyle = C.ink;
+  ctx.beginPath(); ctx.arc(ppx, ppy, 7, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(ppx, ppy, 5, 0, Math.PI*2); ctx.fill();
+
+  // Labels
+  ctx.fillStyle = C.amber; ctx.font = `bold 11px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText(`∇f（梯度）`, arrEndX+4, arrEndY);
+  ctx.fillStyle = C.teal;
+  ctx.fillText(`方向θ=${parseFloat(document.getElementById('thetaSlider').value).toFixed(0)}°`, dirEndX+4, dirEndY);
+
+  // f value annotation
+  const fCur = fn.f(px, py);
+  ctx.fillStyle = C.ink; ctx.font = `bold 12px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`f(${px.toFixed(2)},${py.toFixed(2)}) = ${fCur.toFixed(3)}`, pad+4, 4);
+
+  // |∇f|
+  ctx.fillStyle = C.amber; ctx.font = `11px 'JetBrains Mono',monospace`;
+  ctx.fillText(`|∇f| = (${gx_.toFixed(2)}, ${gy_.toFixed(2)}) = ${gradMag.toFixed(3)}`, pad+4, 18);
+
+  document.getElementById('thetaVal').textContent = `θ = ${parseFloat(document.getElementById('thetaSlider').value).toFixed(0)}°`;
+}
+
+function drawArrow(x1, y1, x2, y2, color, lw) {
+  const dx = x2-x1, dy = y2-y1;
+  const len = Math.sqrt(dx*dx+dy*dy);
+  if (len < 2) return;
+  const ax = dx/len, ay = dy/len;
+  ctx.strokeStyle = color; ctx.lineWidth = lw;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  // Arrowhead
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - ax*10 + ay*5, y2 - ay*10 - ax*5);
+  ctx.lineTo(x2 - ax*10 - ay*5, y2 - ay*10 + ax*5);
+  ctx.closePath(); ctx.fill();
+}
+
+function updateFeedback() {
+  const fn = FNS[fnIdx];
+  const theta = parseFloat(document.getElementById('thetaSlider').value) * Math.PI / 180;
+  const gx_ = fn.gx(px, py), gy_ = fn.gy(px, py);
+  const gradMag = Math.sqrt(gx_*gx_ + gy_*gy_);
+  const du = Math.cos(theta), dv = Math.sin(theta);
+  const dirDeriv = gx_*du + gy_*dv; // directional derivative
+  const cos_angle = gradMag > 0 ? (gx_*du + gy_*dv)/(gradMag) : 0;
+  const angle = Math.acos(Math.min(1, Math.max(-1, cos_angle))) * 180 / Math.PI;
+
+  document.getElementById('fb').innerHTML =
+    `<strong>梯度 ∇f = (∂f/∂x, ∂f/∂y) = (${gx_.toFixed(3)}, ${gy_.toFixed(3)})</strong>，|∇f| = ${gradMag.toFixed(3)}<br>` +
+    `方向 (cos${theta.toFixed(2)}, sin${theta.toFixed(2)}) = (${du.toFixed(3)}, ${dv.toFixed(3)}) 时，<strong>方向导数 = ${dirDeriv.toFixed(4)}</strong><br>` +
+    `方向与梯度的夹角 = ${angle.toFixed(1)}°，方向导数 = |∇f|·cos(θ) = ${gradMag.toFixed(3)}×${cos_angle.toFixed(3)} = ${dirDeriv.toFixed(4)}<br>` +
+    `<strong>关键结论</strong>：① 梯度方向 = 函数增长最快的方向；② 沿梯度方向，方向导数取最大值 |∇f|；③ 梯度垂直于等高线（等高线上 f 不变，梯度方向 f 增长最快）。`;
+}
+
+// Drag
+cvs.addEventListener('pointerdown', e => { dragging = true; cvs.setPointerCapture(e.pointerId); handleDrag(e); });
+cvs.addEventListener('pointermove', e => { if (dragging) handleDrag(e); });
+cvs.addEventListener('pointerup', () => { dragging = false; });
+cvs.addEventListener('click', e => { handleDrag(e); });
+
+function handleDrag(e) {
+  const rect = cvs.getBoundingClientRect();
+  const [mx, my] = canvasToMath(e.clientX-rect.left, e.clientY-rect.top, rect.width);
+  const d = FNS[fnIdx].domain;
+  px = Math.max(-d*0.9, Math.min(d*0.9, mx));
+  py = Math.max(-d*0.9, Math.min(d*0.9, my));
+  update();
+}
+
+window.addEventListener('resize', () => { setup(); update(); });
+setup(); update();
+</script>
+</body>
+</html>

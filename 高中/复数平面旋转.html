@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>复数平面与旋转 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="复数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="拖动复数点，实时显示模和辐角，演示复数乘法=旋转+缩放的几何含义">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:default;}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .mode-row{display:flex;gap:6px;}
+    .mode-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 复数 · 认知动作：变换</div>
+  <h1>复数平面与旋转</h1>
+  <p class="sub">拖动复数 z，看乘以 i 如何旋转90°——复数乘法的几何本质</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('basic',this)">基本表示</button>
+    <button class="mode-btn" onclick="setMode('mult',this)">乘以 i（旋转90°）</button>
+    <button class="mode-btn" onclick="setMode('power',this)">De Moivre定理</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">实部 Re(z)</div><div class="stat-val" id="reVal" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">虚部 Im(z)</div><div class="stat-val" id="imVal" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">模 |z|</div><div class="stat-val" id="modVal" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">辐角 arg(z)</div><div class="stat-val" id="argVal" style="color:var(--ink2)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">实部 a</div>
+      <div class="sl-val" id="aLabel">2</div>
+      <input type="range" id="aSl" min="-4" max="4" step="0.5" value="2">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">虚部 b</div>
+      <div class="sl-val" id="bLabel" style="color:var(--teal)">1</div>
+      <input type="range" id="bSl" min="-4" max="4" step="0.5" value="1">
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 复数乘法=旋转这个几何事实只有动态才能感受
+// PEDAGOGY V2 表征桥接: 代数(a+bi) ↔ 几何(向量) ↔ 极坐标(r·e^iθ)
+// PEDAGOGY V6 动作-数学一致: 拖a=水平移动，拖b=垂直移动
+// PEDAGOGY V7 单一认知动作: 变换（复数乘法的旋转效果）
+// PEDAGOGY V8 概念反馈: 揭示"乘以i=逆时针旋转90°"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=380;
+const SCALE=60;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberL:'#faeeda',purple:'#7b3f9e',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+let mode='basic';
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setMode(m,btn){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function drawArrow(x1,y1,x2,y2,color,w,label){
+  const angle=Math.atan2(y2-y1,x2-x1);
+  const len=Math.hypot(x2-x1,y2-y1);
+  if(len<4) return;
+  const head=14;
+  ctx.strokeStyle=color;ctx.lineWidth=w;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.fillStyle=color;
+  ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-head*Math.cos(angle-0.4),y2-head*Math.sin(angle-0.4));ctx.lineTo(x2-head*Math.cos(angle+0.4),y2-head*Math.sin(angle+0.4));ctx.fill();
+  if(label){
+    ctx.fillStyle=color;ctx.font=`bold 13px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(label,(x1+x2)/2+18*Math.cos(angle+Math.PI/2),(y1+y2)/2+18*Math.sin(angle+Math.PI/2));
+  }
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const a=parseFloat(document.getElementById('aSl').value);
+  const b=parseFloat(document.getElementById('bSl').value);
+  const cx=W/2,cy=H/2;
+  const toPx=(re,im)=>({x:cx+re*SCALE,y:cy-im*SCALE});
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let i=-6;i<=6;i++){
+    ctx.beginPath();ctx.moveTo(cx+i*SCALE,0);ctx.lineTo(cx+i*SCALE,H);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,cy+i*SCALE);ctx.lineTo(W,cy+i*SCALE);ctx.stroke();
+  }
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();
+  ctx.fillStyle=C.ink2;ctx.font=`bold 12px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText('实轴(Re)',W-30,cy+4);
+  ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText('虚轴(Im)',cx+4,12);
+  // Unit circle
+  ctx.strokeStyle=C.border;ctx.lineWidth=1;ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.arc(cx,cy,SCALE,0,Math.PI*2);ctx.stroke();
+  ctx.setLineDash([]);
+
+  const z={re:a,im:b};
+  const mod=Math.hypot(a,b);
+  const arg=Math.atan2(b,a)*180/Math.PI;
+  const P=toPx(a,b);
+
+  if(mode==='basic'){
+    // Projection dashed lines
+    const O=toPx(0,0);
+    ctx.strokeStyle=C.blue+'66';ctx.lineWidth=1.2;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(P.x,P.y);ctx.lineTo(P.x,cy);ctx.stroke(); // to Re axis
+    ctx.beginPath();ctx.moveTo(P.x,P.y);ctx.lineTo(cx,P.y);ctx.stroke(); // to Im axis
+    ctx.setLineDash([]);
+    // Labels
+    ctx.fillStyle=C.blue;ctx.font=`12px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(`a=${a.toFixed(1)}`,P.x,cy+4);
+    ctx.fillStyle=C.teal;ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillText(`b=${b.toFixed(1)}`,cx+4,P.y);
+    // Angle arc
+    if(mod>0.5){
+      const arcAngle=Math.atan2(-b,a); // canvas y-down
+      ctx.fillStyle=C.amber+'33';
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,SCALE*0.4,0,arcAngle,b<0);ctx.closePath();ctx.fill();
+      ctx.strokeStyle=C.amber;ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.arc(cx,cy,SCALE*0.4,0,arcAngle,b<0);ctx.stroke();
+      ctx.fillStyle=C.amber;ctx.font=`12px 'Noto Sans SC',sans-serif`;ctx.textAlign='left';ctx.textBaseline='bottom';
+      ctx.fillText(`${arg.toFixed(1)}°`,cx+SCALE*0.45+2,cy-10);
+    }
+    drawArrow(cx,cy,P.x,P.y,C.blue,3,`z=${a>0?a.toFixed(1):''}${b>0?'+'+b.toFixed(1)+'i':b<0?b.toFixed(1)+'i':''}${a===0&&b===0?'0':''}`);
+
+  } else if(mode==='mult'){
+    // z, iz, -z, -iz (4 rotations)
+    const rotations=[
+      {re:a,im:b,label:'z',color:C.blue,desc:'原始复数'},
+      {re:-b,im:a,label:'iz',color:C.teal,desc:'乘以i（旋转90°）'},
+      {re:-a,im:-b,label:'-z',color:C.amber,desc:'乘以i²=-1（旋转180°）'},
+      {re:b,im:-a,label:'-iz',color:C.purple||'#7b3f9e',desc:'乘以i³（旋转270°）'}
+    ];
+    // Draw rotation arc
+    ctx.strokeStyle=C.ink3+'55';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.arc(cx,cy,mod*SCALE,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+    rotations.forEach(({re,im,label,color})=>{
+      const Pt=toPx(re,im);
+      drawArrow(cx,cy,Pt.x,Pt.y,color,2.5,label);
+      ctx.fillStyle=color;ctx.beginPath();ctx.arc(Pt.x,Pt.y,6,0,Math.PI*2);ctx.fill();
+    });
+
+  } else { // De Moivre
+    // z^n for n=0,1,2,3,4
+    if(mod>0){
+      const argRad=Math.atan2(b,a);
+      const pts=[];
+      for(let n=0;n<=5;n++){
+        const rn=Math.pow(mod,n);
+        const angN=argRad*n;
+        pts.push({re:rn*Math.cos(angN),im:rn*Math.sin(angN),n});
+      }
+      // Draw spiral path
+      ctx.strokeStyle=C.ink3+'44';ctx.lineWidth=1.5;ctx.setLineDash([]);
+      ctx.beginPath();
+      pts.forEach((p,i)=>{
+        const Pt=toPx(p.re,p.im);
+        if(!isFinite(Pt.x)||!isFinite(Pt.y)) return;
+        i===0?ctx.moveTo(Pt.x,Pt.y):ctx.lineTo(Pt.x,Pt.y);
+      });
+      ctx.stroke();
+      const colors=[C.blue,C.teal,C.amber,C.purple||'#7b3f9e','#c33','#0aa'];
+      pts.forEach((p,i)=>{
+        const Pt=toPx(p.re,p.im);
+        if(!isFinite(Pt.x)||!isFinite(Pt.y)) return;
+        ctx.fillStyle=colors[i];ctx.beginPath();ctx.arc(Pt.x,Pt.y,7,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#fff';ctx.font=`bold 10px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(`z^${i}`,Pt.x,Pt.y);
+      });
+    }
+  }
+
+  // Dot at z
+  ctx.fillStyle=C.surf;ctx.strokeStyle=C.blue;ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.arc(P.x,P.y,8,0,Math.PI*2);ctx.fill();ctx.stroke();
+
+  // Update stats
+  document.getElementById('reVal').textContent=a.toFixed(2);
+  document.getElementById('imVal').textContent=b.toFixed(2);
+  document.getElementById('modVal').textContent=mod.toFixed(3);
+  document.getElementById('argVal').textContent=arg.toFixed(1)+'°';
+  document.getElementById('aLabel').textContent=a.toFixed(1);
+  document.getElementById('bLabel').textContent=b.toFixed(1);
+
+  // PEDAGOGY V8
+  const euler=`${mod.toFixed(2)}·e^(i·${arg.toFixed(1)}°)`;
+  const msgs={
+    basic:`z = ${a}+${b}i = ${euler}。模 |z| = √(${a}²+${b}²) = ${mod.toFixed(3)}，辐角 arg(z) = arctan(${b}/${a}) = ${arg.toFixed(1)}°。<br>复数平面（高斯平面）：横轴=实部，纵轴=虚部。<strong>每个复数对应平面上唯一一个点/向量。</strong>`,
+    mult:`乘以 i：z × i = (${a}+${b}i)×i = ${-b}+${a}i。几何意义：<strong>逆时针旋转90°，模不变。</strong><br>乘以 i² = -1：旋转180°（取反）。i 本质上是一个"旋转90°"的算子。`,
+    power:`De Moivre定理：z^n = r^n · e^(inθ)。n次幂=模取n次方，辐角乘以n。<br>z^${2}=${(mod*mod).toFixed(2)}·e^(i·${(arg*2).toFixed(0)}°) = ${(mod*mod*Math.cos(Math.atan2(b,a)*2)).toFixed(2)}+${(mod*mod*Math.sin(Math.atan2(b,a)*2)).toFixed(2)}i。`
+  };
+  document.getElementById('fb').innerHTML=msgs[mode];
+}
+
+['aSl','bSl'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

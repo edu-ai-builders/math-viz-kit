@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>合并同类项归类器 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="代数式">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="分解">
+  <meta name="desc" content="拖动代数项卡片到对应类别，同类项自动合并并显示结果，理解合并同类项的本质">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--red:#b84040;--red-light:#fff0f0;--purple:#7b3f9e;--purple-light:#f3e8ff;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:680px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:680px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .expr-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+    .expr-title{font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:8px;}
+    .expr-display{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--blue);background:var(--blue-light);border-radius:var(--radius-sm);padding:10px;text-align:center;}
+    .terms-pool{display:flex;gap:8px;flex-wrap:wrap;padding:12px 0;}
+    .term-card{padding:8px 16px;border-radius:var(--radius-sm);font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;cursor:grab;user-select:none;border:2px solid transparent;transition:box-shadow .15s;display:inline-block;}
+    .term-card.dragging{opacity:0.5;cursor:grabbing;}
+    .buckets{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
+    .bucket{border:2px dashed var(--border);border-radius:var(--radius-sm);padding:10px;min-height:80px;transition:background .15s;}
+    .bucket.over{background:var(--teal-light);border-color:var(--teal);}
+    .bucket-label{font-size:12px;font-weight:700;color:var(--ink2);margin-bottom:6px;}
+    .bucket-terms{display:flex;gap:4px;flex-wrap:wrap;}
+    .bucket-result{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;margin-top:6px;padding-top:6px;border-top:1px solid var(--border);}
+    .result-box{background:var(--teal-light);border:2px solid var(--teal);border-radius:var(--radius-sm);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--teal);text-align:center;}
+    .btn-row{display:flex;gap:8px;}
+    .btn{padding:9px 20px;border-radius:var(--radius-sm);font-size:14px;font-family:'Noto Sans SC',sans-serif;font-weight:700;cursor:pointer;border:none;}
+    .btn-reset{background:var(--surface);border:2px solid var(--border);color:var(--ink2);}
+    .btn-new{background:var(--blue);color:#fff;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 代数式 · 认知动作：分解</div>
+  <h1>合并同类项归类器</h1>
+  <p class="sub">把代数项拖入对应类别，自动计算合并结果</p>
+</header>
+<main>
+  <div class="expr-box">
+    <div class="expr-title">待化简的表达式：</div>
+    <div class="expr-display" id="exprDisplay"></div>
+    <div class="terms-pool" id="termsPool"></div>
+  </div>
+  <div class="expr-box">
+    <div class="expr-title">第二步：把同类项拖到同一个框里</div>
+    <div class="buckets" id="buckets"></div>
+  </div>
+  <div class="result-box" id="resultBox">将所有项归类后，结果将自动出现</div>
+  <div class="btn-row">
+    <button class="btn btn-reset" onclick="reset()">重新归类</button>
+    <button class="btn btn-new" onclick="newExpr()">换题目</button>
+  </div>
+  <div class="fb" id="fb">同类项：<strong>含有相同字母且字母的指数相同</strong>的项，可以合并（系数相加）。常数项也是同类。</div>
+</main>
+<script>
+// PEDAGOGY V5 操作先于符号: 先拖拽归类，再看合并结果
+// PEDAGOGY V6 动作—数学一致: 拖入同一格=归为同类
+// PEDAGOGY V8 概念反馈: "这两项含相同字母x²，所以是同类项，系数相加"
+
+const EXPR_SETS = [
+  {
+    expr:'3x + 2y - x + 5y + 4',
+    terms:[
+      {text:'3x',type:'x',coeff:3},{text:'-x',type:'x',coeff:-1},
+      {text:'2y',type:'y',coeff:2},{text:'5y',type:'y',coeff:5},
+      {text:'4',type:'const',coeff:4}
+    ]
+  },
+  {
+    expr:'2x² + 3x - x² + 4x - 1',
+    terms:[
+      {text:'2x²',type:'x²',coeff:2},{text:'-x²',type:'x²',coeff:-1},
+      {text:'3x',type:'x',coeff:3},{text:'4x',type:'x',coeff:4},
+      {text:'-1',type:'const',coeff:-1}
+    ]
+  },
+  {
+    expr:'4ab - 2a + 3ab + 5a - ab',
+    terms:[
+      {text:'4ab',type:'ab',coeff:4},{text:'3ab',type:'ab',coeff:3},{text:'-ab',type:'ab',coeff:-1},
+      {text:'-2a',type:'a',coeff:-2},{text:'5a',type:'a',coeff:5}
+    ]
+  },
+  {
+    expr:'x² + 2xy - 3x² + xy + 7',
+    terms:[
+      {text:'x²',type:'x²',coeff:1},{text:'-3x²',type:'x²',coeff:-3},
+      {text:'2xy',type:'xy',coeff:2},{text:'xy',type:'xy',coeff:1},
+      {text:'7',type:'const',coeff:7}
+    ]
+  }
+];
+
+const TYPE_COLORS = {
+  'x':'#c06000','x²':'#1a5cb5','y':'#0a7a50','const':'#7b3f9e',
+  'xy':'#854f0b','ab':'#b84040','a':'#0f6e56'
+};
+const TYPE_BG = {
+  'x':'#fff0d0','x²':'#e0ecff','y':'#d0f0e0','const':'#f3e8ff',
+  'xy':'#faeeda','ab':'#fff0f0','a':'#e1f5ee'
+};
+
+let exprIdx = 0;
+let buckets = {}; // type -> [terms]
+let types = [];
+let dragItem = null;
+let dragOrigin = null; // 'pool' or bucket type
+
+function newExpr() {
+  exprIdx = (exprIdx+1)%EXPR_SETS.length;
+  reset();
+}
+
+function reset() {
+  const ex = EXPR_SETS[exprIdx];
+  types = [...new Set(ex.terms.map(t=>t.type))];
+  buckets = {};
+  types.forEach(t=>buckets[t]=[]);
+  document.getElementById('exprDisplay').textContent = ex.expr;
+  document.getElementById('resultBox').textContent = '将所有项归类后，结果将自动出现';
+  document.getElementById('resultBox').style.background='var(--teal-light)';
+  renderPool();
+  renderBuckets();
+}
+
+function renderPool() {
+  const ex = EXPR_SETS[exprIdx];
+  const placed = Object.values(buckets).flat().map(t=>t.text);
+  const remaining = ex.terms.filter(t=>!placed.includes(t.text));
+  const pool = document.getElementById('termsPool');
+  pool.innerHTML = remaining.map(t=>`
+    <div class="term-card" draggable="true"
+      style="background:${TYPE_BG[t.type]||'#f0f0f0'};border-color:${TYPE_COLORS[t.type]||'#888'}"
+      data-term="${encodeURIComponent(JSON.stringify(t))}"
+      data-origin="pool">
+      ${t.text}
+    </div>
+  `).join('');
+  pool.querySelectorAll('.term-card').forEach(card=>{
+    card.addEventListener('dragstart', onDragStart);
+  });
+}
+
+function renderBuckets() {
+  const bDiv = document.getElementById('buckets');
+  bDiv.innerHTML = types.map(type=>{
+    const items = buckets[type]||[];
+    const sum = items.reduce((s,t)=>s+t.coeff,0);
+    const resultStr = items.length===0?'（空）': sum===0?'0':
+      (sum===1?'':(sum===-1?'-':sum))+type.replace('const','');
+    return `
+      <div class="bucket" id="bucket_${type}" ondragover="e=>{e.preventDefault();document.getElementById('bucket_${type}').classList.add('over')}"
+        ondragleave="document.getElementById('bucket_${type}').classList.remove('over')"
+        ondrop="onDrop(event,'${type}')">
+        <div class="bucket-label">${type==='const'?'常数项':type+' 类'}</div>
+        <div class="bucket-terms">
+          ${items.map(t=>`<div class="term-card" draggable="true"
+            style="background:${TYPE_BG[t.type]||'#f0f0f0'};border-color:${TYPE_COLORS[t.type]||'#888'}"
+            data-term="${encodeURIComponent(JSON.stringify(t))}" data-origin="${type}">
+            ${t.text}</div>`).join('')}
+        </div>
+        ${items.length>0?`<div class="bucket-result" style="color:${TYPE_COLORS[type]||'#333'}">= ${resultStr}</div>`:''}
+      </div>`;
+  }).join('');
+  bDiv.querySelectorAll('.term-card').forEach(card=>{
+    card.addEventListener('dragstart', onDragStart);
+  });
+  checkResult();
+}
+
+function onDragStart(e) {
+  dragItem = JSON.parse(decodeURIComponent(e.target.dataset.term));
+  dragOrigin = e.target.dataset.origin;
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+}
+
+function onDrop(e, toType) {
+  e.preventDefault();
+  document.getElementById('bucket_'+toType).classList.remove('over');
+  if(!dragItem) return;
+  // Remove from origin
+  if(dragOrigin !== 'pool') {
+    buckets[dragOrigin] = (buckets[dragOrigin]||[]).filter(t=>t.text!==dragItem.text);
+  }
+  // Add to destination (check if right type)
+  if(!buckets[toType]) buckets[toType]=[];
+  if(!buckets[toType].find(t=>t.text===dragItem.text)){
+    buckets[toType].push(dragItem);
+    if(dragItem.type !== toType) {
+      document.getElementById('fb').innerHTML=`<strong>注意：</strong>"${dragItem.text}" 是 ${dragItem.type==='const'?'常数项':dragItem.type+'类'}，不是 ${toType==='const'?'常数项':toType+'类'}！应该放到正确的格子里。`;
+    }
+  }
+  dragItem = null;
+  renderPool();
+  renderBuckets();
+}
+
+function checkResult() {
+  const ex = EXPR_SETS[exprIdx];
+  const totalPlaced = Object.values(buckets).flat().length;
+  if(totalPlaced < ex.terms.length) return;
+  // All placed - compute result
+  const parts = types.map(type=>{
+    const items = buckets[type]||[];
+    const sum = items.reduce((s,t)=>s+t.coeff,0);
+    if(sum===0) return null;
+    const varStr = type==='const'?'':type;
+    return (sum===1&&varStr)?varStr:(sum===-1&&varStr)?'-'+varStr:sum+varStr;
+  }).filter(Boolean);
+  const result = parts.join(' + ').replace(/\+ -/g,'- ')||'0';
+  const box = document.getElementById('resultBox');
+  box.textContent = '化简结果：' + result;
+  box.style.background='var(--teal-light)';
+  document.getElementById('fb').innerHTML=`<strong>化简完成！</strong>${ex.expr} = <strong>${result}</strong><br>合并同类项就是：相同字母（及次数）的项，把系数加起来，字母部分不变。`;
+}
+
+window.addEventListener('dragend',()=>{
+  document.querySelectorAll('.term-card').forEach(c=>c.classList.remove('dragging'));
+});
+
+reset();
+</script>
+</body>
+</html>

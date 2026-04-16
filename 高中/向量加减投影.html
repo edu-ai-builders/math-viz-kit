@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>向量加减与投影 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="向量">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="投影">
+  <meta name="desc" content="拖拽箭头做向量加减，实时显示投影与分量，理解向量的几何与代数统一">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=dump" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:default;}
+    .mode-row{display:flex;gap:6px;}
+    .mode-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);color:var(--ink2);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 向量 · 认知动作：投影</div>
+  <h1>向量加减与投影</h1>
+  <p class="sub">拖动箭头端点，实时看向量加法（平行四边形法则）和在轴上的投影分量</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('add',this)">向量加法 a+b</button>
+    <button class="mode-btn" onclick="setMode('sub',this)">向量减法 a-b</button>
+    <button class="mode-btn" onclick="setMode('proj',this)">投影分量</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">向量 a</div><div class="stat-val" id="aInfo" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">向量 b</div><div class="stat-val" id="bInfo" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl" id="resultLbl">a+b</div><div class="stat-val" id="resultInfo" style="color:var(--teal)">—</div></div>
+  </div>
+  <div class="fb" id="fb">拖动蓝色(a)或橙色(b)箭头的端点来改变向量方向和大小。</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 向量加法平行四边形只有动态拖动才能理解
+// PEDAGOGY V5 操作先于符号: 先拖拽看图形，再理解坐标公式
+// PEDAGOGY V6 动作-数学一致: 拖动箭头=改变向量分量
+// PEDAGOGY V7 单一认知动作: 投影（向量在轴上的投影）
+// PEDAGOGY V8 概念反馈: 揭示平行四边形法则和投影公式
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 420;
+const SCALE = 40; // pixels per unit
+
+const C = {
+  blue:'#2a5c8f', blueL:'#e8f0f8', teal:'#0f6e56', tealL:'#e1f5ee',
+  amber:'#854f0b', amberL:'#faeeda', amberD:'#c47a0e', red:'#b84040',
+  ink:'#1a1814', ink2:'#6b6860', ink3:'#a8a69f', border:'#e4e2da', surf:'#fff'
+};
+
+let mode = 'add';
+// Vectors in grid units
+let va = {x:3, y:2}; // vector a
+let vb = {x:1, y:-2}; // vector b
+
+let dragging = null; // 'a' | 'b'
+
+function setup(){
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr; ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function setMode(m, btn){
+  mode = m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function getCenter(){
+  const W = cvs.getBoundingClientRect().width;
+  return {cx: W/2, cy: H/2};
+}
+
+function toCanvas(vx, vy){
+  const {cx,cy} = getCenter();
+  return {x: cx + vx*SCALE, y: cy - vy*SCALE};
+}
+
+function fromCanvas(px, py){
+  const {cx,cy} = getCenter();
+  return {x: Math.round((px-cx)/SCALE * 2)/2, y: Math.round(-(py-cy)/SCALE * 2)/2};
+}
+
+function drawArrow(x1, y1, x2, y2, color, width, label, labelOffset){
+  const angle = Math.atan2(y2-y1, x2-x1);
+  const len = Math.hypot(x2-x1, y2-y1);
+  if(len < 2) return;
+  const headLen = Math.min(14, len*0.3);
+
+  ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  // Arrowhead
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - headLen*Math.cos(angle-0.4), y2 - headLen*Math.sin(angle-0.4));
+  ctx.lineTo(x2 - headLen*Math.cos(angle+0.4), y2 - headLen*Math.sin(angle+0.4));
+  ctx.closePath(); ctx.fill();
+
+  // Label
+  if(label){
+    const lx = (x1+x2)/2 + (labelOffset||0)*Math.cos(angle+Math.PI/2);
+    const ly = (y1+y2)/2 + (labelOffset||0)*Math.sin(angle+Math.PI/2);
+    ctx.fillStyle = color; ctx.font=`bold 14px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(label, lx, ly);
+  }
+}
+
+function drawDashedLine(x1,y1,x2,y2,color){
+  ctx.strokeStyle=color; ctx.lineWidth=1.2; ctx.setLineDash([5,3]);
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function draw(){
+  const W = cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const {cx,cy} = getCenter();
+
+  // Grid
+  ctx.strokeStyle = C.border; ctx.lineWidth = 0.5;
+  for(let x=0;x<W;x+=SCALE){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for(let y=0;y<H;y+=SCALE){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  // Axes
+  ctx.strokeStyle = C.ink2; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(W,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,H); ctx.stroke();
+  ctx.fillStyle = C.ink2; ctx.font=`bold 13px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillText('x', W-14, cy+4);
+  ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText('y', cx+4, 10);
+
+  // Tick labels
+  ctx.fillStyle=C.ink3; ctx.font=`10px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let i=-8;i<=8;i++){ if(i!==0) ctx.fillText(String(i), cx+i*SCALE, cy+3); }
+
+  const O = {x:cx, y:cy};
+  const A = toCanvas(va.x, va.y);
+  const B = toCanvas(vb.x, vb.y);
+
+  if(mode==='add'){
+    // Draw parallelogram
+    const sum = {x:va.x+vb.x, y:va.y+vb.y};
+    const S = toCanvas(sum.x, sum.y);
+    // ghost vectors
+    ctx.globalAlpha = 0.3;
+    drawArrow(A.x, A.y, S.x, S.y, C.amberD, 2, '');
+    drawArrow(B.x, B.y, S.x, S.y, C.blue, 2, '');
+    ctx.globalAlpha = 1;
+    // main vectors
+    drawArrow(O.x,O.y, A.x,A.y, C.blue, 3, 'a', -18);
+    drawArrow(O.x,O.y, B.x,B.y, C.amberD, 3, 'b', -18);
+    // result
+    drawArrow(O.x,O.y, S.x,S.y, C.teal, 3.5, 'a+b', 20);
+    ctx.fillStyle=C.teal; ctx.beginPath(); ctx.arc(S.x,S.y,7,0,Math.PI*2); ctx.fill();
+    document.getElementById('resultLbl').textContent = 'a+b';
+    const mag = Math.hypot(sum.x,sum.y);
+    document.getElementById('resultInfo').textContent = `(${sum.x},${sum.y}) |${mag.toFixed(2)}|`;
+    document.getElementById('fb').innerHTML = `<strong>向量加法（平行四边形法则）</strong>：以两向量为邻边作平行四边形，对角线即为和向量。<br>a+b = (${va.x}+${vb.x}, ${va.y}+${vb.y}) = <strong>(${sum.x}, ${sum.y})</strong>`;
+  } else if(mode==='sub'){
+    const diff = {x:va.x-vb.x, y:va.y-vb.y};
+    const D = toCanvas(diff.x, diff.y);
+    const negB = toCanvas(-vb.x, -vb.y);
+    // Draw -b
+    ctx.globalAlpha=0.4;
+    drawArrow(O.x,O.y, negB.x,negB.y, C.amberD, 2, '-b', -16);
+    ctx.globalAlpha=1;
+    drawArrow(O.x,O.y, A.x,A.y, C.blue, 3, 'a', -18);
+    drawArrow(O.x,O.y, B.x,B.y, C.amberD, 3, 'b', -18);
+    drawArrow(B.x,B.y, A.x,A.y, C.teal, 3, '', 0);
+    drawArrow(O.x,O.y, D.x,D.y, C.teal, 3.5, 'a-b', 20);
+    document.getElementById('resultLbl').textContent = 'a-b';
+    const mag = Math.hypot(diff.x,diff.y);
+    document.getElementById('resultInfo').textContent = `(${diff.x},${diff.y}) |${mag.toFixed(2)}|`;
+    document.getElementById('fb').innerHTML = `<strong>向量减法</strong>：a-b = a+(-b)。几何上，从b的终点画箭头指向a的终点，就是a-b。<br>a-b = (${va.x}-${vb.x}, ${va.y}-${vb.y}) = <strong>(${diff.x}, ${diff.y})</strong>`;
+  } else { // proj
+    drawArrow(O.x,O.y, A.x,A.y, C.blue, 3, 'a', -18);
+    drawArrow(O.x,O.y, B.x,B.y, C.amberD, 3, 'b', -18);
+    // Projection of a onto b
+    const bLen = Math.hypot(vb.x, vb.y);
+    if(bLen > 0.01){
+      const dot = va.x*vb.x + va.y*vb.y;
+      const projLen = dot/bLen;
+      const projUnit = {x:vb.x/bLen, y:vb.y/bLen};
+      const projPt = toCanvas(projUnit.x*projLen, projUnit.y*projLen);
+      // Projection point foot
+      drawDashedLine(A.x, A.y, projPt.x, projPt.y, C.teal+'88');
+      drawArrow(O.x,O.y, projPt.x,projPt.y, C.teal, 3, `proj`, 20);
+      ctx.fillStyle=C.teal; ctx.beginPath(); ctx.arc(projPt.x,projPt.y,6,0,Math.PI*2); ctx.fill();
+      // Right angle marker
+      const perp = {x:-projUnit.y, y:projUnit.x};
+      const sq=8;
+      ctx.strokeStyle=C.teal+'99'; ctx.lineWidth=1.2; ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(projPt.x+perp.x*sq, projPt.y+perp.y*sq);
+      ctx.lineTo(projPt.x+perp.x*sq+projUnit.x*sq, projPt.y+perp.y*sq+projUnit.y*sq);
+      ctx.lineTo(projPt.x+projUnit.x*sq, projPt.y+projUnit.y*sq);
+      ctx.stroke();
+
+      document.getElementById('resultLbl').textContent = 'a在b上的投影';
+      document.getElementById('resultInfo').textContent = projLen.toFixed(3);
+      const angle = Math.acos(dot/(Math.hypot(va.x,va.y)*bLen)) * 180/Math.PI;
+      document.getElementById('fb').innerHTML = `<strong>向量投影</strong>：a 在 b 方向上的投影 = |a|cosθ = a·b/|b| = <strong>${projLen.toFixed(3)}</strong>。<br>a·b（点积）= ${va.x}×${vb.x} + ${va.y}×${vb.y} = <strong>${dot.toFixed(1)}</strong>，夹角 θ = ${angle.toFixed(1)}°。`;
+    }
+  }
+
+  // Drag handles
+  [
+    {pt:A, color:C.blue, label:'A'},
+    {pt:B, color:C.amberD, label:'B'}
+  ].forEach(({pt,color,label})=>{
+    ctx.fillStyle=C.surf; ctx.strokeStyle=color; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=color; ctx.font=`bold 10px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(label, pt.x, pt.y);
+  });
+
+  // Stats
+  document.getElementById('aInfo').textContent = `(${va.x},${va.y}) |${Math.hypot(va.x,va.y).toFixed(2)}|`;
+  document.getElementById('bInfo').textContent = `(${vb.x},${vb.y}) |${Math.hypot(vb.x,vb.y).toFixed(2)}|`;
+}
+
+// Pointer events
+cvs.addEventListener('pointerdown', e=>{
+  const rect = cvs.getBoundingClientRect();
+  const px = e.clientX-rect.left, py=e.clientY-rect.top;
+  const A = toCanvas(va.x, va.y);
+  const B = toCanvas(vb.x, vb.y);
+  if(Math.hypot(px-A.x, py-A.y)<18){ dragging='a'; cvs.setPointerCapture(e.pointerId); cvs.style.cursor='grabbing'; }
+  else if(Math.hypot(px-B.x, py-B.y)<18){ dragging='b'; cvs.setPointerCapture(e.pointerId); cvs.style.cursor='grabbing'; }
+});
+
+cvs.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  const rect = cvs.getBoundingClientRect();
+  const px = e.clientX-rect.left, py=e.clientY-rect.top;
+  const v = fromCanvas(px, py);
+  if(dragging==='a') va = v;
+  else vb = v;
+  draw();
+});
+
+cvs.addEventListener('pointerup', ()=>{ dragging=null; cvs.style.cursor='default'; });
+
+window.addEventListener('resize',()=>{ setup(); draw(); });
+setup(); draw();
+</script>
+</body>
+</html>

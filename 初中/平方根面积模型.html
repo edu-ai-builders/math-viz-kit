@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>平方根面积模型 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="实数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="正方形面积与边长互相转化，拖动改变面积，直观理解√n就是面积为n的正方形边长">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:680px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:680px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:ew-resize;}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .info-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center;}
+    .info-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .info-val{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;}
+    .perfect-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .perf-btn{padding:5px 12px;border:2px solid var(--border);border-radius:20px;font-size:13px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);font-weight:700;transition:all .2s;}
+    .perf-btn:hover{background:var(--blue-light);border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 实数 · 认知动作：变换</div>
+  <h1>平方根面积模型</h1>
+  <p class="sub">√n = 面积为 n 的正方形的边长，拖动手柄改变面积</p>
+</header>
+<main>
+  <canvas id="cvs"></canvas>
+  <div class="info-grid">
+    <div class="info-box">
+      <div class="info-label">正方形面积 S</div>
+      <div class="info-val" id="areaVal" style="color:var(--blue)">25</div>
+    </div>
+    <div class="info-box">
+      <div class="info-label">边长 = √S</div>
+      <div class="info-val" id="sideVal" style="color:var(--teal)">5</div>
+    </div>
+  </div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;">
+    <div style="font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:8px;">完全平方数（边长为整数）：</div>
+    <div class="perfect-row">
+      <button class="perf-btn" onclick="setArea(1)">1</button>
+      <button class="perf-btn" onclick="setArea(4)">4</button>
+      <button class="perf-btn" onclick="setArea(9)">9</button>
+      <button class="perf-btn" onclick="setArea(16)">16</button>
+      <button class="perf-btn" onclick="setArea(25)">25</button>
+      <button class="perf-btn" onclick="setArea(36)">36</button>
+      <button class="perf-btn" onclick="setArea(2)">2</button>
+      <button class="perf-btn" onclick="setArea(3)">3</button>
+      <button class="perf-btn" onclick="setArea(5)">5</button>
+      <button class="perf-btn" onclick="setArea(10)">10</button>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 平方根的"逆运算"概念只有面积↔边长的具体模型才能感受
+// PEDAGOGY V5 操作先于符号: 先拖动看面积与边长的变化，再理解√符号的含义
+// PEDAGOGY V6 动作—数学一致: 拖动右下角=改变面积，边长自动从面积计算
+// PEDAGOGY V8 概念反馈: "√25=5，因为5²=25，5×5的正方形面积恰好是25"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 320;
+
+let area = 25;
+let isDragging = false;
+
+function setArea(a) {
+  area = a;
+  draw(); updateInfo();
+}
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr;
+  ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0,0,W,H);
+
+  const side = Math.sqrt(area);
+  const maxSide = 10;
+  const scale = Math.min((W-80)/(maxSide), (H-80)/(maxSide));
+  const ox = 40, oy = H-40;
+  const pxSide = side*scale;
+
+  // Grid lines (unit squares)
+  ctx.strokeStyle='#f0ede8'; ctx.lineWidth=1;
+  for(let i=0;i<=Math.ceil(side)+1;i++){
+    ctx.beginPath(); ctx.moveTo(ox+i*scale,oy); ctx.lineTo(ox+i*scale,oy-Math.ceil(side+1)*scale); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox,oy-i*scale); ctx.lineTo(ox+Math.ceil(side+1)*scale,oy-i*scale); ctx.stroke();
+  }
+
+  // Full unit squares inside
+  const floorSide = Math.floor(side);
+  for(let i=0;i<floorSide;i++){
+    for(let j=0;j<floorSide;j++){
+      ctx.fillStyle='#e8f0f8';
+      ctx.fillRect(ox+i*scale, oy-(j+1)*scale, scale, scale);
+    }
+  }
+
+  // Fractional parts (partial squares)
+  const frac = side - floorSide;
+  if(frac > 0.001) {
+    // Right strip
+    for(let j=0;j<floorSide;j++){
+      ctx.fillStyle='#d0e8ff';
+      ctx.fillRect(ox+floorSide*scale, oy-(j+1)*scale, frac*scale, scale);
+    }
+    // Top strip
+    for(let i=0;i<floorSide;i++){
+      ctx.fillStyle='#d0e8ff';
+      ctx.fillRect(ox+i*scale, oy-(floorSide+frac)*scale, scale, frac*scale);
+    }
+    // Corner piece
+    ctx.fillStyle='#b8d4ff';
+    ctx.fillRect(ox+floorSide*scale, oy-(floorSide+frac)*scale, frac*scale, frac*scale);
+  }
+
+  // Main square border
+  ctx.strokeStyle='#2a5c8f'; ctx.lineWidth=3;
+  ctx.strokeRect(ox, oy-pxSide, pxSide, pxSide);
+
+  // Side labels
+  ctx.fillStyle='#2a5c8f'; ctx.font=`bold 14px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText(`√${Number.isInteger(area)?area:area.toFixed(1)}`, ox+pxSide/2, oy-pxSide-6);
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(`√${Number.isInteger(area)?area:area.toFixed(1)}`, ox+pxSide+6, oy-pxSide/2);
+
+  // Area label inside
+  ctx.fillStyle='#1a5cb5'; ctx.font=`bold 16px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  if(pxSide > 40) ctx.fillText(`S = ${Number.isInteger(area)?area:area.toFixed(2)}`, ox+pxSide/2, oy-pxSide/2);
+
+  // Drag handle at bottom-right
+  const hx = ox+pxSide, hy = oy;
+  ctx.fillStyle='#2a5c8f';
+  ctx.beginPath(); ctx.arc(hx,hy,8,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font=`bold 12px sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('⟷', hx, hy);
+
+  // Axes
+  ctx.strokeStyle='#6b6860'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(ox,oy-H+20); ctx.lineTo(ox,oy+2); ctx.lineTo(ox+W-60,oy+2); ctx.stroke();
+  // Axis ticks
+  for(let i=1;i<=9;i++){
+    ctx.fillStyle='#a8a69f'; ctx.font=`10px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(i, ox+i*scale, oy+6);
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(i, ox-4, oy-i*scale);
+  }
+}
+
+function updateInfo() {
+  const side = Math.sqrt(area);
+  const isPerfect = Number.isInteger(side);
+  document.getElementById('areaVal').textContent = Number.isInteger(area)?area:area.toFixed(2);
+  document.getElementById('sideVal').textContent = isPerfect?side.toFixed(0):side.toFixed(4);
+  document.getElementById('sideVal').style.color = isPerfect?'var(--teal)':'var(--amber)';
+  const fb = document.getElementById('fb');
+  if(isPerfect) {
+    fb.innerHTML=`<strong>完全平方数！</strong>√${area} = ${side}，因为 ${side} × ${side} = ${area}。<br>边长恰好是整数的正方形，其面积就叫做<strong>完全平方数</strong>（1, 4, 9, 16, 25, ...）。`;
+  } else {
+    fb.innerHTML=`√${area.toFixed(2)} ≈ <strong>${side.toFixed(4)}</strong>（无理数）。<br>${area} 不是完全平方数，所以它的平方根不是有理数，是无限不循环小数。<br>可以估算：${Math.floor(side)}² = ${Math.floor(side)**2} < ${area.toFixed(1)} < ${Math.ceil(side)**2} = ${Math.ceil(side)}²，所以 ${Math.floor(side)} < √${area.toFixed(1)} < ${Math.ceil(side)}。`;
+  }
+}
+
+cvs.addEventListener('pointerdown',e=>{
+  const r=cvs.getBoundingClientRect();
+  const side=Math.sqrt(area);
+  const scale=Math.min((r.width-80)/10,(H-80)/10);
+  const ox=40,oy=H-40;
+  const hx=ox+side*scale, hy=oy;
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
+  if(Math.abs(mx-hx)<20 && Math.abs(my-hy)<20){ isDragging=true; cvs.setPointerCapture(e.pointerId);}
+});
+cvs.addEventListener('pointermove',e=>{
+  if(!isDragging) return;
+  const r=cvs.getBoundingClientRect();
+  const scale=Math.min((r.width-80)/10,(H-80)/10);
+  const ox=40;
+  const px=e.clientX-r.left-ox;
+  const newSide=Math.max(0.5,Math.min(9.9,px/scale));
+  area=Math.round(newSide*newSide*10)/10;
+  draw(); updateInfo();
+});
+cvs.addEventListener('pointerup',()=>{isDragging=false;});
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); draw(); updateInfo();
+</script>
+</body>
+</html>

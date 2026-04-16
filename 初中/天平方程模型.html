@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>天平方程模型 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="方程与代数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="用天平模型演示方程的等量变换，理解方程解法的本质">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:700px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:700px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .eq-display{background:var(--blue-light);border:2px solid var(--blue);border-radius:var(--radius);padding:12px 18px;text-align:center;font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    canvas{width:100%;height:260px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .operations{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;}
+    .ops-title{font-size:13px;color:var(--ink2);margin-bottom:10px;}
+    .ops-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .op-btn{padding:10px 6px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;text-align:center;color:var(--ink2);}
+    .op-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-light);}
+    .op-btn:disabled{opacity:.4;cursor:not-allowed;}
+    .steps{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;max-height:150px;overflow-y:auto;}
+    .step-item{font-size:13px;padding:4px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+    .step-item:last-child{border-bottom:none;}
+    .step-num{font-size:11px;color:var(--ink3);min-width:20px;}
+    .step-eq{font-family:'JetBrains Mono',monospace;font-weight:600;}
+    .step-op{font-size:11px;color:var(--teal);}
+    .btns{display:flex;gap:8px;}
+    .btn{flex:1;padding:11px;border:none;border-radius:var(--radius);font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;transition:all .2s;}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-primary:hover{background:var(--blue-dark);}
+    .btn-secondary{background:var(--surface);color:var(--blue);border:2px solid var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;opacity:0;transition:opacity .5s;}
+    .fb.show{opacity:1;}
+    @media(max-width:500px){.ops-grid{grid-template-columns:1fr 1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 方程 · 认知动作：变换</div>
+  <h1>天平方程模型</h1>
+  <p class="sub">天平保持平衡 = 等式两边相等。对两边做同样的操作，天平仍然平衡</p>
+</header>
+<main>
+  <div class="eq-display" id="eqDisplay">2x + 3 = 11</div>
+  <canvas id="cvs"></canvas>
+  <div class="operations">
+    <div class="ops-title">在方程<strong>两边同时进行操作</strong>（保持天平平衡）：</div>
+    <div class="ops-grid" id="opsGrid">
+      <button class="op-btn" onclick="operate('-3','两边−3')">两边 −3</button>
+      <button class="op-btn" onclick="operate('/2','两边÷2')">两边 ÷2</button>
+      <button class="op-btn" onclick="operate('+3','两边+3')">两边 +3</button>
+      <button class="op-btn" onclick="operate('*2','两边×2')">两边 ×2</button>
+    </div>
+  </div>
+  <div class="steps" id="steps">
+    <div class="step-item"><span class="step-num">起始</span><span class="step-eq">2x + 3 = 11</span></div>
+  </div>
+  <div class="fb" id="fb"></div>
+  <div class="btns">
+    <button class="btn btn-primary" onclick="newProblem()">新题目</button>
+    <button class="btn btn-secondary" onclick="resetAll()">重置</button>
+  </div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：变换
+// V1 动态跃迁：天平倾斜/平衡的动画展示等式的平衡性
+// V3 分步揭示：每步操作单独记录，步骤可追溯
+// V5 操作先于符号：先通过天平操作理解，再总结解方程规则
+// V6 动作-数学一致：两边加/减=天平两侧同步变化
+// V7 单一认知动作：变换（等量变换）
+// V8 概念反馈：揭示"方程是等式，任何对两边相同的操作不改变等号"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',amberL:'#faeeda',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+const PROBLEMS=[
+  {coeff:2,add:3,rhs:11},  // 2x+3=11 → x=4
+  {coeff:3,add:0,rhs:12},  // 3x=12 → x=4
+  {coeff:1,add:5,rhs:13},  // x+5=13 → x=8
+  {coeff:4,add:2,rhs:18},  // 4x+2=18 → x=4
+  {coeff:2,add:-1,rhs:7},  // 2x-1=7 → x=4
+  {coeff:5,add:3,rhs:23},  // 5x+3=23 → x=4
+];
+
+let prob={coeff:2,add:3,rhs:11};
+// State: we track left side as: coeff*x + const = rhs
+let state={coeff:2,constant:3,rhs:11};
+let tiltAngle=0, animId=null, steps=[], isSolved=false;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=260*dpr; ctx.scale(dpr,dpr); cvs.style.height='260px';
+}
+
+function stateToString(s){
+  let left='';
+  if(s.coeff===1) left='x';
+  else if(s.coeff===0) left='0';
+  else left=`${s.coeff}x`;
+  if(s.constant>0) left+=` + ${s.constant}`;
+  else if(s.constant<0) left+=` - ${Math.abs(s.constant)}`;
+  return `${left} = ${s.rhs}`;
+}
+
+function leftValue(s){return s.coeff*4+s.constant;} // x=4 for these problems
+function rightValue(s){return s.rhs;}
+function imbalance(s){return (s.coeff*4+s.constant)-s.rhs;}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=260;
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2, pivotY=80, armLen=W*0.38;
+
+  // Tilt (if any)
+  const tilt=Math.min(Math.max(tiltAngle,-0.12),0.12);
+
+  // Draw fulcrum
+  ctx.fillStyle=C.ink2;
+  ctx.beginPath(); ctx.moveTo(cx-14,pivotY+20); ctx.lineTo(cx+14,pivotY+20); ctx.lineTo(cx,pivotY); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=C.border;
+  ctx.beginPath(); ctx.roundRect(cx-20,pivotY+20,40,12,4); ctx.fill();
+  ctx.fillStyle=C.ink2; ctx.beginPath(); ctx.roundRect(cx-30,pivotY+32,60,8,3); ctx.fill();
+
+  // Draw beam (rotated around pivot)
+  ctx.save();
+  ctx.translate(cx,pivotY);
+  ctx.rotate(tilt);
+
+  // Beam
+  ctx.strokeStyle=C.ink; ctx.lineWidth=6; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-armLen,0); ctx.lineTo(armLen,0); ctx.stroke();
+
+  // Left pan (x side)
+  const panY=60;
+  ctx.strokeStyle=C.ink2; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(-armLen,0); ctx.lineTo(-armLen,panY); ctx.stroke();
+  ctx.fillStyle=C.blueL; ctx.strokeStyle=C.blue; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.roundRect(-armLen-45,panY,90,35,6); ctx.fill(); ctx.stroke();
+  // Left content
+  ctx.fillStyle=C.blue; ctx.font=`bold 15px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  let leftTxt=state.coeff>0?`${state.coeff===1?'':state.coeff}x`:'0';
+  if(state.constant>0) leftTxt+=`+${state.constant}`;
+  else if(state.constant<0) leftTxt+=`${state.constant}`;
+  ctx.fillText(leftTxt,-armLen,panY+17);
+  ctx.fillStyle=C.ink2; ctx.font=`11px 'Noto Sans SC',sans-serif`;
+  ctx.fillText('左边（未知数）',-armLen,panY+38);
+
+  // Right pan
+  ctx.strokeStyle=C.ink2; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(armLen,0); ctx.lineTo(armLen,panY); ctx.stroke();
+  ctx.fillStyle=C.amber+'33'; ctx.strokeStyle=C.amber; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.roundRect(armLen-45,panY,90,35,6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=C.amber; ctx.font=`bold 15px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(`${state.rhs}`,armLen,panY+17);
+  ctx.fillStyle=C.ink2; ctx.font=`11px 'Noto Sans SC',sans-serif`;
+  ctx.fillText('右边（已知数）',armLen,panY+38);
+
+  ctx.restore();
+
+  // Balance indicator
+  const balanced=(state.coeff===0||imbalance(state)===0)||isSolved;
+  ctx.fillStyle=balanced?C.teal:C.amber;
+  ctx.font=`bold 13px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText(balanced?'⚖️ 天平平衡':tilt<0?'← 左边重':tilt>0?'右边重 →':'⚖️',cx,pivotY+150);
+
+  // Solved indicator
+  if(isSolved&&state.coeff===1&&state.constant===0){
+    ctx.fillStyle=C.teal; ctx.font=`bold 18px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(`✓ x = ${state.rhs}`,cx,pivotY+170);
+  }
+}
+
+function operate(op,label){
+  if(isSolved)return;
+  let {coeff,constant,rhs}=state;
+  let opDesc='';
+
+  if(op==='-3'){coeff=coeff;constant-=3;rhs-=3;opDesc='两边 −3';}
+  else if(op==='+3'){constant+=3;rhs+=3;opDesc='两边 +3';}
+  else if(op=='/2'){
+    if(coeff%2!==0||constant%2!==0||rhs%2!==0){alert('这步无法整除，请选择其他操作');return;}
+    coeff/=2;constant/=2;rhs/=2;opDesc='两边 ÷2';
+  }
+  else if(op==='*2'){coeff*=2;constant*=2;rhs*=2;opDesc='两边 ×2';}
+  else {
+    // Dynamic operations
+    const num=parseFloat(op);
+    if(isNaN(num))return;
+    constant+=num;rhs+=num;opDesc=`两边 ${num>0?'+':''}${num}`;
+  }
+
+  state={coeff,constant,rhs};
+  addStep(stateToString(state),opDesc);
+
+  // Check solved
+  if(state.coeff===1&&state.constant===0){
+    isSolved=true;
+    tiltAngle=0;
+    showFeedback();
+    updateOps();
+  } else if(state.coeff===0&&state.constant===state.rhs){
+    // Consistent
+  }
+
+  // Animate tilt briefly
+  const imb=imbalance(state);
+  tiltAngle=imb!==0?0.06*(imb>0?1:-1):0;
+  setTimeout(()=>{tiltAngle=0;draw();},600);
+  updateDisplay();
+  draw();
+}
+
+function addStep(eq,opLabel){
+  steps.push({eq,op:opLabel});
+  const stepsEl=document.getElementById('steps');
+  stepsEl.innerHTML=steps.map((s,i)=>`<div class="step-item"><span class="step-num">${i===0?'起始':i}</span><span class="step-eq">${s.eq}</span><span class="step-op">${s.op||''}</span></div>`).join('');
+  stepsEl.scrollTop=stepsEl.scrollHeight;
+}
+
+function updateDisplay(){
+  document.getElementById('eqDisplay').textContent=stateToString(state);
+  generateOps();
+}
+
+function generateOps(){
+  const {coeff,constant,rhs}=state;
+  const grid=document.getElementById('opsGrid');
+  let ops=[];
+  if(constant!==0){
+    ops.push({op:`${-constant}`,label:`两边 ${-constant>0?'+':''}${-constant}`});
+  }
+  if(coeff>1){
+    ops.push({op:null,label:`两边 ÷${coeff}`,action:`div${coeff}`});
+  }
+  if(rhs%coeff===0&&constant===0&&coeff>1){
+    // Already added
+  }
+  // Default ops
+  if(ops.length<4){
+    const adds=[-5,-3,-2,3,5,10].filter(v=>v!==0&&v!==constant);
+    for(const a of adds){if(ops.length>=4)break;if(!ops.find(o=>o.op===String(a)))ops.push({op:String(a),label:`两边 ${a>0?'+':''}${a}`});}
+  }
+  grid.innerHTML=ops.slice(0,4).map(o=>`<button class="op-btn" onclick="operate('${o.action||o.op}','${o.label}')">${o.label}</button>`).join('');
+
+  // Always add ÷ coeff if coeff > 1 and constant = 0
+  if(coeff>1&&constant===0){
+    grid.innerHTML+=`<button class="op-btn" onclick="operate('divCoeff','两边÷${coeff}');operateDiv(${coeff})">两边 ÷${coeff}</button>`;
+  }
+}
+
+window.operateDiv=function(d){
+  if(state.rhs%d!==0){return;}
+  state.coeff=Math.floor(state.coeff/d);
+  state.constant=Math.floor(state.constant/d);
+  state.rhs=Math.floor(state.rhs/d);
+  addStep(stateToString(state),`两边÷${d}`);
+  if(state.coeff===1&&state.constant===0){isSolved=true;showFeedback();}
+  updateDisplay(); draw();
+};
+
+function showFeedback(){
+  // PEDAGOGY V8
+  const fb=document.getElementById('fb');
+  const ans=state.rhs;
+  fb.innerHTML=`🎉 解出来了！<strong>x = ${ans}</strong><br>你一步步对方程两边做了相同操作，天平始终保持平衡。<br>这就是解方程的核心：<strong>等式的两边可以同加、同减、同乘、同除同一个数，等式仍然成立。</strong><br>验算：将 x=${ans} 代回原式：${prob.coeff}×${ans}+${prob.add} = ${prob.coeff*ans+prob.add} = ${prob.rhs} ✓`;
+  fb.classList.add('show');
+}
+
+function updateOps(){
+  document.querySelectorAll('.op-btn').forEach(b=>b.disabled=isSolved);
+}
+
+function newProblem(){
+  const p=PROBLEMS[Math.floor(Math.random()*PROBLEMS.length)];
+  prob=p;
+  state={coeff:p.coeff,constant:p.add,rhs:p.rhs};
+  steps=[{eq:stateToString(state),op:''}];
+  isSolved=false; tiltAngle=0;
+  document.getElementById('fb').classList.remove('show');
+  document.getElementById('eqDisplay').textContent=stateToString(state);
+  const stepsEl=document.getElementById('steps');
+  stepsEl.innerHTML=`<div class="step-item"><span class="step-num">起始</span><span class="step-eq">${stateToString(state)}</span></div>`;
+  generateOps(); draw();
+}
+
+function resetAll(){
+  state={...prob,constant:prob.add,coeff:prob.coeff};
+  // Re-init from prob
+  state={coeff:prob.coeff,constant:prob.add,rhs:prob.rhs};
+  steps=[{eq:stateToString(state),op:''}];
+  isSolved=false; tiltAngle=0;
+  document.getElementById('fb').classList.remove('show');
+  document.getElementById('eqDisplay').textContent=stateToString(state);
+  const stepsEl=document.getElementById('steps');
+  stepsEl.innerHTML=`<div class="step-item"><span class="step-num">起始</span><span class="step-eq">${stateToString(state)}</span></div>`;
+  generateOps(); draw();
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();
+state={coeff:prob.coeff,constant:prob.add,rhs:prob.rhs};
+steps=[{eq:stateToString(state),op:''}];
+generateOps(); draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>局部线性近似实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="微分">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="逼近">
+  <meta name="desc" content="局部放大曲线直到切线与曲线无法区分，微分本质——"足够小的范围内，曲线=直线"">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto Sans SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .ctrl-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--blue);margin-bottom:4px;}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    .fn-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .fn-btn{padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);font-weight:700;transition:all .2s;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 微分 · 认知动作：逼近</div>
+  <h1>局部线性近似实验室</h1>
+  <p class="sub">不断放大曲线，直到它"看起来像"一条直线——微分的几何本质</p>
+</header>
+<main>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn(0,this)">sin x</button>
+    <button class="fn-btn" onclick="setFn(1,this)">x³-x</button>
+    <button class="fn-btn" onclick="setFn(2,this)">eˣ</button>
+    <button class="fn-btn" onclick="setFn(3,this)">√x</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="ctrl-grid">
+    <div class="ctrl-box">
+      <div class="ctrl-label">展开点 x₀</div>
+      <div class="ctrl-val" id="x0Val">x₀ = 1.00</div>
+      <input type="range" id="x0Slider" min="-2" max="4" step="0.1" value="1" oninput="update()">
+    </div>
+    <div class="ctrl-box">
+      <div class="ctrl-label">放大倍数（越大越局部）</div>
+      <div class="ctrl-val" id="zoomVal">zoom = ×1</div>
+      <input type="range" id="zoomSlider" min="0" max="5" step="0.05" value="0" oninput="update()">
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: "曲线局部趋直"只有连续放大才能直观感受
+// PEDAGOGY V3 分步揭示: 低缩放=明显曲线；高缩放=切线贴合
+// PEDAGOGY V6 动作-数学一致: 滑杆右移=放大倍数增加=视野缩小=更局部
+// PEDAGOGY V7 单一认知动作: 逼近（局部放大后曲线趋近切线）
+// PEDAGOGY V8 概念反馈: "你已经放大到曲线与切线几乎重合——这就是微分/线性化的含义"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 320;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da'
+};
+
+const FNS = [
+  { label:'sin x', f: x=>Math.sin(x), df: x=>Math.cos(x) },
+  { label:'x³-x', f: x=>x*x*x-x, df: x=>3*x*x-1 },
+  { label:'eˣ',   f: x=>Math.exp(x), df: x=>Math.exp(x) },
+  { label:'√x',   f: x=>x>0?Math.sqrt(x):NaN, df: x=>x>0?0.5/Math.sqrt(x):NaN },
+];
+
+let fnIdx = 0;
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setFn(i, btn) {
+  fnIdx = i;
+  document.querySelectorAll('.fn-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Reset x0 for √x
+  if (i === 3) document.getElementById('x0Slider').value = 2;
+  update();
+}
+
+function update() {
+  const x0 = parseFloat(document.getElementById('x0Slider').value);
+  const zoomExp = parseFloat(document.getElementById('zoomSlider').value);
+  const zoom = Math.pow(10, zoomExp);
+  document.getElementById('x0Val').textContent = `x₀ = ${x0.toFixed(2)}`;
+  document.getElementById('zoomVal').textContent = `zoom = ×${zoom.toFixed(1)}`;
+  draw(x0, zoom);
+}
+
+function draw(x0, zoom) {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+  const fn = FNS[fnIdx];
+  const f0 = fn.f(x0), df0 = fn.df(x0);
+
+  const pad = { l: 55, r: 20, t: 30, b: 40 };
+  const cw = W - pad.l - pad.r;
+  const ch = H - pad.t - pad.b;
+
+  // Window: centered at (x0, f0), width = 2/zoom
+  const wx = 2 / zoom;
+  const wy = wx * (ch / cw) * 1.5;
+  const xMin = x0 - wx/2, xMax = x0 + wx/2;
+  const yMin = f0 - wy/2, yMax = f0 + wy/2;
+
+  function toX(x) { return pad.l + (x - xMin)/(xMax-xMin)*cw; }
+  function toY(y) { return pad.t + ch - (y - yMin)/(yMax-yMin)*ch; }
+
+  // Grid
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  [0.25,0.5,0.75].forEach(p => {
+    const yy = pad.t + p*ch;
+    ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(W-pad.r, yy); ctx.stroke();
+    const yVal = yMax - p*(yMax-yMin);
+    ctx.fillStyle = C.ink3; ctx.font = `10px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(yVal.toFixed(zoom>10?4:zoom>1?3:2), pad.l-3, yy);
+  });
+  ctx.setLineDash([]);
+
+  // Axes
+  const x0px = toX(x0), y0px = toY(f0);
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t+ch); ctx.lineTo(W-pad.r, pad.t+ch); ctx.stroke();
+
+  // Tangent line (in red/amber, drawn first so curve is on top)
+  ctx.strokeStyle = C.amber; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, toY(f0 + df0*(xMin - x0)));
+  ctx.lineTo(W-pad.r, toY(f0 + df0*(xMax - x0)));
+  ctx.stroke();
+
+  // Function curve
+  ctx.strokeStyle = C.blue; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  let first = true;
+  for (let px=0; px<=cw; px++) {
+    const x = xMin + px/cw*(xMax-xMin);
+    const y = fn.f(x);
+    if (isNaN(y) || !isFinite(y)) { first = true; continue; }
+    const yy = toY(y);
+    if (yy < pad.t - 10 || yy > pad.t+ch+10) { first = true; continue; }
+    if (first) { ctx.moveTo(pad.l+px, yy); first = false; }
+    else ctx.lineTo(pad.l+px, yy);
+  }
+  ctx.stroke();
+
+  // x0 point
+  ctx.fillStyle = C.teal;
+  ctx.beginPath(); ctx.arc(x0px, y0px, 5, 0, Math.PI*2); ctx.fill();
+
+  // Error band at a specific dx
+  const dx = wx * 0.15;
+  const xTest = x0 + dx;
+  const yExact = fn.f(xTest);
+  const yLinear = f0 + df0 * dx;
+  if (!isNaN(yExact)) {
+    const err = Math.abs(yExact - yLinear);
+    const yEx = toY(yExact), yLin = toY(yLinear);
+    ctx.strokeStyle = C.teal + 'aa'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(toX(xTest), yEx); ctx.lineTo(toX(xTest), yLin); ctx.stroke();
+    ctx.fillStyle = C.teal; ctx.font = `11px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(`误差 ${err.toExponential(2)}`, toX(xTest)+4, (yEx+yLin)/2);
+  }
+
+  // Labels
+  ctx.fillStyle = C.blue; ctx.font = `bold 13px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`y = ${fn.label}  （蓝色曲线）`, pad.l+4, 4);
+  ctx.fillStyle = C.amber; ctx.font = `bold 12px 'JetBrains Mono',monospace`;
+  ctx.fillText(`切线: y = f(x₀) + f'(x₀)(x-x₀)`, pad.l+4, 18);
+
+  // Bottom: linearization formula
+  const slope_str = df0 >= 0 ? `+${df0.toFixed(4)}` : df0.toFixed(4);
+  ctx.fillStyle = C.ink2; ctx.font = `11px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(`L(x) = ${f0.toFixed(4)} ${slope_str}(x - ${x0.toFixed(2)})  |  zoom = ×${zoom.toFixed(1)}`, W/2, pad.t+ch+6);
+
+  // Tick for x0
+  ctx.fillStyle = C.ink3; ctx.font = `10px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(`x₀=${x0.toFixed(2)}`, x0px, pad.t+ch+20);
+
+  updateFeedback(zoom, dx);
+}
+
+function updateFeedback(zoom, dx) {
+  const fn = FNS[fnIdx];
+  const x0 = parseFloat(document.getElementById('x0Slider').value);
+  const f0 = fn.f(x0), df0 = fn.df(x0);
+  const xTest = x0 + dx;
+  const err = !isNaN(fn.f(xTest)) ? Math.abs(fn.f(xTest) - (f0 + df0*dx)) : 0;
+  let msg;
+  if (zoom < 2) {
+    msg = '当前视野较大，曲线的<strong>弯曲</strong>清晰可见，切线（橙色）和曲线（蓝色）明显不同。';
+  } else if (zoom < 50) {
+    msg = '放大后曲线变得更"直"了！切线和曲线开始重合。';
+  } else {
+    msg = '<strong>曲线与切线几乎完全重合！</strong>在如此微小的邻域内，函数行为和线性函数完全一样——这就是"局部线性"。';
+  }
+  document.getElementById('fb').innerHTML =
+    `<strong>微分（局部线性化）</strong>：L(x) = f(x₀) + f'(x₀)·Δx，${msg}<br>` +
+    `在 x₀ + ${dx.toFixed(4)} 处：真值 = ${isNaN(fn.f(xTest))?'N/A':fn.f(xTest).toFixed(6)}，线性近似 = ${(f0+df0*dx).toFixed(6)}，误差 = ${err.toExponential(2)}<br>` +
+    `误差为 O(Δx²)，Δx 越小误差越快趋向零——这说明切线是曲线的"最佳线性近似"。`;
+}
+
+window.addEventListener('resize', () => { setup(); update(); });
+setup(); update();
+</script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>反比例函数 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="函数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="k值滑杆实时改变双曲线形态，理解反比例系数k的几何意义和渐近线">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;}
+    .sl-row{display:flex;align-items:center;gap:10px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);min-width:50px;}
+    .sl-val{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);min-width:60px;text-align:right;}
+    input[type=range]{flex:1;accent-color:var(--blue);cursor:pointer;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 函数 · 认知动作：变换</div>
+  <h1>反比例函数</h1>
+  <p class="sub">改变 k 值，双曲线实时变形——理解 y = k/x 中 k 的几何意义</p>
+</header>
+<main>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">系数 k</div><div class="stat-val" id="kStat" style="color:var(--blue)">4</div></div>
+    <div class="stat"><div class="stat-lbl">在哪个象限</div><div class="stat-val" id="quadrantStat" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">xy 乘积</div><div class="stat-val" id="prodStat" style="color:var(--amber)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <span class="sl-lbl">k 值</span>
+      <input type="range" id="kSl" min="-10" max="10" step="0.5" value="4">
+      <span class="sl-val" id="kLabel">4</span>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: k值对双曲线形态的影响只有动态才能感受
+// PEDAGOGY V4 信号聚焦: 一条曲线，渐近线用虚线（不同含义不同样式）
+// PEDAGOGY V6 动作-数学一致: 拖k增大=曲线"撑开"远离原点
+// PEDAGOGY V7 单一认知动作: 变换（系数改变曲线形态）
+// PEDAGOGY V8 概念反馈: 揭示"xy=k（矩形面积为常数）"和渐近线
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=380;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  let k=parseFloat(document.getElementById('kSl').value);
+  if(k===0) k=0.1;
+
+  const margin={left:44,right:16,top:16,bottom:40};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const xRange=6,yRange=6;
+  const xToP=x=>margin.left+(x+xRange)/(2*xRange)*plotW;
+  const yToP=y=>margin.top+(yRange-y)/(2*yRange)*plotH;
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let i=-xRange;i<=xRange;i++){ctx.beginPath();ctx.moveTo(xToP(i),margin.top);ctx.lineTo(xToP(i),margin.top+plotH);ctx.stroke();}
+  for(let i=-yRange;i<=yRange;i++){ctx.beginPath();ctx.moveTo(margin.left,yToP(i));ctx.lineTo(margin.left+plotW,yToP(i));ctx.stroke();}
+
+  // Asymptotes
+  ctx.strokeStyle=C.ink3;ctx.lineWidth=1.5;ctx.setLineDash([6,4]);
+  ctx.beginPath();ctx.moveTo(xToP(0),margin.top);ctx.lineTo(xToP(0),margin.top+plotH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(0));ctx.lineTo(margin.left+plotW,yToP(0));ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.ink3;ctx.font=`11px 'Noto Sans SC',sans-serif`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText('渐近线:x=0',xToP(0)+3,margin.top+3);
+  ctx.textAlign='right';ctx.textBaseline='bottom';
+  ctx.fillText('渐近线:y=0',margin.left+plotW-3,yToP(0)-3);
+
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(0));ctx.lineTo(margin.left+plotW,yToP(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(0),margin.top);ctx.lineTo(xToP(0),margin.top+plotH);ctx.stroke();
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+  for(let i=-xRange;i<=xRange;i++){if(i!==0)ctx.fillText(String(i),xToP(i),yToP(0)+4);}
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let i=-yRange;i<=yRange;i++){if(i!==0)ctx.fillText(String(i),xToP(0)-4,yToP(i));}
+
+  // Draw hyperbola: two branches
+  const color=k>0?C.blue:C.amber;
+  ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.setLineDash([]);
+  // Positive x branch
+  ctx.beginPath();let first=true;
+  for(let px=1;px<=plotW;px++){
+    const x=(px/plotW)*(2*xRange)-xRange;
+    if(x<=0||x<0.1) continue;
+    const y=k/x;
+    if(y<-yRange*1.5||y>yRange*1.5){first=true;continue;}
+    first?(ctx.moveTo(margin.left+px,yToP(y)),first=false):ctx.lineTo(margin.left+px,yToP(y));
+  }
+  ctx.stroke();
+  // Negative x branch
+  ctx.beginPath();first=true;
+  for(let px=plotW-1;px>=0;px--){
+    const x=(px/plotW)*(2*xRange)-xRange;
+    if(x>=0||x>-0.1) continue;
+    const y=k/x;
+    if(y<-yRange*1.5||y>yRange*1.5){first=true;continue;}
+    first?(ctx.moveTo(margin.left+px,yToP(y)),first=false):ctx.lineTo(margin.left+px,yToP(y));
+  }
+  ctx.stroke();
+
+  // Show rectangle at hover point x=1
+  const ptX=Math.abs(k)<0.5?Math.sign(k||1)*1:Math.sign(k)*1;
+  const ptY=k/ptX;
+  if(Math.abs(ptY)<=yRange){
+    ctx.fillStyle=color+'22';
+    ctx.fillRect(xToP(0),yToP(Math.max(0,ptY)),Math.abs(xToP(ptX)-xToP(0)),Math.abs(yToP(ptY)-yToP(0)));
+    ctx.strokeStyle=color+'66';ctx.lineWidth=1;ctx.setLineDash([3,2]);
+    ctx.beginPath();ctx.moveTo(xToP(ptX),margin.top);ctx.lineTo(xToP(ptX),yToP(ptY));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(ptY));ctx.lineTo(xToP(ptX),yToP(ptY));ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=color;ctx.beginPath();ctx.arc(xToP(ptX),yToP(ptY),6,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font=`10px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('P',xToP(ptX),yToP(ptY));
+    ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(`(${ptX.toFixed(1)}, ${ptY.toFixed(1)})`,xToP(ptX),yToP(ptY)+8);
+  }
+
+  // Label
+  ctx.fillStyle=color;ctx.font=`bold 14px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(`y = ${k}/x`,margin.left+4,margin.top+4);
+
+  // Update stats
+  document.getElementById('kStat').textContent=k.toFixed(1);
+  document.getElementById('kLabel').textContent=k.toFixed(1);
+  document.getElementById('quadrantStat').textContent=k>0?'一三象限':'二四象限';
+  document.getElementById('prodStat').textContent=k.toFixed(1);
+
+  // PEDAGOGY V8
+  document.getElementById('fb').innerHTML=
+    k>0?
+    `k = <strong>${k.toFixed(1)} > 0</strong>：双曲线在<strong>第一、三象限</strong>。x和y同号，乘积 xy = ${k.toFixed(1)}（恒正）。<br>` +
+    `每个点P(x,y)对应的矩形面积等于 |k| = <strong>${Math.abs(k).toFixed(1)}</strong>，这就是反比例关系的几何本质！<br>` +
+    `渐近线：x→0时y→∞，y→0时x→∞，双曲线永远不碰坐标轴。`:
+    `k = <strong>${k.toFixed(1)} < 0</strong>：双曲线在<strong>第二、四象限</strong>。x和y异号，乘积 xy = ${k.toFixed(1)}（恒负）。<br>` +
+    `k越大（绝对值越大），双曲线离原点越远；|k|越小，越靠近原点。`;
+}
+
+document.getElementById('kSl').addEventListener('input',draw);
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

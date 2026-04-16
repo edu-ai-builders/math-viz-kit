@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gram-Schmidt正交化动画 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="线性代数">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="Gram-Schmidt正交化过程的逐步动画，展示投影和减法操作如何将一组向量变为正交基">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .step-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+    .step-btn{padding:7px 16px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-family:'Noto Sans SC',sans-serif;font-weight:700;background:var(--blue);color:#fff;}
+    .reset-btn{padding:7px 16px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface);color:var(--ink2);}
+    .step-indicator{font-size:13px;color:var(--ink2);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .formula-steps{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:2;}
+    .step-formula{padding:4px 8px;border-radius:4px;transition:all .2s;}
+    .step-formula.active{background:var(--blue-light);color:var(--blue);font-weight:700;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 线性代数 · 认知动作：变换</div>
+  <h1>Gram-Schmidt 正交化动画</h1>
+  <p class="sub">逐步展示如何将线性无关向量组变为正交基</p>
+</header>
+<main>
+  <div class="step-row">
+    <button class="step-btn" onclick="nextStep()">下一步</button>
+    <button class="reset-btn" onclick="reset()">重置</button>
+    <span class="step-indicator" id="stepInd">第 0/4 步</span>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="formula-steps" id="formulaSteps"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V3 分步揭示: 每步只展示一个操作（保留/投影/减法/归一化）
+// PEDAGOGY V5 操作先于符号: 图形显示在先，公式对应在后
+// PEDAGOGY V8 概念反馈: 每步解释操作含义
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=320;
+
+// Starting vectors (linearly independent but not orthogonal)
+const a1=[3,1],a2=[2,3];
+let step=0;
+const MAX_STEPS=4;
+
+// GS process
+const u1=[...a1]; // Step 1: u1 = a1
+const dot12=a1[0]*a2[0]+a1[1]*a2[1];
+const dot11=a1[0]*a1[0]+a1[1]*a1[1];
+const proj1_a2=[dot12/dot11*a1[0],dot12/dot11*a1[1]]; // projection of a2 onto u1
+const u2_unnorm=[a2[0]-proj1_a2[0],a2[1]-proj1_a2[1]]; // u2 = a2 - proj
+const u2_norm=Math.sqrt(u2_unnorm[0]**2+u2_unnorm[1]**2);
+const u2=[u2_unnorm[0]/u2_norm,u2_unnorm[1]/u2_norm]; // normalized
+const u1_norm=Math.sqrt(u1[0]**2+u1[1]**2);
+const q1=[u1[0]/u1_norm,u1[1]/u1_norm]; // normalized u1
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+const xRange=[-1,5],yRange=[-1,4.5];
+
+function toX(x){const W=cvs.getBoundingClientRect().width;const p=40;return p+(x-xRange[0])/(xRange[1]-xRange[0])*(W-2*p);}
+function toY(y){const p=25;return p+(H-2*p)*(1-(y-yRange[0])/(yRange[1]-yRange[0]));}
+
+function arrow(x1,y1,x2,y2,col,dash=[],label='',lw=2.5){
+  ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.setLineDash(dash);
+  ctx.beginPath();ctx.moveTo(toX(x1),toY(y1));ctx.lineTo(toX(x2),toY(y2));ctx.stroke();
+  ctx.setLineDash([]);
+  const ang=Math.atan2(toY(y2)-toY(y1),toX(x2)-toX(x1));const hs=9;
+  ctx.fillStyle=col;ctx.beginPath();
+  ctx.moveTo(toX(x2),toY(y2));ctx.lineTo(toX(x2)-hs*Math.cos(ang-0.4),toY(y2)-hs*Math.sin(ang-0.4));
+  ctx.lineTo(toX(x2)-hs*Math.cos(ang+0.4),toY(y2)-hs*Math.sin(ang+0.4));ctx.closePath();ctx.fill();
+  if(label){
+    ctx.fillStyle=col;ctx.font=`bold 12px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(label,toX(x2)+14,toY(y2)-8);
+  }
+}
+
+function dot(ax,ay,col,r_=5){
+  ctx.fillStyle=col;ctx.beginPath();ctx.arc(toX(ax),toY(ay),r_,0,Math.PI*2);ctx.fill();
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const pad=40;const cw=W-2*pad;const ch=H-50;
+
+  // Grid
+  ctx.strokeStyle='#e4e2da';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+  for(let x=xRange[0];x<=xRange[1];x++){ctx.beginPath();ctx.moveTo(toX(x),25);ctx.lineTo(toX(x),25+ch);ctx.stroke();}
+  for(let y=yRange[0];y<=yRange[1];y++){ctx.beginPath();ctx.moveTo(pad,toY(y));ctx.lineTo(W-pad,toY(y));ctx.stroke();}
+  ctx.setLineDash([]);
+
+  // Axes
+  ctx.strokeStyle='#6b6860';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(pad,toY(0));ctx.lineTo(W-pad,toY(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(toX(0),25);ctx.lineTo(toX(0),25+ch);ctx.stroke();
+  ctx.fillStyle='#a8a69f';ctx.font=`9px 'JetBrains Mono',monospace`;
+  for(let x=xRange[0];x<=xRange[1];x++){if(x<0)continue;ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(x,toX(x),toY(0)+3);}
+  for(let y=0;y<=yRange[1];y++){if(!y)continue;ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(y,toX(0)-3,toY(y));}
+
+  // Always show original vectors
+  ctx.globalAlpha=0.4;
+  arrow(0,0,a1[0],a1[1],'#c8c5be',[5,3],'a₁',1.5);
+  arrow(0,0,a2[0],a2[1],'#c8c5be',[5,3],'a₂',1.5);
+  ctx.globalAlpha=1;
+
+  if(step>=1){
+    // Step 1: u1 = a1
+    arrow(0,0,u1[0],u1[1],'#2a5c8f',[],step===1?'u₁=a₁':'u₁');
+  }
+
+  if(step>=2){
+    // Step 2: show projection of a2 onto u1
+    arrow(0,0,proj1_a2[0],proj1_a2[1],'#854f0b',[4,3],'proj(a₂,u₁)');
+    // Dashed line from proj to a2
+    ctx.strokeStyle='#854f0b60';ctx.lineWidth=1.5;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(toX(proj1_a2[0]),toY(proj1_a2[1]));ctx.lineTo(toX(a2[0]),toY(a2[1]));ctx.stroke();
+    ctx.setLineDash([]);
+    dot(proj1_a2[0],proj1_a2[1],'#854f0b',4);
+    // Right angle mark
+    ctx.strokeStyle='#854f0b';ctx.lineWidth=1;
+    const sqSz=0.15;
+    ctx.strokeRect(toX(proj1_a2[0])-sqSz*20,toY(proj1_a2[1])-sqSz*20,sqSz*40,sqSz*20);
+  }
+
+  if(step>=3){
+    // Step 3: u2 = a2 - proj
+    arrow(0,0,u2_unnorm[0],u2_unnorm[1],'#0f6e56',[],'u₂=a₂-proj');
+    // Verify orthogonality
+    ctx.strokeStyle='#0f6e5640';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+    // Draw right angle between u1 and u2
+    ctx.setLineDash([]);
+  }
+
+  if(step>=4){
+    // Step 4: normalize
+    const s=2.5;
+    arrow(0,0,q1[0]*s,q1[1]*s,'#2a5c8f',[],'q₁',3);
+    arrow(0,0,u2[0]*s,u2[1]*s,'#0f6e56',[],'q₂',3);
+    // Show they're orthogonal with right angle
+    ctx.strokeStyle='#dc2626';ctx.lineWidth=1.5;
+    ctx.font=`11px 'Noto Sans SC',sans-serif`;ctx.fillStyle='#dc2626';
+    ctx.textAlign='left';ctx.fillText('q₁·q₂=0 ✓',toX(1.5),toY(3.5));
+    ctx.fillText('‖q₁‖=‖q₂‖=1 ✓',toX(1.5),toY(3.2));
+  }
+}
+
+function updateFormula(){
+  const steps2=[
+    {id:0,text:'初始向量：a₁=(3,1), a₂=(2,3)',active:step===0},
+    {id:1,text:'步骤1：u₁ = a₁ = (3,1)',active:step===1},
+    {id:2,text:'步骤2：proj(a₂,u₁) = (a₂·u₁/‖u₁‖²)u₁ = ('+((dot12/dot11).toFixed(2))+'×a₁)',active:step===2},
+    {id:3,text:'步骤3：u₂ = a₂ - proj = ('+u2_unnorm.map(v=>v.toFixed(3))+')',active:step===3},
+    {id:4,text:'步骤4：归一化 q₁=u₁/‖u₁‖, q₂=u₂/‖u₂‖  得正交基',active:step===4},
+  ];
+  document.getElementById('formulaSteps').innerHTML=steps2.map(s=>`<div class="step-formula ${s.active?'active':''}">${s.text}</div>`).join('');
+  document.getElementById('stepInd').textContent=`第 ${step}/${MAX_STEPS} 步`;
+
+  const msgs=['点击"下一步"开始Gram-Schmidt正交化过程。',
+    '<strong>步骤1</strong>：取 u₁=a₁，保留第一个向量不变。',
+    '<strong>步骤2</strong>：计算 a₂ 在 u₁ 方向的投影（棕色向量）。公式：proj = (a₂·u₁/‖u₁‖²)u₁。',
+    '<strong>步骤3</strong>：u₂ = a₂ - proj，减去投影分量，得到与 u₁ 正交的向量（绿色）。',
+    '<strong>步骤4</strong>：将 u₁,u₂ 归一化，得到标准正交基 q₁,q₂（单位向量，互相垂直）。验证：q₁·q₂=0且‖q₁‖=‖q₂‖=1。'];
+  document.getElementById('fb').innerHTML=msgs[step]+'<br><strong>Gram-Schmidt算法</strong>：将任意线性无关向量组 {a₁,...,aₙ} 变为正交标准基，是QR分解的核心步骤。';
+}
+
+function nextStep(){if(step<MAX_STEPS){step++;draw();updateFormula();}}
+function reset(){step=0;draw();updateFormula();}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();updateFormula();
+</script>
+</body>
+</html>

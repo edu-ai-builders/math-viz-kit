@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>幂函数同屏比较器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="函数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="多条幂函数y=xⁿ同屏叠图比较，选择不同指数，理解正负整数和分数指数的图像特征">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:700px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:700px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .fn-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;}
+    .fn-cb{display:flex;align-items:center;gap:5px;padding:6px 8px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:700;transition:all .15s;}
+    .fn-cb.on{color:#fff;border-color:transparent;}
+    .fn-cb input[type=checkbox]{display:none;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .legend-row{display:flex;gap:8px;flex-wrap:wrap;}
+    .leg-item{display:flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:12px;}
+    .leg-dot{width:12px;height:4px;border-radius:2px;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 函数 · 认知动作：比较</div>
+  <h1>幂函数同屏比较器</h1>
+  <p class="sub">选择多个指数，同屏叠图比较 y = xⁿ 的图像特征</p>
+</header>
+<main>
+  <div class="fn-grid" id="fnGrid"></div>
+  <canvas id="cvs"></canvas>
+  <div class="legend-row" id="legend"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V2 表征桥接: 多条幂函数同屏对比，一眼看出指数影响
+// PEDAGOGY V4 信号聚焦: 每条曲线不同颜色，关键点(0,0)(1,1)(-1,±1)高亮
+// PEDAGOGY V7 单一认知动作: 比较（不同指数的幂函数图像比较）
+// PEDAGOGY V8 概念反馈: "指数越大，x>1时增长越快；负指数在x=0处无意义"
+
+const FUNS = [
+  {n:0.5,  label:'x^(1/2)', sym:'√x',   color:'#0f6e56', domain:[0,4]},
+  {n:1,    label:'x^1',     sym:'x',     color:'#2a5c8f', domain:[-4,4]},
+  {n:2,    label:'x^2',     sym:'x²',    color:'#854f0b', domain:[-4,4]},
+  {n:3,    label:'x^3',     sym:'x³',    color:'#b84040', domain:[-3,3]},
+  {n:4,    label:'x^4',     sym:'x⁴',    color:'#7b3f9e', domain:[-3,3]},
+  {n:-1,   label:'x^(-1)',  sym:'1/x',   color:'#c06000', domain_exc:0},
+  {n:-2,   label:'x^(-2)',  sym:'1/x²',  color:'#1a5cb5', domain_exc:0},
+  {n:1/3,  label:'x^(1/3)', sym:'∛x',    color:'#d97706', domain:[-4,4]},
+  {n:2/3,  label:'x^(2/3)', sym:'x^⅔',  color:'#059669', domain:[-4,4]},
+  {n:1.5,  label:'x^(3/2)', sym:'x^1.5', color:'#7c3aed', domain:[0,4]},
+];
+
+let active = new Set([1,2,3]); // indices into FUNS
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=320;
+
+function buildButtons(){
+  const grid=document.getElementById('fnGrid');
+  grid.innerHTML='';
+  FUNS.forEach((f,i)=>{
+    const btn=document.createElement('div');
+    btn.className='fn-cb'+(active.has(i)?' on':'');
+    btn.style.background=active.has(i)?f.color:'';
+    btn.innerHTML=`<input type="checkbox" ${active.has(i)?'checked':''}><span>y=${f.sym}</span>`;
+    btn.onclick=()=>{
+      if(active.has(i)) active.delete(i); else active.add(i);
+      btn.classList.toggle('on');
+      btn.style.background=active.has(i)?f.color:'';
+      draw(); updateLegend(); updateFb();
+    };
+    grid.appendChild(btn);
+  });
+}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function powerSafe(x,n){
+  if(n===Math.floor(n)){
+    if(n<0 && Math.abs(x)<0.001) return null;
+    return Math.pow(x,n);
+  }
+  // fractional: handle negative x specially
+  if(x<0){
+    const {numerator,denominator}=fracApprox(n);
+    if(denominator%2===1) return -Math.pow(-x,n);
+    return null;
+  }
+  if(x===0&&n>0) return 0;
+  if(x===0) return null;
+  return Math.pow(x,n);
+}
+
+function fracApprox(n){
+  // Simple fraction approximation for common cases
+  if(Math.abs(n-1/3)<0.01) return {numerator:1,denominator:3};
+  if(Math.abs(n-2/3)<0.01) return {numerator:2,denominator:3};
+  return {numerator:Math.round(n*10),denominator:10};
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const pad={l:40,r:10,t:20,b:30};
+  const cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
+  const xRange=[-4,4], yRange=[-4,4];
+
+  function toX(x){return pad.l+(x-xRange[0])/(xRange[1]-xRange[0])*cw;}
+  function toY(y){return pad.t+ch-(y-yRange[0])/(yRange[1]-yRange[0])*ch;}
+
+  // Grid
+  ctx.strokeStyle='#e4e2da';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+  for(let x=xRange[0];x<=xRange[1];x++){
+    ctx.beginPath();ctx.moveTo(toX(x),pad.t);ctx.lineTo(toX(x),pad.t+ch);ctx.stroke();
+  }
+  for(let y=yRange[0];y<=yRange[1];y++){
+    ctx.beginPath();ctx.moveTo(pad.l,toY(y));ctx.lineTo(W-pad.r,toY(y));ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Axes
+  ctx.strokeStyle='#6b6860';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(pad.l,toY(0));ctx.lineTo(W-pad.r,toY(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(toX(0),pad.t);ctx.lineTo(toX(0),pad.t+ch);ctx.stroke();
+
+  // Labels
+  ctx.fillStyle='#a8a69f';ctx.font=`9px 'JetBrains Mono',monospace`;
+  for(let i=xRange[0];i<=xRange[1];i++){
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(i,toX(i),toY(0)+3);
+  }
+  for(let i=yRange[0];i<=yRange[1];i++){
+    if(i===0) continue;
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(i,toX(0)-3,toY(i));
+  }
+
+  // Plot functions
+  const S=200;
+  [...active].forEach(idx=>{
+    const f=FUNS[idx];
+    ctx.strokeStyle=f.color;ctx.lineWidth=2.5;
+    ctx.beginPath();
+    let penDown=false;
+    for(let i=0;i<=S;i++){
+      const x=xRange[0]+i/S*(xRange[1]-xRange[0]);
+      const y=powerSafe(x,f.n);
+      if(y===null||!isFinite(y)||y<yRange[0]-2||y>yRange[1]+2){penDown=false;continue;}
+      if(!penDown){ctx.moveTo(toX(x),toY(y));penDown=true;}
+      else ctx.lineTo(toX(x),toY(y));
+    }
+    ctx.stroke();
+
+    // Mark (0,0) and (1,1)
+    [[0,0],[1,1]].forEach(([x,y])=>{
+      const py=powerSafe(x,f.n);
+      if(py!==null&&Math.abs(py-y)<0.01){
+        ctx.fillStyle=f.color;
+        ctx.beginPath();ctx.arc(toX(x),toY(y),3,0,Math.PI*2);ctx.fill();
+      }
+    });
+  });
+
+  // (1,1) marker
+  ctx.strokeStyle='#a8a69f';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(toX(1),pad.t);ctx.lineTo(toX(1),toY(1));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pad.l,toY(1));ctx.lineTo(toX(1),toY(1));ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#6b6860';ctx.font=`10px 'JetBrains Mono',monospace`;
+  ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText('(1,1)',toX(1)+3,toY(1)-2);
+}
+
+function updateLegend(){
+  const row=document.getElementById('legend');
+  row.innerHTML=[...active].map(i=>{
+    const f=FUNS[i];
+    return `<div class="leg-item"><div class="leg-dot" style="background:${f.color}"></div>y=${f.sym}</div>`;
+  }).join('');
+}
+
+function updateFb(){
+  const selected=[...active].map(i=>FUNS[i]);
+  const hasNeg=selected.some(f=>f.n<0);
+  const hasFrac=selected.some(f=>f.n>0&&f.n!==Math.floor(f.n));
+  const hasEven=selected.some(f=>Number.isInteger(f.n)&&f.n%2===0&&f.n>0);
+  const hasOdd=selected.some(f=>Number.isInteger(f.n)&&f.n%2===1&&f.n>0);
+  document.getElementById('fb').innerHTML=
+    `<strong>所有幂函数的共同点</strong>：都经过点 (1, 1)，当 n>0 时也过 (0, 0)。<br>` +
+    (hasEven?'<strong>偶数正指数</strong>（n=2,4,...）：关于y轴对称（偶函数），x=0处最小值。<br>':'')+
+    (hasOdd?'<strong>奇数正指数</strong>（n=1,3,...）：关于原点对称（奇函数），单调递增。<br>':'')+
+    (hasNeg?'<strong>负指数</strong>（n=-1,-2,...）：x=0无意义（渐近线），|x|越大|y|越小。<br>':'')+
+    (hasFrac?'<strong>分数指数</strong>（n=1/2,1/3,...）：对应根号运算，x<0时视分母奇偶而定。<br>':'')+
+    'x>1时，指数越大增长越快；0<x<1时，指数越大值越小。';
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); buildButtons(); draw(); updateLegend(); updateFb();
+</script>
+</body>
+</html>

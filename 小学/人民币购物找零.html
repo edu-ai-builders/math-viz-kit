@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>人民币购物找零 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="人民币">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="模拟">
+  <meta name="desc" content="超市购物模拟：选商品→算总价→选择付钱面值→动画显示找零过程">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#fff8f0;--surface:#fff;--ink:#2a1a00;--ink2:#7a5a30;--ink3:#b89060;--border:#f0d8b0;--blue:#1a5cb5;--blue-light:#e0ecff;--teal:#0a7a50;--teal-light:#d0f0e0;--amber:#c06000;--amber-light:#fff0d0;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:20px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:20px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:12px 20px 28px;display:flex;flex-direction:column;gap:10px;}
+    .section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;}
+    .section-title{font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:8px;}
+    .goods-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .good-btn{padding:8px 6px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);text-align:center;transition:all .2s;font-size:13px;}
+    .good-btn.selected{background:var(--amber-light);border-color:var(--amber);}
+    .good-icon{font-size:24px;}
+    .good-price{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--amber);font-weight:700;}
+    .cart-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .cart-item{background:var(--amber-light);border-radius:6px;padding:4px 8px;font-size:13px;}
+    .total-box{background:var(--teal-light);border-radius:var(--radius-sm);padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--teal);text-align:center;}
+    .money-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:6px;}
+    .money-btn{padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);text-align:center;font-size:13px;font-weight:700;font-family:'JetBrains Mono',monospace;transition:all .2s;}
+    .money-btn:hover{background:var(--amber-light);border-color:var(--amber);}
+    .paid-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .paid-chip{background:var(--blue-light);border:1px solid var(--blue);border-radius:6px;padding:4px 8px;font-size:12px;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius-sm);}
+    .btn-pay{padding:10px 24px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius-sm);font-size:15px;font-family:'Noto Sans SC',sans-serif;font-weight:700;cursor:pointer;width:100%;}
+    .btn-clear{padding:8px 16px;background:var(--surface);border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;color:var(--ink2);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 人民币 · 认知动作：模拟</div>
+  <h1>人民币购物找零模拟</h1>
+  <p class="sub">选择商品→付款→看找零过程</p>
+</header>
+<main>
+  <div class="section">
+    <div class="section-title">第一步：选择要买的商品</div>
+    <div class="goods-grid" id="goodsGrid"></div>
+    <div class="cart-row" id="cartRow" style="margin-top:8px;"></div>
+    <div class="total-box" id="totalBox">总价：¥0.00</div>
+  </div>
+  <div class="section">
+    <div class="section-title">第二步：选择要付的钱</div>
+    <div class="money-grid" id="moneyGrid"></div>
+    <div class="paid-row" id="paidRow" style="margin-top:6px;"></div>
+    <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
+      <div style="font-family:monospace;font-size:15px;font-weight:700;color:var(--blue)" id="paidTotal">已付：¥0.00</div>
+      <button class="btn-clear" onclick="clearPaid()">清空</button>
+    </div>
+  </div>
+  <canvas id="cvs" height="100"></canvas>
+  <button class="btn-pay" onclick="pay()">付款并找零</button>
+  <div class="fb" id="fb">选好商品，付款后会显示找零过程。</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 找零的过程（大面值→小面值）只有动画才能感受
+// PEDAGOGY V5 操作先于符号: 先实际购物，找零自然涌现
+// PEDAGOGY V7 单一认知动作: 模拟（现实购物情境中的加减法）
+// PEDAGOGY V8 概念反馈: "你付了X元，总价Y元，所以找回X-Y元"
+
+const GOODS = [
+  {emoji:'🍎', name:'苹果', price:2.5},
+  {emoji:'🍌', name:'香蕉', price:3.0},
+  {emoji:'🥛', name:'牛奶', price:4.5},
+  {emoji:'🍞', name:'面包', price:5.0},
+  {emoji:'🧃', name:'果汁', price:3.5},
+  {emoji:'🥚', name:'鸡蛋', price:6.0},
+  {emoji:'🍬', name:'糖果', price:1.0},
+  {emoji:'📏', name:'铅笔', price:1.5},
+];
+
+const MONEY = [
+  {label:'¥100', val:100},
+  {label:'¥50', val:50},
+  {label:'¥20', val:20},
+  {label:'¥10', val:10},
+  {label:'¥5', val:5},
+  {label:'¥2', val:2},
+  {label:'¥1', val:1},
+  {label:'¥0.5', val:0.5},
+  {label:'¥0.1', val:0.1},
+  {label:'¥0.01', val:0.01},
+];
+
+let cart = [];
+let paid = [];
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = 100*dpr;
+  ctx.scale(dpr,dpr); cvs.style.height = '100px';
+}
+
+// Build goods grid
+const gGrid = document.getElementById('goodsGrid');
+GOODS.forEach((g,i)=>{
+  const btn = document.createElement('button');
+  btn.className = 'good-btn';
+  btn.innerHTML = `<div class="good-icon">${g.emoji}</div><div>${g.name}</div><div class="good-price">¥${g.price.toFixed(2)}</div>`;
+  btn.onclick = () => {
+    cart.push(g);
+    btn.classList.add('selected');
+    setTimeout(()=>btn.classList.remove('selected'), 400);
+    updateCart();
+  };
+  gGrid.appendChild(btn);
+});
+
+// Build money grid
+const mGrid = document.getElementById('moneyGrid');
+MONEY.forEach(m=>{
+  const btn = document.createElement('button');
+  btn.className = 'money-btn';
+  btn.textContent = m.label;
+  btn.onclick = () => { paid.push(m.val); updatePaid(); };
+  mGrid.appendChild(btn);
+});
+
+function updateCart() {
+  const total = cart.reduce((s,g)=>s+g.price,0);
+  document.getElementById('cartRow').innerHTML = cart.length===0?'（购物车为空）':
+    cart.map(g=>`<span class="cart-item">${g.emoji}${g.name} ¥${g.price.toFixed(2)}</span>`).join('');
+  document.getElementById('totalBox').textContent = `总价：¥${total.toFixed(2)}`;
+}
+
+function updatePaid() {
+  const pTotal = paid.reduce((s,v)=>s+v,0);
+  document.getElementById('paidRow').innerHTML = paid.length===0?'':
+    paid.map(v=>`<span class="paid-chip">¥${v.toFixed(v<1?2:v<10?1:0)}</span>`).join('');
+  document.getElementById('paidTotal').textContent = `已付：¥${pTotal.toFixed(2)}`;
+}
+
+function clearPaid() { paid = []; updatePaid(); ctx.clearRect(0,0,cvs.width,cvs.height); }
+
+function pay() {
+  const total = cart.reduce((s,g)=>s+g.price,0);
+  const pTotal = paid.reduce((s,v)=>s+v,0);
+  const change = Math.round((pTotal-total)*100)/100;
+  const fb = document.getElementById('fb');
+
+  if(cart.length===0){fb.innerHTML='<strong>请先选择商品！</strong>';return;}
+  if(pTotal===0){fb.innerHTML='<strong>请先选择要付的钱！</strong>';return;}
+  if(pTotal<total){
+    fb.innerHTML=`<strong>钱不够！</strong>需要 ¥${total.toFixed(2)}，已付 ¥${pTotal.toFixed(2)}，还差 ¥${(total-pTotal).toFixed(2)}`;
+    return;
+  }
+
+  // Compute change breakdown (greedy)
+  let rem = change;
+  const changeBreakdown = [];
+  MONEY.forEach(m=>{
+    const cnt = Math.floor(Math.round(rem/m.val*100)/100);
+    if(cnt>0){ changeBreakdown.push({label:m.label, val:m.val, cnt}); rem=Math.round((rem-cnt*m.val)*100)/100; }
+  });
+
+  // Draw change breakdown
+  const W = cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,100);
+  if(change===0){
+    ctx.fillStyle='#0a7a50'; ctx.font=`bold 18px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('刚好！不用找零 ✓', W/2, 50);
+  } else {
+    ctx.fillStyle='#1a5cb5'; ctx.font=`bold 14px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(`找零 ¥${change.toFixed(2)}：`, 10, 30);
+    let x=100;
+    changeBreakdown.forEach(item=>{
+      for(let i=0;i<item.cnt;i++){
+        ctx.fillStyle=item.val>=10?'#d4a017':item.val>=1?'#c0c0c0':'#b87333';
+        ctx.beginPath(); ctx.ellipse(x+18,50,18,12,0,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=1; ctx.stroke();
+        ctx.fillStyle='#fff'; ctx.font=`bold 9px 'JetBrains Mono',monospace`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(item.label.replace('¥',''), x+18, 50);
+        x+=40;
+        if(x>W-40) break;
+      }
+    });
+  }
+
+  fb.innerHTML = `<strong>购物完成！</strong><br>` +
+    `总价：¥${total.toFixed(2)}，已付：¥${pTotal.toFixed(2)}，找零：¥${change.toFixed(2)}<br>` +
+    `${change===0?'恰好！':'找零 = 付款 - 总价 = '}${pTotal.toFixed(2)} - ${total.toFixed(2)} = ${change.toFixed(2)} 元<br>` +
+    (changeBreakdown.length>0?'找零组合：'+changeBreakdown.map(b=>`${b.label}×${b.cnt}`).join('，'):'');
+
+  // Reset
+  cart=[]; paid=[];
+  updateCart(); updatePaid();
+}
+
+window.addEventListener('resize',()=>{setup();});
+setup();
+</script>
+</body>
+</html>

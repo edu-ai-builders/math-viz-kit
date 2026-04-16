@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>二项式定理展开 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="二项式定理">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="分解">
+  <meta name="desc" content="帕斯卡三角与二项展开系数的关系，动态展示(a+b)^n的展开项和系数规律">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .expand-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:13px;overflow-x:auto;white-space:nowrap;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.controls{grid-template-columns:1fr 1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 二项式定理 · 认知动作：分解</div>
+  <h1>二项式定理展开</h1>
+  <p class="sub">帕斯卡三角行 = (a+b)^n 的系数——发现模式，理解定理来源</p>
+</header>
+<main>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">指数 n</div>
+      <div class="sl-val" id="nLabel">4</div>
+      <input type="range" id="nSl" min="1" max="8" value="4">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">a 值</div>
+      <div class="sl-val" id="aLabel" style="color:var(--teal)">1</div>
+      <input type="range" id="aSl" min="1" max="5" step="1" value="1">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">b 值</div>
+      <div class="sl-val" id="bLabel" style="color:var(--amber)">1</div>
+      <input type="range" id="bSl" min="1" max="5" step="1" value="1">
+    </div>
+  </div>
+  <div class="expand-box" id="expandBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 帕斯卡三角到二项展开系数的联系只有高亮才能体现
+// PEDAGOGY V3 分步揭示: n=1开始，用户增大n观察规律扩展
+// PEDAGOGY V5 操作先于符号: 先看三角形中的数，再理解C(n,k)
+// PEDAGOGY V7 单一认知动作: 分解（展开为各项之和）
+// PEDAGOGY V8 概念反馈: 揭示帕斯卡三角的构造规律和组合数联系
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=380;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function comb(n,r){
+  if(r>n||r<0) return 0;
+  let num=1,den=1;
+  for(let i=0;i<r;i++){num*=(n-i);den*=(i+1);}
+  return num/den;
+}
+
+function buildPascal(rows){
+  const tri=[[1]];
+  for(let r=1;r<rows;r++){
+    const prev=tri[r-1];
+    const row=[1];
+    for(let k=1;k<prev.length;k++) row.push(prev[k-1]+prev[k]);
+    row.push(1);
+    tri.push(row);
+  }
+  return tri;
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const n=parseInt(document.getElementById('nSl').value);
+  const a=parseInt(document.getElementById('aSl').value);
+  const b=parseInt(document.getElementById('bSl').value);
+  const maxRows=Math.min(n+1,9);
+  const tri=buildPascal(maxRows);
+
+  const margin={left:16,right:16,top:20,bottom:20};
+  const plotH=H-margin.top-margin.bottom;
+  const rowH=plotH/maxRows;
+  const maxCols=maxRows;
+  const cellW=Math.min((W-margin.left-margin.right)/maxCols, 60);
+
+  // Draw Pascal's triangle
+  tri.forEach((row,ri)=>{
+    const isHighlighted=(ri===n);
+    const rowWidth=row.length*cellW;
+    const startX=W/2-rowWidth/2+cellW/2;
+    const yc=margin.top+ri*rowH+rowH/2;
+
+    row.forEach((val,ki)=>{
+      const xc=startX+ki*cellW;
+      const bgColor=isHighlighted?C.amber:C.blue;
+      const alpha=isHighlighted?0.9:0.15+ri*0.05;
+      ctx.fillStyle=bgColor+(isHighlighted?'ee':'33');
+      ctx.beginPath();ctx.roundRect(xc-cellW/2+3,yc-rowH/2+3,cellW-6,rowH-6,6);ctx.fill();
+      if(isHighlighted){
+        ctx.strokeStyle=C.amber;ctx.lineWidth=2;
+        ctx.beginPath();ctx.roundRect(xc-cellW/2+3,yc-rowH/2+3,cellW-6,rowH-6,6);ctx.stroke();
+      }
+      ctx.fillStyle=isHighlighted?C.surf:C.ink;
+      ctx.font=`bold ${Math.min(14,cellW*0.4)}px 'JetBrains Mono',monospace`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(String(val),xc,yc);
+    });
+
+    // Row label
+    if(ri<=n){
+      ctx.fillStyle=isHighlighted?C.amber:C.ink3;
+      ctx.font=`${isHighlighted?'bold ':' '}12px 'Noto Sans SC',sans-serif`;
+      ctx.textAlign='right';ctx.textBaseline='middle';
+      ctx.fillText(`n=${ri}`,margin.left+W/2-rowWidth/2-6,yc);
+    }
+  });
+
+  // Highlight active row label
+  const activeRow=tri[n]||[];
+  const rowWidth=activeRow.length*cellW;
+  const yc=margin.top+n*rowH+rowH/2;
+  ctx.fillStyle=C.amber;ctx.font=`bold 12px 'Noto Sans SC',sans-serif`;ctx.textAlign='right';ctx.textBaseline='middle';
+  ctx.fillText(`← (a+b)^${n} 的系数`,margin.left+W,yc);
+
+  // Connection lines down (Pascal rule)
+  tri.forEach((row,ri)=>{
+    if(ri>=maxRows-1) return;
+    const nextRow=tri[ri+1];
+    const rowW=row.length*cellW;
+    const startX=W/2-rowW/2+cellW/2;
+    const yc1=margin.top+ri*rowH+rowH/2;
+    const yc2=margin.top+(ri+1)*rowH+rowH/2;
+    const nextStartX=W/2-nextRow.length*cellW/2+cellW/2;
+    row.forEach((val,ki)=>{
+      const x1=startX+ki*cellW;
+      const x2l=nextStartX+ki*cellW;
+      const x2r=nextStartX+(ki+1)*cellW;
+      ctx.strokeStyle=C.ink3+'44';ctx.lineWidth=0.8;ctx.setLineDash([]);
+      if(x2l&&nextRow[ki]){ctx.beginPath();ctx.moveTo(x1,yc1+rowH/2-4);ctx.lineTo(x2l,yc2-rowH/2+4);ctx.stroke();}
+      if(x2r&&nextRow[ki+1]){ctx.beginPath();ctx.moveTo(x1,yc1+rowH/2-4);ctx.lineTo(x2r,yc2-rowH/2+4);ctx.stroke();}
+    });
+  });
+
+  // Update controls
+  document.getElementById('nLabel').textContent=n;
+  document.getElementById('aLabel').textContent=a;
+  document.getElementById('bLabel').textContent=b;
+
+  // Expansion
+  const coeffs=tri[n]||[1];
+  const terms=coeffs.map((c,k)=>{
+    const ap=n-k, bp=k;
+    const coeff=c*(Math.pow(a,ap)*Math.pow(b,bp));
+    const label=`${c}·${a}^${ap}·${b}^${bp}=${coeff}`;
+    if(a===1&&b===1) return `${c}${ap>0?`a${ap>1?`^${ap}`:''}`:``}${bp>0?`b${bp>1?`^${bp}`:''}`:``}`;
+    return `${coeff}`;
+  });
+  const totalVal=terms.reduce((s,t)=>s+parseInt(t.replace(/[^0-9-]/g,'')||0),0);
+  document.getElementById('expandBox').textContent=
+    `(${a}a+${b}b)^${n} = ` + coeffs.map((c,k)=>{
+      const ap=n-k,bp=k;
+      return `C(${n},${k})·${a===1?'':`${a}^${ap}`}a^${ap}·${b===1?'':`${b}^${bp}`}b^${bp}`;
+    }).join(' + ');
+
+  // PEDAGOGY V8
+  document.getElementById('fb').innerHTML=
+    `第 ${n} 行（从第0行开始）= <strong>${coeffs.join(', ')}</strong> = (a+b)^${n} 展开各项的系数。<br>` +
+    `帕斯卡三角构造规律：<strong>每个数 = 上方左右两数之和</strong>（组合数递推）。<br>` +
+    `系数 C(${n},k) = 从 ${n} 个位置中选 k 个放 b（其余放 a）的方案数。<br>` +
+    `当 a=b=1 时各行之和：${coeffs.reduce((s,v)=>s+v,0)} = 2^${n}。`;
+}
+
+['nSl','aSl','bSl'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

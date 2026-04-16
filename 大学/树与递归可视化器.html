@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>树与递归可视化器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="离散数学">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="递归展开树的动画可视化，展示斐波那契数列、汉诺塔、快排等递归算法的调用树结构">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .algo-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .algo-btn{padding:7px 14px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);font-weight:700;}
+    .algo-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .ctrl-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .ctrl-label{font-size:12px;color:var(--ink2);}
+    input[type=range]{accent-color:var(--blue);width:120px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--blue);}
+    .btn{padding:7px 16px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;font-family:'Noto Sans SC',sans-serif;font-weight:700;background:var(--blue);color:#fff;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);overflow:hidden;}
+    .info-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--blue);font-family:'JetBrains Mono',monospace;line-height:1.7;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 离散数学 · 认知动作：累积</div>
+  <h1>树与递归可视化器</h1>
+  <p class="sub">动画展示递归调用树的展开过程</p>
+</header>
+<main>
+  <div class="algo-row">
+    <button class="algo-btn active" onclick="setAlgo('fib',this)">斐波那契</button>
+    <button class="algo-btn" onclick="setAlgo('factorial',this)">阶乘</button>
+    <button class="algo-btn" onclick="setAlgo('mergesort',this)">归并排序</button>
+    <button class="algo-btn" onclick="setAlgo('hanoi',this)">汉诺塔</button>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctrl-label">参数 n =</span>
+    <input type="range" id="slN" min="1" max="8" step="1" value="5" oninput="updateN()">
+    <span class="ctrl-val" id="nLbl">5</span>
+    <button class="btn" onclick="animate()">展开动画</button>
+    <button class="btn" style="background:var(--surface);color:var(--ink2);border:2px solid var(--border)" onclick="showAll()">显示全部</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="info-box" id="infoBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V3 分步揭示: 动画逐步展开递归调用树，理解递归深度和宽度
+// PEDAGOGY V4 信号聚焦: 深度越深颜色越浅，叶节点高亮
+// PEDAGOGY V8 概念反馈: 显示总调用次数和时间复杂度
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=360;
+let algo='fib';
+let N=5;
+let tree=null;
+let visibleNodes=[];
+let animTimer=null;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function updateN(){
+  N=parseInt(document.getElementById('slN').value);
+  document.getElementById('nLbl').textContent=N;
+  buildTree();draw();
+}
+
+function setAlgo(a,btn){
+  algo=a;
+  document.querySelectorAll('.algo-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  // Adjust N range
+  const maxN={fib:8,factorial:8,mergesort:6,hanoi:5};
+  document.getElementById('slN').max=maxN[a];
+  N=Math.min(N,maxN[a]);
+  document.getElementById('slN').value=N;
+  document.getElementById('nLbl').textContent=N;
+  buildTree();showAll();
+}
+
+// Build recursive call tree
+function buildTree(){
+  let calls=0;
+  function fibTree(n,depth=0){
+    calls++;
+    const node={label:`fib(${n})`,n,depth,children:[]};
+    if(n<=1){node.leaf=true;node.val=n;return node;}
+    node.children.push(fibTree(n-1,depth+1));
+    node.children.push(fibTree(n-2,depth+1));
+    node.val=node.children[0].val+node.children[1].val;
+    return node;
+  }
+  function factTree(n,depth=0){
+    calls++;
+    const node={label:`${n}!`,n,depth,children:[]};
+    if(n<=1){node.leaf=true;node.val=1;return node;}
+    node.children.push(factTree(n-1,depth+1));
+    node.val=n*node.children[0].val;
+    return node;
+  }
+  function mergeTree(n,depth=0){
+    calls++;
+    const node={label:`sort(${n})`,n,depth,children:[]};
+    if(n<=1){node.leaf=true;node.val=n;return node;}
+    const left=Math.floor(n/2),right=n-left;
+    node.children.push(mergeTree(left,depth+1));
+    node.children.push(mergeTree(right,depth+1));
+    return node;
+  }
+  function hanoiTree(n,from='A',to='C',via='B',depth=0){
+    calls++;
+    const node={label:`H(${n},${from}→${to})`,n,depth,children:[]};
+    if(n===1){node.leaf=true;return node;}
+    node.children.push(hanoiTree(n-1,from,via,to,depth+1));
+    node.children.push({label:`移动${n}`,n,depth:depth+1,leaf:true,move:true});
+    node.children.push(hanoiTree(n-1,via,to,from,depth+1));
+    return node;
+  }
+
+  calls=0;
+  if(algo==='fib') tree=fibTree(N);
+  else if(algo==='factorial') tree=factTree(N);
+  else if(algo==='mergesort') tree=mergeTree(N);
+  else tree=hanoiTree(N);
+
+  // Assign x positions (BFS layout)
+  assignPositions(tree);
+
+  // BFS order for animation
+  visibleNodes=[];
+  const q=[tree];
+  while(q.length){
+    const node=q.shift();
+    visibleNodes.push(node);
+    node.children.forEach(c=>q.push(c));
+  }
+
+  const complexity={
+    fib:`T(n)=O(2ⁿ)，总调用≈${calls}次`,
+    factorial:`T(n)=O(n)，总调用=${calls}次`,
+    mergesort:`T(n)=O(n log n)，总调用=${calls}次`,
+    hanoi:`T(n)=O(2ⁿ)，总移动=${calls}次`
+  };
+  document.getElementById('infoBox').innerHTML=
+    `n=${N}  总节点数=${visibleNodes.length}  ${complexity[algo]}\n` +
+    (tree.val!==undefined?`结果=${tree.val}`:'');
+
+  const desc={
+    fib:`斐波那契递归树：fib(n)=fib(n-1)+fib(n-2)，呈指数级增长（O(2ⁿ)），存在大量重复计算。用记忆化或动态规划可降至O(n)。`,
+    factorial:`阶乘递归树：n!=n×(n-1)!，纯线性递归，深度=n，每层只有一个子调用（O(n)）。`,
+    mergesort:`归并排序分治树：将问题分为两半，每层有O(n)次合并操作，共log₂n层，总复杂度O(n log n)。`,
+    hanoi:`汉诺塔递归树：T(n)=2T(n-1)+1，解为2ⁿ-1步。这是能用优雅递归描述但指数级增长的经典例子。`
+  };
+  document.getElementById('fb').innerHTML=`<strong>递归调用树</strong>：每个节点代表一次函数调用，子节点是递归调用。<br>${desc[algo]}`;
+}
+
+function assignPositions(root){
+  // DFS layout: assign leaf positions first, then average
+  let leafCount=0;
+  function countLeaves(node){
+    if(!node.children.length){node._leafIdx=leafCount++;return;}
+    node.children.forEach(countLeaves);
+  }
+  countLeaves(root);
+
+  function assignX(node){
+    if(!node.children.length){node.x=node._leafIdx;return;}
+    node.children.forEach(assignX);
+    node.x=node.children.reduce((s,c)=>s+c.x,0)/node.children.length;
+  }
+  assignX(root);
+
+  // Normalize x to [0,1]
+  const allNodes=[];
+  function collect(n){allNodes.push(n);n.children.forEach(collect);}
+  collect(root);
+  const minX=Math.min(...allNodes.map(n=>n.x));
+  const maxX=Math.max(...allNodes.map(n=>n.x));
+  const maxDepth=Math.max(...allNodes.map(n=>n.depth));
+  allNodes.forEach(n=>{
+    n.nx=(maxX===minX?0.5:(n.x-minX)/(maxX-minX));
+    n.ny=n.depth/(maxDepth+0.5);
+  });
+}
+
+function getNodeColor(node){
+  const depth=node.depth;
+  const maxD=Math.max(...visibleNodes.map(n=>n.depth));
+  const t=depth/Math.max(maxD,1);
+  const colors=['#2a5c8f','#0f6e56','#854f0b','#b84040','#7b3f9e','#c06000'];
+  return colors[depth%colors.length];
+}
+
+let visibleCount=0;
+function animate(){
+  cancelAnimationFrame(animTimer);animTimer=null;
+  visibleCount=0;
+  function step(){
+    if(visibleCount<visibleNodes.length){
+      visibleCount+=Math.max(1,Math.floor(visibleNodes.length/60));
+      draw();
+      animTimer=requestAnimationFrame(step);
+    }
+  }
+  animTimer=requestAnimationFrame(step);
+}
+
+function showAll(){
+  cancelAnimationFrame(animTimer);
+  visibleCount=visibleNodes.length;
+  draw();
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  if(!tree) return;
+
+  const pad={l:30,r:30,t:40,b:20};
+  const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+
+  function nodePos(n){return[pad.l+n.nx*cw, pad.t+n.ny*ch];}
+
+  const shown=visibleNodes.slice(0,visibleCount);
+  const shownSet=new Set(shown);
+
+  // Draw edges first
+  shown.forEach(node=>{
+    node.children.forEach(child=>{
+      if(!shownSet.has(child)) return;
+      const [x1,y1]=nodePos(node),[x2,y2]=nodePos(child);
+      ctx.strokeStyle='#c8c5be';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    });
+  });
+
+  // Draw nodes
+  const nodeR=Math.min(18,cw/(visibleNodes.length+1)*0.8);
+  shown.forEach((node,i)=>{
+    const [x,y]=nodePos(node);
+    const col=getNodeColor(node);
+    const isCurrent=i===visibleCount-1;
+
+    // Node circle
+    ctx.fillStyle=node.leaf?col+'cc':col;
+    ctx.beginPath();ctx.arc(x,y,isCurrent?nodeR+2:nodeR,0,Math.PI*2);ctx.fill();
+    if(isCurrent){ctx.strokeStyle='#1a1814';ctx.lineWidth=2;ctx.stroke();}
+
+    // Label
+    const fontSize=Math.min(10,nodeR*0.8);
+    ctx.fillStyle='#fff';ctx.font=`bold ${fontSize}px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    const shortLabel=node.label.length>8?node.label.slice(0,8):node.label;
+    ctx.fillText(shortLabel,x,y);
+  });
+}
+
+window.addEventListener('resize',()=>{setup();showAll();});
+setup();buildTree();showAll();
+</script>
+</body>
+</html>

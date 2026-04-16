@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>单位圆三角函数联动器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="三角函数">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="单位圆旋转角与正弦余弦波形实时联动，建立三角函数的几何直觉">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:860px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:860px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .values{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+    .val-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;text-align:center;}
+    .val-label{font-size:12px;color:var(--ink2);}
+    .val-num{font-size:26px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    .canvas-row{display:grid;grid-template-columns:1fr 1.6fr;gap:12px;align-items:start;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:grab;}
+    canvas:active{cursor:grabbing;}
+    .btns{display:flex;gap:8px;}
+    .btn{flex:1;padding:11px;border:none;border-radius:var(--radius);font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;transition:all .2s;}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-primary:hover{background:var(--blue-dark);}
+    .btn-toggle{background:var(--surface);color:var(--blue);border:2px solid var(--blue);}
+    .btn-toggle.active{background:var(--blue);color:#fff;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:600px){.canvas-row{grid-template-columns:1fr;}.values{grid-template-columns:1fr 1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 三角函数 · 认知动作：变换</div>
+  <h1>单位圆三角函数联动器</h1>
+  <p class="sub">拖动单位圆上的点，实时看 sin、cos、tan 的变化规律</p>
+</header>
+<main>
+  <div class="values">
+    <div class="val-card">
+      <div class="val-label">角度 θ</div>
+      <div class="val-num" id="vAngle" style="color:var(--ink)">0°</div>
+    </div>
+    <div class="val-card">
+      <div class="val-label">sin θ（y坐标）</div>
+      <div class="val-num" id="vSin" style="color:var(--teal)">0.00</div>
+    </div>
+    <div class="val-card">
+      <div class="val-label">cos θ（x坐标）</div>
+      <div class="val-num" id="vCos" style="color:var(--blue)">1.00</div>
+    </div>
+  </div>
+  <div class="canvas-row">
+    <canvas id="circleCvs" height="280"></canvas>
+    <canvas id="waveCvs" height="280"></canvas>
+  </div>
+  <div class="btns">
+    <button class="btn btn-primary" id="animBtn" onclick="toggleAnim()">▶ 自动旋转</button>
+    <button class="btn btn-toggle" id="sinBtn" onclick="toggleWave('sin')" style="background:var(--teal-light);color:var(--teal);border-color:var(--teal)">sin 波形</button>
+    <button class="btn btn-toggle" id="cosBtn" onclick="toggleWave('cos')">cos 波形</button>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：变换
+// V1 动态跃迁：拖动点，单位圆旋转 + 波形同步展开，二者关系一目了然
+// V2 表征桥接：角度值 + 单位圆几何 + 波形图三同步
+// V4 信号聚焦：蓝=cosθ(x轴投影)，绿=sinθ(y轴投影)，颜色贯穿全图
+// V6 动作-数学一致：拖动角度增大=点逆时针旋转=波形向右"记录"
+// V7 单一认知动作：变换
+// V8 概念反馈：揭示sinθ=y坐标，cosθ=x坐标这一几何本质
+
+const cCvs=document.getElementById('circleCvs');
+const cCtx=cCvs.getContext('2d');
+const wCvs=document.getElementById('waveCvs');
+const wCtx=wCvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let angle=0, autoAnim=false, animId=null, dragging=false;
+let showSin=true, showCos=false;
+const history=[]; // store {t, sin, cos} for wave
+
+function setup(){
+  [cCvs,wCvs].forEach(cvs=>{
+    const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+    cvs.width=r.width*dpr; cvs.height=280*dpr;
+    const c=cvs.getContext('2d'); c.scale(dpr,dpr); cvs.style.height='280px';
+  });
+}
+
+function drawCircle(){
+  const W=cCvs.getBoundingClientRect().width, H=280;
+  cCtx.clearRect(0,0,W,H);
+  const cx=W/2, cy=H/2, R=Math.min(W,H)*0.38;
+
+  // Grid lines
+  cCtx.strokeStyle=C.border; cCtx.lineWidth=1;
+  cCtx.beginPath(); cCtx.moveTo(0,cy); cCtx.lineTo(W,cy); cCtx.stroke();
+  cCtx.beginPath(); cCtx.moveTo(cx,0); cCtx.lineTo(cx,H); cCtx.stroke();
+
+  // Unit circle
+  cCtx.strokeStyle=C.ink3; cCtx.lineWidth=1.5;
+  cCtx.beginPath(); cCtx.arc(cx,cy,R,0,Math.PI*2); cCtx.stroke();
+
+  const rad=angle*Math.PI/180;
+  const px=cx+R*Math.cos(rad), py=cy-R*Math.sin(rad);
+
+  // Angle arc
+  cCtx.strokeStyle=C.amber+'88'; cCtx.lineWidth=2;
+  cCtx.beginPath(); cCtx.arc(cx,cy,R*0.22,0,-rad); cCtx.stroke();
+  cCtx.fillStyle=C.amber; cCtx.font=`12px 'JetBrains Mono',monospace`; cCtx.textAlign='center'; cCtx.textBaseline='middle';
+  const al=R*0.32;
+  cCtx.fillText(`${Math.round(angle)}°`,cx+al*Math.cos(-rad/2),cy+al*Math.sin(-rad/2));
+
+  // sin projection (vertical)
+  cCtx.strokeStyle=C.teal; cCtx.lineWidth=2.5; cCtx.setLineDash([4,3]);
+  cCtx.beginPath(); cCtx.moveTo(px,cy); cCtx.lineTo(px,py); cCtx.stroke();
+  cCtx.setLineDash([]);
+  // sin label
+  cCtx.fillStyle=C.teal; cCtx.font=`bold 12px 'Noto Sans SC',sans-serif`; cCtx.textAlign=px>cx?'left':'right'; cCtx.textBaseline='middle';
+  cCtx.fillText(`sin=${Math.sin(rad).toFixed(2)}`,px+(px>cx?4:-4),(py+cy)/2);
+
+  // cos projection (horizontal)
+  cCtx.strokeStyle=C.blue; cCtx.lineWidth=2.5; cCtx.setLineDash([4,3]);
+  cCtx.beginPath(); cCtx.moveTo(cx,py); cCtx.lineTo(px,py); cCtx.stroke();
+  cCtx.setLineDash([]);
+  // cos label
+  cCtx.fillStyle=C.blue; cCtx.font=`bold 12px 'Noto Sans SC',sans-serif`; cCtx.textAlign='center'; cCtx.textBaseline=py>cy?'top':'bottom';
+  cCtx.fillText(`cos=${Math.cos(rad).toFixed(2)}`,(px+cx)/2,py+(py>cy?4:-4));
+
+  // Radius line
+  cCtx.strokeStyle=C.ink; cCtx.lineWidth=2;
+  cCtx.beginPath(); cCtx.moveTo(cx,cy); cCtx.lineTo(px,py); cCtx.stroke();
+
+  // Point on circle
+  cCtx.fillStyle=C.ink;
+  cCtx.beginPath(); cCtx.arc(px,py,7,0,Math.PI*2); cCtx.fill();
+  cCtx.fillStyle='#fff';
+  cCtx.beginPath(); cCtx.arc(px,py,3,0,Math.PI*2); cCtx.fill();
+
+  // x,y intercepts
+  cCtx.fillStyle=C.teal; cCtx.beginPath(); cCtx.arc(px,cy,4,0,Math.PI*2); cCtx.fill();
+  cCtx.fillStyle=C.blue; cCtx.beginPath(); cCtx.arc(cx,py,4,0,Math.PI*2); cCtx.fill();
+
+  // Axis labels
+  cCtx.fillStyle=C.ink2; cCtx.font=`11px 'JetBrains Mono',monospace`;
+  ['1','−1'].forEach((l,i)=>{
+    cCtx.textAlign='center'; cCtx.textBaseline='top'; cCtx.fillText(l,cx+(i?-1:1)*R,cy+4);
+    cCtx.textAlign='right'; cCtx.textBaseline='middle'; cCtx.fillText(l,cx-4,cy-(i?-1:1)*R);
+  });
+  cCtx.fillStyle=C.ink2; cCtx.font=`bold 12px 'Noto Sans SC',sans-serif`;
+  cCtx.textAlign='right'; cCtx.textBaseline='bottom'; cCtx.fillText('x',W-4,cy-4);
+  cCtx.textAlign='center'; cCtx.textBaseline='top'; cCtx.fillText('y',cx+4,4);
+}
+
+function drawWave(){
+  const W=wCvs.getBoundingClientRect().width, H=280;
+  wCtx.clearRect(0,0,W,H);
+  const cx=40, cy=H/2, scaleX=(W-60)/720, scaleY=(H/2-30);
+
+  // Grid
+  wCtx.strokeStyle=C.border; wCtx.lineWidth=0.5;
+  [-1,-0.5,0,0.5,1].forEach(v=>{
+    const y=cy-v*scaleY;
+    wCtx.beginPath(); wCtx.moveTo(cx,y); wCtx.lineTo(W-10,y); wCtx.stroke();
+    if(v!==0){wCtx.fillStyle=C.ink3;wCtx.font=`10px 'JetBrains Mono',monospace`;wCtx.textAlign='right';wCtx.textBaseline='middle';wCtx.fillText(v,cx-2,y);}
+  });
+  [0,90,180,270,360].forEach(d=>{
+    const x=cx+d*scaleX;
+    wCtx.strokeStyle=C.border; wCtx.beginPath(); wCtx.moveTo(x,20); wCtx.lineTo(x,H-10); wCtx.stroke();
+    wCtx.fillStyle=C.ink3; wCtx.font=`10px 'JetBrains Mono',monospace`; wCtx.textAlign='center'; wCtx.textBaseline='top';
+    wCtx.fillText(`${d}°`,x,H-16);
+  });
+
+  // Axes
+  wCtx.strokeStyle=C.ink2; wCtx.lineWidth=1.5;
+  wCtx.beginPath(); wCtx.moveTo(cx,20); wCtx.lineTo(cx,H-20); wCtx.stroke();
+  wCtx.beginPath(); wCtx.moveTo(cx,cy); wCtx.lineTo(W-10,cy); wCtx.stroke();
+
+  // Draw sin wave
+  if(showSin){
+    wCtx.strokeStyle=C.teal; wCtx.lineWidth=2;
+    wCtx.beginPath();
+    for(let d=0;d<=360;d++){
+      const x=cx+d*scaleX, y=cy-Math.sin(d*Math.PI/180)*scaleY;
+      d===0?wCtx.moveTo(x,y):wCtx.lineTo(x,y);
+    }
+    wCtx.stroke();
+    wCtx.fillStyle=C.teal; wCtx.font=`bold 12px 'JetBrains Mono',monospace`; wCtx.textAlign='left'; wCtx.textBaseline='top';
+    wCtx.fillText('sin θ',cx+4,22);
+  }
+
+  // Draw cos wave
+  if(showCos){
+    wCtx.strokeStyle=C.blue; wCtx.lineWidth=2;
+    wCtx.beginPath();
+    for(let d=0;d<=360;d++){
+      const x=cx+d*scaleX, y=cy-Math.cos(d*Math.PI/180)*scaleY;
+      d===0?wCtx.moveTo(x,y):wCtx.lineTo(x,y);
+    }
+    wCtx.stroke();
+    wCtx.fillStyle=C.blue; wCtx.font=`bold 12px 'JetBrains Mono',monospace`; wCtx.textAlign='left'; wCtx.textBaseline='top';
+    wCtx.fillText('cos θ',cx+4,showSin?38:22);
+  }
+
+  // Current angle marker
+  const a=((angle%360)+360)%360;
+  const mx=cx+a*scaleX;
+  wCtx.strokeStyle=C.ink2+'88'; wCtx.lineWidth=1; wCtx.setLineDash([4,3]);
+  wCtx.beginPath(); wCtx.moveTo(mx,20); wCtx.lineTo(mx,H-20); wCtx.stroke();
+  wCtx.setLineDash([]);
+
+  if(showSin){
+    const sy=cy-Math.sin(a*Math.PI/180)*scaleY;
+    wCtx.fillStyle=C.teal; wCtx.beginPath(); wCtx.arc(mx,sy,5,0,Math.PI*2); wCtx.fill();
+  }
+  if(showCos){
+    const cosy=cy-Math.cos(a*Math.PI/180)*scaleY;
+    wCtx.fillStyle=C.blue; wCtx.beginPath(); wCtx.arc(mx,cosy,5,0,Math.PI*2); wCtx.fill();
+  }
+}
+
+function updateValues(){
+  const rad=angle*Math.PI/180;
+  const s=Math.sin(rad), co=Math.cos(rad);
+  document.getElementById('vAngle').textContent=`${Math.round(((angle%360)+360)%360)}°`;
+  document.getElementById('vSin').textContent=s.toFixed(3);
+  document.getElementById('vCos').textContent=co.toFixed(3);
+  // V8 feedback
+  const fb=document.getElementById('fb');
+  const a=((angle%360)+360)%360;
+  let msg=`θ = ${Math.round(a)}° 时：sin θ = <strong style="color:var(--teal)">${s.toFixed(3)}</strong>（点的 y 坐标），cos θ = <strong style="color:var(--blue)">${co.toFixed(3)}</strong>（点的 x 坐标）。<br>`;
+  if(a<90) msg+=`第一象限：sin > 0，cos > 0`;
+  else if(a<180) msg+=`第二象限：sin > 0，cos < 0`;
+  else if(a<270) msg+=`第三象限：sin < 0，cos < 0`;
+  else msg+=`第四象限：sin < 0，cos > 0`;
+  if(Math.abs(s)<0.01) msg+=`；<strong>sin ≈ 0</strong>（点在x轴上）`;
+  if(Math.abs(co)<0.01) msg+=`；<strong>cos ≈ 0</strong>（点在y轴上）`;
+  if(Math.abs(s)>0.99) msg+=`；<strong>sin ≈ ±1</strong>（点在最高/最低点）`;
+  fb.innerHTML=msg;
+}
+
+function draw(){drawCircle();drawWave();updateValues();}
+
+// Circle drag interaction
+function circlePointerHandler(e){
+  if(e.type==='pointerdown') dragging=true;
+  if(!dragging&&e.type!=='pointerdown')return;
+  const rect=cCvs.getBoundingClientRect();
+  const x=e.clientX-rect.left-cCvs.getBoundingClientRect().width/2;
+  const y=e.clientY-rect.top-140;
+  angle=-Math.atan2(y,x)*180/Math.PI;
+  draw();
+}
+cCvs.addEventListener('pointerdown',circlePointerHandler);
+cCvs.addEventListener('pointermove',circlePointerHandler);
+cCvs.addEventListener('pointerup',()=>dragging=false);
+cCvs.addEventListener('pointercancel',()=>dragging=false);
+
+function toggleAnim(){
+  autoAnim=!autoAnim;
+  document.getElementById('animBtn').textContent=autoAnim?'⏸ 暂停':'▶ 自动旋转';
+  if(autoAnim) startAnim();
+  else { if(animId) cancelAnimationFrame(animId); animId=null; }
+}
+
+function startAnim(){
+  let last=performance.now();
+  function tick(now){
+    if(!autoAnim)return;
+    angle+=(now-last)*0.04;
+    last=now; draw();
+    animId=requestAnimationFrame(tick);
+  }
+  animId=requestAnimationFrame(tick);
+}
+
+function toggleWave(type){
+  if(type==='sin') showSin=!showSin;
+  else showCos=!showCos;
+  document.getElementById('sinBtn').style.background=showSin?'var(--teal)':'var(--teal-light)';
+  document.getElementById('sinBtn').style.color=showSin?'#fff':'var(--teal)';
+  document.getElementById('cosBtn').style.background=showCos?'var(--blue)':'var(--surface)';
+  document.getElementById('cosBtn').style.color=showCos?'#fff':'var(--blue)';
+  draw();
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>假设检验可视化器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="假设检验">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="采样分布+拒绝域阴影，拖动检验统计量感受p值，α=0.05/0.01切换，双侧/单侧切换">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:ew-resize;}
+    .ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .ctrl-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;margin-bottom:4px;}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    .opt-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .opt-btn{padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;background:var(--surface);font-family:'JetBrains Mono',monospace;font-weight:700;transition:all .2s;}
+    .opt-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .result-box{border-radius:var(--radius-sm);padding:12px 16px;font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;text-align:center;}
+    .result-reject{background:#fee2e2;color:#b91c1c;border:2px solid #b91c1c;}
+    .result-accept{background:var(--teal-light);color:var(--teal);border:2px solid var(--teal);}
+    .fb{background:var(--blue-light);border-left:4px solid var(--blue);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 假设检验 · 认知动作：比较</div>
+  <h1>假设检验可视化器</h1>
+  <p class="sub">拖动检验统计量，观察 p 值和拒绝域，理解显著性检验的逻辑</p>
+</header>
+<main>
+  <div class="opt-row">
+    <button class="opt-btn active" onclick="setType('two',this)">双侧检验</button>
+    <button class="opt-btn" onclick="setType('right',this)">右侧检验</button>
+    <button class="opt-btn" onclick="setType('left',this)">左侧检验</button>
+    <button class="opt-btn" id="alphaBtn" onclick="toggleAlpha()">α = 0.05</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="ctrl-grid">
+    <div class="ctrl-box">
+      <div class="ctrl-label">检验统计量 z（拖动画布或滑杆）</div>
+      <div class="ctrl-val" id="zVal" style="color:var(--blue)">z = 0.00</div>
+      <input type="range" id="zSlider" min="-4" max="4" step="0.05" value="0" oninput="update()">
+    </div>
+    <div class="ctrl-box">
+      <div class="ctrl-label">p 值</div>
+      <div class="ctrl-val" id="pVal" style="color:var(--ink)">p = 1.0000</div>
+      <div style="font-size:12px;color:var(--ink2);margin-top:4px;" id="pDesc">远大于 α，不能拒绝 H₀</div>
+    </div>
+  </div>
+  <div class="result-box result-accept" id="result">结论：不能拒绝 H₀（无显著差异）</div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 拒绝域只有配合p值才能让人理解"什么是极端结果"
+// PEDAGOGY V4 信号聚焦: 红色=拒绝域，蓝色=接受域，琥珀色=当前统计量
+// PEDAGOGY V5 操作先于符号: 先拖动感受何时"越界"，再解释p值公式
+// PEDAGOGY V7 单一认知动作: 比较（统计量是否落入拒绝域）
+// PEDAGOGY V8 概念反馈: "p值是H₀为真时得到此极端结果的概率，不是H₀为真的概率"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 280;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  red:'#b91c1c',redL:'#fee2e2',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da'
+};
+
+let testType = 'two';
+let alpha = 0.05;
+let dragging = false;
+
+// Normal PDF
+function normPDF(z) { return Math.exp(-0.5*z*z) / Math.sqrt(2*Math.PI); }
+// Normal CDF approximation
+function normCDF(z) {
+  const t = 1/(1+0.2316419*Math.abs(z));
+  const d = 0.3989423*Math.exp(-z*z/2);
+  const p = d*t*(0.3193815+t*(-0.3565638+t*(1.7814779+t*(-1.8212560+t*1.3302744))));
+  return z > 0 ? 1-p : p;
+}
+// Inverse normal (approximate) for critical values
+function normInv(p) {
+  // Beasley-Springer-Moro algorithm approximation
+  const a = [0, -3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [0, -5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+  const c = [0, -7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+  const d2 = [0, 7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+  const p_low = 0.02425, p_high = 1 - p_low;
+  let q, r, x;
+  if (p < p_low) {
+    q = Math.sqrt(-2*Math.log(p));
+    x = (((((c[1]*q+c[2])*q+c[3])*q+c[4])*q+c[5])*q+c[6]) / ((((d2[1]*q+d2[2])*q+d2[3])*q+d2[4])*q+1);
+  } else if (p <= p_high) {
+    q = p - 0.5; r = q*q;
+    x = (((((a[1]*r+a[2])*r+a[3])*r+a[4])*r+a[5])*r+a[6])*q / (((((b[1]*r+b[2])*r+b[3])*r+b[4])*r+b[5])*r+1);
+  } else {
+    q = Math.sqrt(-2*Math.log(1-p));
+    x = -(((((c[1]*q+c[2])*q+c[3])*q+c[4])*q+c[5])*q+c[6]) / ((((d2[1]*q+d2[2])*q+d2[3])*q+d2[4])*q+1);
+  }
+  return x;
+}
+
+function getCritical() {
+  if (testType === 'two') {
+    const z = normInv(1 - alpha/2);
+    return { zLow: -z, zHigh: z };
+  } else if (testType === 'right') {
+    return { zLow: null, zHigh: normInv(1-alpha) };
+  } else {
+    return { zLow: normInv(alpha), zHigh: null };
+  }
+}
+
+function getPValue(z) {
+  if (testType === 'two') return 2 * (1 - normCDF(Math.abs(z)));
+  if (testType === 'right') return 1 - normCDF(z);
+  return normCDF(z);
+}
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setType(t, btn) {
+  testType = t;
+  document.querySelectorAll('.opt-btn').slice(0,3).forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  update();
+}
+
+function toggleAlpha() {
+  alpha = alpha === 0.05 ? 0.01 : 0.05;
+  document.getElementById('alphaBtn').textContent = `α = ${alpha}`;
+  document.getElementById('alphaBtn').classList.add('active');
+  update();
+}
+
+function update() {
+  const z = parseFloat(document.getElementById('zSlider').value);
+  document.getElementById('zVal').textContent = `z = ${z.toFixed(2)}`;
+  draw(z);
+}
+
+function draw(z) {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+
+  const pad = { l: 30, r: 30, t: 20, b: 50 };
+  const cw = W - pad.l - pad.r;
+  const ch = H - pad.t - pad.b;
+  const zRange = 4.5;
+
+  function toX(zv) { return pad.l + (zv + zRange)/(2*zRange)*cw; }
+  function toY(y, maxY) { return pad.t + ch - y/maxY*ch; }
+  const maxY = normPDF(0) * 1.1;
+
+  const crit = getCritical();
+  const pValue = getPValue(z);
+  const rejected = pValue < alpha;
+
+  // Rejection regions (red fill)
+  function fillTail(zFrom, zTo, color) {
+    const zF = Math.max(-zRange, zFrom), zT = Math.min(zRange, zTo);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(toX(zF), toY(0, maxY));
+    const steps = Math.round(Math.abs(zT-zF)*100);
+    for (let i=0; i<=steps; i++) {
+      const zv = zF + i/steps*(zT-zF);
+      ctx.lineTo(toX(zv), toY(normPDF(zv), maxY));
+    }
+    ctx.lineTo(toX(zT), toY(0, maxY));
+    ctx.closePath(); ctx.fill();
+  }
+
+  if (testType === 'two' && crit.zLow !== null) {
+    fillTail(-zRange, crit.zLow, C.redL);
+    fillTail(crit.zHigh, zRange, C.redL);
+  } else if (testType === 'right' && crit.zHigh !== null) {
+    fillTail(crit.zHigh, zRange, C.redL);
+  } else if (testType === 'left' && crit.zLow !== null) {
+    fillTail(-zRange, crit.zLow, C.redL);
+  }
+
+  // p-value shading (blue-ish)
+  if (testType === 'two') {
+    fillTail(Math.abs(z), zRange, C.blueL);
+    fillTail(-zRange, -Math.abs(z), C.blueL);
+  } else if (testType === 'right') {
+    fillTail(z, zRange, C.blueL);
+  } else {
+    fillTail(-zRange, z, C.blueL);
+  }
+
+  // Normal curve
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  for (let px=0; px<=cw; px++) {
+    const zv = -zRange + px/cw*(2*zRange);
+    const yy = toY(normPDF(zv), maxY);
+    if (px===0) ctx.moveTo(pad.l+px, yy);
+    else ctx.lineTo(pad.l+px, yy);
+  }
+  ctx.stroke();
+
+  // x-axis
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(pad.l, pad.t+ch); ctx.lineTo(W-pad.r, pad.t+ch); ctx.stroke();
+
+  // Critical value lines
+  [crit.zLow, crit.zHigh].forEach(zc => {
+    if (zc === null) return;
+    const xx = toX(zc);
+    ctx.strokeStyle = C.red; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(xx, pad.t); ctx.lineTo(xx, pad.t+ch); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = C.red; ctx.font = `bold 11px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(`z*=${zc.toFixed(3)}`, xx, pad.t);
+  });
+
+  // Current z line (amber)
+  const zPx = toX(z);
+  ctx.strokeStyle = C.amberD; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(zPx, pad.t); ctx.lineTo(zPx, pad.t+ch); ctx.stroke();
+  ctx.fillStyle = C.amberD;
+  ctx.beginPath(); ctx.arc(zPx, toY(normPDF(z), maxY), 5, 0, Math.PI*2); ctx.fill();
+
+  // Axis ticks
+  [-4,-3,-2,-1,0,1,2,3,4].forEach(v => {
+    const xx = toX(v);
+    ctx.fillStyle = C.ink3; ctx.font = `11px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(v, xx, pad.t+ch+4);
+  });
+
+  // Labels
+  ctx.fillStyle = C.ink2; ctx.font = `12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('z 统计量', W/2, pad.t+ch+24);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = C.redL.replace('ee','88'); // hint
+  ctx.fillStyle = C.red; ctx.font = `11px 'Noto Sans SC',sans-serif`;
+  ctx.fillText('红色区域 = 拒绝域（面积 = α）', pad.l+4, pad.t+2);
+  ctx.fillStyle = C.blue;
+  ctx.fillText(`蓝色区域 = p 值 = ${pValue.toFixed(4)}`, pad.l+4, pad.t+16);
+
+  // Update stats
+  document.getElementById('pVal').textContent = `p = ${pValue.toFixed(4)}`;
+  document.getElementById('pVal').style.color = rejected ? C.red : C.teal;
+  document.getElementById('pDesc').textContent = rejected ? `p < α = ${alpha}，拒绝 H₀！` : `p ≥ α = ${alpha}，不能拒绝 H₀`;
+
+  const resultEl = document.getElementById('result');
+  if (rejected) {
+    resultEl.textContent = `拒绝 H₀！z = ${z.toFixed(2)} 落入拒绝域，结果在 α = ${alpha} 水平显著`;
+    resultEl.className = 'result-box result-reject';
+  } else {
+    resultEl.textContent = `不能拒绝 H₀：z = ${z.toFixed(2)} 不够极端，p = ${pValue.toFixed(4)} ≥ α = ${alpha}`;
+    resultEl.className = 'result-box result-accept';
+  }
+
+  updateFeedback(z, pValue, rejected, crit);
+}
+
+function updateFeedback(z, pValue, rejected, crit) {
+  const el = document.getElementById('fb');
+  const typeLabel = testType==='two'?'双侧':testType==='right'?'右侧':'左侧';
+  let msg = `<strong>${typeLabel}检验，α = ${alpha}</strong>：`;
+  if (rejected) {
+    msg += `p = ${pValue.toFixed(4)} < α，在显著性水平 α 下<strong>拒绝原假设 H₀</strong>。<br>`;
+    msg += `含义：若 H₀ 为真，得到 |z| ≥ ${Math.abs(z).toFixed(2)} 的概率只有 ${(pValue*100).toFixed(2)}%，说明此结果非常罕见，有理由怀疑 H₀。`;
+  } else {
+    msg += `p = ${pValue.toFixed(4)} ≥ α，<strong>不能拒绝 H₀</strong>（注意：不是"接受 H₀"！）。<br>`;
+    msg += `含义：数据与 H₀ 的预期不矛盾，证据不足以推翻原假设。`;
+  }
+  msg += `<br><strong>⚠️ p值的正确含义</strong>：p值是"假设H₀为真，得到此结果或更极端结果的概率"，不是H₀为真的概率。`;
+  el.innerHTML = msg;
+}
+
+// Drag on canvas
+cvs.addEventListener('pointerdown', e => { dragging = true; cvs.setPointerCapture(e.pointerId); handleDrag(e); });
+cvs.addEventListener('pointermove', e => { if (dragging) handleDrag(e); });
+cvs.addEventListener('pointerup', () => { dragging = false; });
+
+function handleDrag(e) {
+  const rect = cvs.getBoundingClientRect();
+  const px = e.clientX - rect.left;
+  const cw = rect.width - 60;
+  const z = -4.5 + (px - 30)/cw*9;
+  const zClamped = Math.max(-4, Math.min(4, z));
+  document.getElementById('zSlider').value = zClamped;
+  update();
+}
+
+window.addEventListener('resize', () => { setup(); update(); });
+setup(); update();
+</script>
+</body>
+</html>

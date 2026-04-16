@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>有理数数轴实验室 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="有理数">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="在数轴上标注正负有理数，体验绝对值、相反数、大小比较的几何含义">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:700px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:700px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;height:180px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:pointer;}
+    .modes{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+    .modes-label{font-size:13px;color:var(--ink2);}
+    .mode-btn{padding:7px 14px;border:2px solid var(--border);border-radius:20px;font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);color:var(--ink2);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .points-list{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+    .point-tag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:16px;font-size:13px;font-family:'JetBrains Mono',monospace;font-weight:700;}
+    .point-tag button{border:none;background:none;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.8);padding:0 2px;}
+    .add-row{display:flex;gap:8px;}
+    .num-input{flex:1;height:40px;padding:0 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:16px;font-family:'JetBrains Mono',monospace;background:var(--surface);}
+    .num-input:focus{border-color:var(--blue);outline:none;}
+    .add-btn{padding:0 16px;height:40px;border:none;border-radius:var(--radius-sm);background:var(--blue);color:#fff;font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;}
+    .info-panel{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .info-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;}
+    .info-title{font-size:12px;color:var(--ink2);margin-bottom:6px;}
+    .info-row{font-size:14px;padding:3px 0;border-bottom:1px solid var(--border);}
+    .info-row:last-child{border-bottom:none;}
+    .info-row strong{font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.info-panel{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 有理数 · 认知动作：比较</div>
+  <h1>有理数数轴实验室</h1>
+  <p class="sub">点击或输入，在数轴上标出数的位置——看绝对值、相反数的几何含义</p>
+</header>
+<main>
+  <canvas id="cvs"></canvas>
+  <div class="modes">
+    <span class="modes-label">模式：</span>
+    <button class="mode-btn active" onclick="setMode('mark',this)">标注点</button>
+    <button class="mode-btn" onclick="setMode('abs',this)">绝对值</button>
+    <button class="mode-btn" onclick="setMode('opposite',this)">相反数</button>
+    <button class="mode-btn" onclick="setMode('compare',this)">比较大小</button>
+  </div>
+  <div class="add-row">
+    <input type="number" class="num-input" id="numInput" placeholder="输入数字，如 -3.5" step="0.5">
+    <button class="add-btn" onclick="addPoint()">添加到数轴</button>
+  </div>
+  <div class="points-list" id="pointsList">
+    <span style="font-size:13px;color:var(--ink3)">点击数轴或输入数字添加点…</span>
+  </div>
+  <div class="info-panel" id="infoPanel"></div>
+  <div class="fb" id="fb">在数轴上，<strong>正数</strong>在0的右边，<strong>负数</strong>在0的左边。数越大，位置越靠右。</div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：比较
+// V1 动态跃迁：添加数字=数轴上点实时出现，绝对值=距离线段可见
+// V2 表征桥接：数值 + 数轴位置 + 绝对值/相反数关系三联动
+// V4 信号聚焦：正数=蓝，负数=橙，零=绿
+// V7 单一认知动作：比较
+// V8 概念反馈：揭示绝对值=到原点距离，相反数=关于原点对称
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',amberL:'#faeeda',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let points=[], mode='mark';
+const RANGE=[-8,8];
+const COLORS=[C.blue,C.amber,'#7b3fa0','#1a7a8a','#b84040','#2d8a2d'];
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=180*dpr; ctx.scale(dpr,dpr); cvs.style.height='180px';
+}
+
+function toX(v,W){
+  const margin=40;
+  return margin+(v-RANGE[0])/(RANGE[1]-RANGE[0])*(W-2*margin);
+}
+function fromX(px,W){
+  const margin=40;
+  return RANGE[0]+(px-margin)/(W-2*margin)*(RANGE[1]-RANGE[0]);
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=180;
+  ctx.clearRect(0,0,W,H);
+  const axisY=H/2+10;
+
+  // Axis line
+  ctx.strokeStyle=C.ink2; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(30,axisY); ctx.lineTo(W-30,axisY); ctx.stroke();
+  // Arrows
+  ctx.fillStyle=C.ink2;
+  ctx.beginPath(); ctx.moveTo(W-28,axisY); ctx.lineTo(W-38,axisY-5); ctx.lineTo(W-38,axisY+5); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(32,axisY); ctx.lineTo(42,axisY-5); ctx.lineTo(42,axisY+5); ctx.closePath(); ctx.fill();
+
+  // Ticks
+  for(let v=RANGE[0];v<=RANGE[1];v++){
+    const x=toX(v,W);
+    const isMajor=v%2===0;
+    ctx.strokeStyle=isMajor?C.ink2:C.ink3; ctx.lineWidth=isMajor?1.5:1;
+    ctx.beginPath(); ctx.moveTo(x,axisY-(isMajor?8:4)); ctx.lineTo(x,axisY+(isMajor?8:4)); ctx.stroke();
+    if(isMajor){
+      ctx.fillStyle=v===0?C.teal:C.ink2; ctx.font=`${v===0?'bold ':' '}12px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+      ctx.fillText(v,x,axisY+10);
+    }
+  }
+
+  // Mode-specific drawings
+  if(mode==='abs'&&points.length>0){
+    points.forEach(p=>{
+      const px=toX(p.val,W), ox=toX(0,W);
+      ctx.strokeStyle=p.val>=0?C.blue:C.amber; ctx.lineWidth=5; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(ox,axisY-14); ctx.lineTo(px,axisY-14); ctx.stroke();
+      ctx.fillStyle=p.val>=0?C.blue:C.amber; ctx.font=`bold 12px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText(`|${p.val}|=${Math.abs(p.val)}`,(ox+px)/2,axisY-16);
+    });
+  }
+
+  if(mode==='opposite'&&points.length>0){
+    points.forEach(p=>{
+      const px=toX(p.val,W), opx=toX(-p.val,W), ox=toX(0,W);
+      ctx.strokeStyle=C.teal+'66'; ctx.lineWidth=2; ctx.setLineDash([4,3]);
+      ctx.beginPath(); ctx.moveTo(px,axisY-20); ctx.lineTo(ox,axisY-20); ctx.lineTo(opx,axisY-20); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle=C.teal; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText('对称中心 0',(px+opx)/2,axisY-22);
+    });
+  }
+
+  // Points
+  points.forEach((p,i)=>{
+    const px=toX(p.val,W);
+    const col=p.val>0?C.blue:p.val<0?C.amber:C.teal;
+    ctx.fillStyle=col; ctx.beginPath(); ctx.arc(px,axisY,7,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(px,axisY,2.5,0,Math.PI*2); ctx.fill();
+    // Label
+    ctx.fillStyle=col; ctx.font=`bold 13px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(p.val,px,axisY-(mode==='abs'?30:18));
+
+    // Opposite number dot
+    if(mode==='opposite'){
+      const opx=toX(-p.val,W);
+      ctx.fillStyle=col+'88'; ctx.beginPath(); ctx.arc(opx,axisY,5,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(opx,axisY,5,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle=col; ctx.font=`12px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+      ctx.fillText(-p.val,opx,axisY+10);
+    }
+  });
+
+  // Compare mode
+  if(mode==='compare'&&points.length>=2){
+    const sorted=[...points].sort((a,b)=>a.val-b.val);
+    ctx.fillStyle=C.ink2; ctx.font=`13px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(`从小到大：${sorted.map(p=>p.val).join(' < ')}`,W/2,axisY+24);
+  }
+}
+
+function addPoint(){
+  const v=parseFloat(document.getElementById('numInput').value);
+  if(isNaN(v)||v<RANGE[0]||v>RANGE[1]){alert(`请输入 ${RANGE[0]} 到 ${RANGE[1]} 之间的数`);return;}
+  if(!points.find(p=>p.val===v)) points.push({val:v,color:COLORS[points.length%COLORS.length]});
+  document.getElementById('numInput').value='';
+  updateAll();
+}
+
+cvs.addEventListener('click',e=>{
+  const rect=cvs.getBoundingClientRect();
+  const v=Math.round(fromX(e.clientX-rect.left,rect.width)*2)/2;
+  if(v<RANGE[0]||v>RANGE[1])return;
+  if(!points.find(p=>p.val===v)) points.push({val:v,color:COLORS[points.length%COLORS.length]});
+  updateAll();
+});
+
+function updateAll(){
+  draw();
+  updatePointsList();
+  updateInfoPanel();
+  updateFeedback();
+}
+
+function updatePointsList(){
+  const pl=document.getElementById('pointsList');
+  if(points.length===0){pl.innerHTML='<span style="font-size:13px;color:var(--ink3)">点击数轴或输入数字添加点…</span>';return;}
+  pl.innerHTML=points.map((p,i)=>`<span class="point-tag" style="background:${p.val>0?C.blue:p.val<0?C.amber:C.teal};color:#fff">${p.val}<button onclick="removePoint(${i})">✕</button></span>`).join('');
+}
+
+function removePoint(idx){points.splice(idx,1);updateAll();}
+window.removePoint=removePoint;
+
+function updateInfoPanel(){
+  const ip=document.getElementById('infoPanel');
+  if(points.length===0){ip.innerHTML='';return;}
+  ip.innerHTML=`
+  <div class="info-card">
+    <div class="info-title">绝对值（到原点距离）</div>
+    ${points.map(p=>`<div class="info-row">|${p.val}| = <strong>${Math.abs(p.val)}</strong></div>`).join('')}
+  </div>
+  <div class="info-card">
+    <div class="info-title">相反数（关于0对称）</div>
+    ${points.map(p=>`<div class="info-row">${p.val}的相反数 = <strong>${-p.val}</strong></div>`).join('')}
+  </div>`;
+}
+
+function updateFeedback(){
+  const fb=document.getElementById('fb');
+  if(points.length===0){fb.innerHTML='在数轴上，<strong>正数</strong>在0的右边，<strong>负数</strong>在0的左边。数越大，位置越靠右。';return;}
+  const p=points[points.length-1];
+  let msg='';
+  if(mode==='abs') msg=`<strong>绝对值</strong>是点到原点0的距离。${p.val}到0的距离 = |${p.val}| = <strong>${Math.abs(p.val)}</strong>，与符号无关。`;
+  else if(mode==='opposite') msg=`<strong>相反数</strong>是关于原点对称的点。${p.val}的相反数是 <strong>${-p.val}</strong>，它们到0的距离相同，方向相反。`;
+  else if(mode==='compare'&&points.length>=2) {
+    const sorted=[...points].sort((a,b)=>a.val-b.val);
+    msg=`在数轴上，越靠右的数越大。排序：<strong>${sorted.map(p=>p.val).join(' < ')}</strong>。负数之间，绝对值越大的反而越小（${sorted.filter(p=>p.val<0).reverse().map(p=>p.val).join(', ')}从大到小）。`;
+  } else msg=`${p.val} 在数轴上 <strong>${p.val>0?'0的右边（正数）':p.val<0?'0的左边（负数）':'原点0处'}</strong>，|${p.val}| = ${Math.abs(p.val)}，相反数 = ${-p.val}。`;
+  fb.innerHTML=msg;
+}
+
+function setMode(m,btn){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  updateAll();
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); draw();
+</script>
+</body>
+</html>

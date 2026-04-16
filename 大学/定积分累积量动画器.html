@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>定积分累积量动画器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="积分">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="双面板：上方f(x)的累积面积实时填充，下方F(x)=∫f(t)dt同步增长，体现微积分基本定理">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:ew-resize;}
+    .fn-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .fn-btn{padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);font-weight:700;transition:all .2s;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .ctrl-row{display:flex;gap:8px;}
+    .btn{padding:10px 18px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;font-family:'Noto Sans SC',sans-serif;font-weight:500;}
+    .btn-anim{background:var(--blue);color:#fff;}
+    .btn-stop{background:var(--amber);color:#fff;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 积分 · 认知动作：累积</div>
+  <h1>定积分累积量动画器</h1>
+  <p class="sub">拖动 x 边界，观察面积如何累积为 F(x)——微积分基本定理的核心</p>
+</header>
+<main>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn(0,this)">sin x</button>
+    <button class="fn-btn" onclick="setFn(1,this)">x²</button>
+    <button class="fn-btn" onclick="setFn(2,this)">eˣ</button>
+    <button class="fn-btn" onclick="setFn(3,this)">cos x</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="ctrl-row">
+    <button class="btn btn-anim" id="animBtn" onclick="toggleAnim()">▶ 动画积累</button>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 面积"流动式"累积只有动画才能体现积分的累积本质
+// PEDAGOGY V2 表征桥接: f(x)面积图 + F(x)曲线 + 数值三联动
+// PEDAGOGY V6 动作-数学一致: 向右拖 = 积分上限增大 = 面积增大
+// PEDAGOGY V7 单一认知动作: 累积（面积不断加入 → F(x)上升/下降）
+// PEDAGOGY V8 概念反馈: "F(x)在f(x)>0处上升，f(x)<0处下降——这就是微积分基本定理"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 420;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',neg:'#dc2626',negL:'#fee2e2',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+const FNS = [
+  { label:'sin x', f: x=>Math.sin(x), F: x=>-Math.cos(x)+1, domain:[-Math.PI*2, Math.PI*2], a0:0 },
+  { label:'x²',   f: x=>x*x,         F: x=>x*x*x/3,       domain:[0, 3],               a0:0 },
+  { label:'eˣ',   f: x=>Math.exp(x),  F: x=>Math.exp(x)-1,  domain:[0, 2.5],             a0:0 },
+  { label:'cos x', f: x=>Math.cos(x), F: x=>Math.sin(x),    domain:[-Math.PI*2, Math.PI*2], a0:0 },
+];
+
+let fnIdx = 0;
+let xCur;
+let dragging = false;
+let animating = false;
+let raf = null;
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setFn(i, btn) {
+  fnIdx = i;
+  document.querySelectorAll('.fn-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  stopAnim();
+  xCur = FNS[i].domain[0];
+  draw();
+}
+
+function toggleAnim() {
+  if (animating) stopAnim();
+  else startAnim();
+}
+
+function startAnim() {
+  animating = true;
+  document.getElementById('animBtn').textContent = '⏸ 暂停';
+  document.getElementById('animBtn').className = 'btn btn-stop';
+  const fn = FNS[fnIdx];
+  xCur = fn.domain[0];
+  animStep();
+}
+
+function stopAnim() {
+  animating = false;
+  cancelAnimationFrame(raf);
+  document.getElementById('animBtn').textContent = '▶ 动画积累';
+  document.getElementById('animBtn').className = 'btn btn-anim';
+}
+
+function animStep() {
+  const fn = FNS[fnIdx];
+  xCur += (fn.domain[1] - fn.domain[0]) * 0.005;
+  if (xCur >= fn.domain[1]) { xCur = fn.domain[1]; stopAnim(); }
+  draw();
+  if (animating) raf = requestAnimationFrame(animStep);
+}
+
+function numericalIntegral(f, a, b, n=200) {
+  const h = (b-a)/n;
+  let s = 0;
+  for (let i=0; i<n; i++) s += f(a + (i+0.5)*h) * h;
+  return s;
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+  const fn = FNS[fnIdx];
+  const [xMin, xMax] = fn.domain;
+  if (xCur === undefined) xCur = xMin;
+  const xC = Math.max(xMin, Math.min(xMax, xCur));
+
+  const panelH = (H - 20) / 2;
+  const pad = { l: 50, r: 15, t: 16, b: 30 };
+  const cw = W - pad.l - pad.r;
+
+  function drawPanel(panelY, isTop) {
+    const ch = panelH - pad.t - pad.b;
+
+    // y range
+    const ys = [];
+    for (let i=0; i<=200; i++) {
+      const x = xMin + i/200*(xMax-xMin);
+      ys.push(isTop ? fn.f(x) : fn.F(x) - fn.F(xMin));
+    }
+    const rawMax = Math.max(...ys), rawMin = Math.min(...ys);
+    const yRange = Math.max(rawMax - rawMin, 0.1) * 1.2;
+    const yMid = (rawMax + rawMin) / 2;
+
+    function toY(y) { return panelY + pad.t + ch/2 - (y - yMid)/yRange*ch; }
+    function toX(x) { return pad.l + (x - xMin)/(xMax-xMin)*cw; }
+    const xAxis = toY(0);
+
+    // Grid
+    ctx.strokeStyle = C.border; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(pad.l, xAxis); ctx.lineTo(pad.l+cw, xAxis); ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (isTop) {
+      // Shaded area from xMin to xC
+      for (let px=0; px < cw; px++) {
+        const x = xMin + px/cw*(xMax-xMin);
+        if (x > xC) break;
+        const y = fn.f(x);
+        const yy = toY(y);
+        if (y >= 0) {
+          ctx.fillStyle = C.blueL;
+          ctx.fillRect(pad.l+px, yy, 1, xAxis - yy);
+        } else {
+          ctx.fillStyle = C.negL;
+          ctx.fillRect(pad.l+px, xAxis, 1, yy - xAxis);
+        }
+      }
+    }
+
+    // Curve
+    ctx.strokeStyle = isTop ? C.blue : C.teal;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let px=0; px<=cw; px++) {
+      const x = xMin + px/cw*(xMax-xMin);
+      const y = isTop ? fn.f(x) : fn.F(x) - fn.F(xMin);
+      const yy = toY(y);
+      if (px===0) ctx.moveTo(pad.l+px, yy);
+      else ctx.lineTo(pad.l+px, yy);
+    }
+    ctx.stroke();
+
+    // Vertical line at xC
+    const xcPx = toX(xC);
+    ctx.strokeStyle = C.amber; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(xcPx, panelY+pad.t); ctx.lineTo(xcPx, panelY+pad.t+ch); ctx.stroke();
+
+    // Current value dot
+    const yCurVal = isTop ? fn.f(xC) : fn.F(xC) - fn.F(xMin);
+    const ycPx = toY(yCurVal);
+    ctx.fillStyle = C.amber;
+    ctx.beginPath(); ctx.arc(xcPx, ycPx, 5, 0, Math.PI*2); ctx.fill();
+
+    // Axes
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(pad.l, panelY+pad.t); ctx.lineTo(pad.l, panelY+pad.t+ch); ctx.lineTo(W-pad.r, panelY+pad.t+ch); ctx.stroke();
+
+    // y axis ticks
+    [rawMin, 0, rawMax].forEach(v => {
+      const yy = toY(v);
+      ctx.fillStyle = C.ink3; ctx.font = `10px 'JetBrains Mono',monospace`;
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(v.toFixed(1), pad.l-3, yy);
+    });
+    // x axis ticks
+    [xMin, (xMin+xMax)/2, xMax].forEach(x => {
+      ctx.fillStyle = C.ink3; ctx.font = `10px 'JetBrains Mono',monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(x.toFixed(1), toX(x), panelY+pad.t+ch+4);
+    });
+
+    // Panel label
+    ctx.fillStyle = isTop ? C.blue : C.teal;
+    ctx.font = `bold 13px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    if (isTop) {
+      const area = numericalIntegral(fn.f, xMin, xC);
+      ctx.fillText(`f(x) = ${fn.label}    ∫₀ˣ f(t)dt = ${area.toFixed(4)}`, pad.l+4, panelY+2);
+    } else {
+      const FVal = fn.F(xC) - fn.F(xMin);
+      ctx.fillText(`F(x) = ∫f(t)dt    F(${xC.toFixed(2)}) = ${FVal.toFixed(4)}`, pad.l+4, panelY+2);
+    }
+  }
+
+  drawPanel(0, true);
+  // Connector line
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, panelH); ctx.lineTo(W, panelH); ctx.stroke();
+  drawPanel(panelH + 5, false);
+
+  // Synchronized vertical line indicator
+  const xcPx = pad.l + (xC-FNS[fnIdx].domain[0])/(FNS[fnIdx].domain[1]-FNS[fnIdx].domain[0])*cw;
+  ctx.strokeStyle = C.amber + '60'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(xcPx, panelH-30); ctx.lineTo(xcPx, panelH+35); ctx.stroke();
+  ctx.setLineDash([]);
+
+  updateFeedback(xC);
+}
+
+function updateFeedback(xC) {
+  const fn = FNS[fnIdx];
+  const fVal = fn.f(xC);
+  const FVal = fn.F(xC) - fn.F(fn.domain[0]);
+  let rising;
+  if (fVal > 0.05) rising = '正值，F(x) 正在<strong>上升</strong>';
+  else if (fVal < -0.05) rising = '负值，F(x) 正在<strong>下降</strong>';
+  else rising = '≈ 0，F(x) 在<strong>极值点附近</strong>（斜率为零）';
+  document.getElementById('fb').innerHTML =
+    `<strong>微积分基本定理（第一部分）</strong>：F(x) = ∫ₐˣ f(t)dt，则 F'(x) = f(x)。<br>` +
+    `当前 x = ${xC.toFixed(2)}：f(x) = ${fVal.toFixed(3)} （${rising}），F(x) = ${FVal.toFixed(4)}。<br>` +
+    `<strong>关键洞察</strong>：f(x) > 0 → 面积增加 → F(x) 上升；f(x) < 0 → 负面积 → F(x) 下降。<br>` +
+    `红色填充区域表示"负面积"（f(x) < 0 时积分的贡献是负数）。`;
+}
+
+// Drag
+cvs.addEventListener('pointerdown', e => { dragging = true; stopAnim(); cvs.setPointerCapture(e.pointerId); handleDrag(e); });
+cvs.addEventListener('pointermove', e => { if (dragging) handleDrag(e); });
+cvs.addEventListener('pointerup', () => { dragging = false; });
+
+function handleDrag(e) {
+  const rect = cvs.getBoundingClientRect();
+  const px = e.clientX - rect.left;
+  const fn = FNS[fnIdx];
+  const cw = rect.width - 65;
+  xCur = fn.domain[0] + (px - 50) / cw * (fn.domain[1] - fn.domain[0]);
+  xCur = Math.max(fn.domain[0], Math.min(fn.domain[1], xCur));
+  draw();
+}
+
+window.addEventListener('resize', () => { setup(); draw(); });
+setup();
+setFn(0, document.querySelector('.fn-btn.active'));
+</script>
+</body>
+</html>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>集合交并补可视化 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="集合">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="韦恩图动态高亮A∩B/A∪B/A∖B/Aᶜ，拖拽圆改变重叠度，直观理解集合运算">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:grab;}
+    .op-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .op-btn{padding:10px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);transition:all .2s;text-align:center;font-weight:700;}
+    .op-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 集合 · 认知动作：比较</div>
+  <h1>集合交并补可视化</h1>
+  <p class="sub">点击操作按钮切换高亮区域，拖动圆改变重叠程度</p>
+</header>
+<main>
+  <div class="op-row">
+    <button class="op-btn active" onclick="setOp('union',this)">A∪B 并集</button>
+    <button class="op-btn" onclick="setOp('inter',this)">A∩B 交集</button>
+    <button class="op-btn" onclick="setOp('diff',this)">A\B 差集</button>
+    <button class="op-btn" onclick="setOp('comp',this)">Aᶜ 补集</button>
+  </div>
+  <div class="op-row">
+    <button class="op-btn" onclick="setOp('symDiff',this)">A△B 对称差</button>
+    <button class="op-btn" onclick="setOp('compB',this)">Bᶜ 补集</button>
+    <button class="op-btn" onclick="setOp('onlyA',this)">仅A不含B</button>
+    <button class="op-btn" onclick="setOp('onlyB',this)">仅B不含A</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 集合运算的区域关系只有韦恩图高亮才能直观感受
+// PEDAGOGY V4 信号聚焦: 蓝=高亮区域，灰=非高亮，虚线=集合边界
+// PEDAGOGY V6 动作-数学一致: 拖圆圈=改变集合的重叠程度
+// PEDAGOGY V7 单一认知动作: 比较（不同运算的结果区域）
+// PEDAGOGY V8 概念反馈: 揭示各集合运算的正式定义和概率类比
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=360;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+let op='union';
+let cx1,cx2,cy1,cy2,R;
+let dragging=null;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+  const W=cvs.getBoundingClientRect().width;
+  R=Math.min(W*0.25,90);
+  cx1=W*0.38;cx2=W*0.62;cy1=H*0.45;cy2=H*0.45;
+}
+
+function setOp(o,btn){
+  op=o;
+  document.querySelectorAll('.op-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+// Check if point (px,py) is in circle centered at (cx,cy) with radius R
+function inCircle(px,py,cx,cy,r){
+  return (px-cx)**2+(py-cy)**2<=r*r;
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const margin=24;
+  // Universe rectangle
+  ctx.strokeStyle=C.ink3;ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+  ctx.strokeRect(margin,30,W-2*margin,H-50);
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.ink3;ctx.font=`12px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText('U（全集）',margin+6,34);
+
+  // Pixel-wise fill for the operation result
+  // Use offscreen approach: sample points
+  const N=60;
+  const dx=(W-2*margin)/N;
+  const dy=(H-50)/N;
+  for(let i=0;i<N;i++){
+    for(let j=0;j<N;j++){
+      const px=margin+i*dx+dx/2;
+      const py=30+j*dy+dy/2;
+      const inA=inCircle(px,py,cx1,cy1,R);
+      const inB=inCircle(px,py,cx2,cy2,R);
+      const inU=true;
+      let highlight=false;
+      if(op==='union') highlight=inA||inB;
+      else if(op==='inter') highlight=inA&&inB;
+      else if(op==='diff') highlight=inA&&!inB;
+      else if(op==='comp') highlight=!inA&&inU;
+      else if(op==='symDiff') highlight=(inA&&!inB)||(inB&&!inA);
+      else if(op==='compB') highlight=!inB&&inU;
+      else if(op==='onlyA') highlight=inA&&!inB;
+      else if(op==='onlyB') highlight=inB&&!inA;
+      if(highlight){
+        ctx.fillStyle=C.blue+'55';
+        ctx.fillRect(px-dx/2,py-dy/2,dx+1,dy+1);
+      }
+    }
+  }
+
+  // Draw circles
+  ctx.strokeStyle=C.blue;ctx.lineWidth=2.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.arc(cx1,cy1,R,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle=C.amberD;
+  ctx.beginPath();ctx.arc(cx2,cy2,R,0,Math.PI*2);ctx.stroke();
+  // Labels
+  ctx.fillStyle=C.blue;ctx.font=`bold 22px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('A',cx1-R*0.5,cy1);
+  ctx.fillStyle=C.amberD;
+  ctx.fillText('B',cx2+R*0.5,cy2);
+
+  // Operation text
+  ctx.fillStyle=C.ink;ctx.font=`bold 16px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+  const opLabels={
+    union:'A∪B = {x | x∈A 或 x∈B}',
+    inter:'A∩B = {x | x∈A 且 x∈B}',
+    diff: 'A\\B = {x | x∈A 且 x∉B}',
+    comp: 'Aᶜ = {x | x∉A}（在全集U中）',
+    symDiff:'A△B = (A∪B)\\(A∩B)',
+    compB:'Bᶜ = {x | x∉B}（在全集U中）',
+    onlyA:'A∩Bᶜ = A\\B',
+    onlyB:'B∩Aᶜ = B\\A',
+  };
+  ctx.fillText(opLabels[op],W/2,H-36);
+
+  // Distance hint
+  const dist=Math.hypot(cx2-cx1,cy2-cy1);
+  const overlap=Math.max(0,2*R-dist);
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText(`拖动圆 | 重叠程度：${(overlap/(2*R)*100).toFixed(0)}%`,W/2,H-8);
+
+  // PEDAGOGY V8
+  const fbTexts={
+    union:'A∪B（并集）：属于A或属于B（或两者都属于）的元素集合。包括A+B的所有部分。',
+    inter:'A∩B（交集）：同时属于A和B的元素。两圆重叠区域。相当于P(A∩B)条件概率中的联合事件。',
+    diff:'A\\B（差集）：属于A但不属于B的元素。只保留A独有的部分。',
+    comp:'Aᶜ（补集）：不属于A的所有元素（在全集U中）。A+Aᶜ=U，A∩Aᶜ=∅。',
+    symDiff:'A△B（对称差）：属于A或B但不同时属于两者的元素。相当于"非交集的并集"。',
+    compB:'Bᶜ（B的补集）：不属于B的所有元素。',
+    onlyA:'A∩Bᶜ = A\\B：只属于A的元素（A中去掉与B的重叠部分）。',
+    onlyB:'B∩Aᶜ = B\\A：只属于B的元素（B中去掉与A的重叠部分）。',
+  };
+  document.getElementById('fb').innerHTML=`<strong>${opLabels[op]}</strong><br>${fbTexts[op]}<br>拖动两个圆改变重叠程度，观察高亮区域的变化。当两圆不相交时，A∩B=∅（空集）。`;
+}
+
+cvs.addEventListener('pointerdown',e=>{
+  const rect=cvs.getBoundingClientRect();
+  const px=e.clientX-rect.left,py=e.clientY-rect.top;
+  if(Math.hypot(px-cx1,py-cy1)<R+10) dragging='A';
+  else if(Math.hypot(px-cx2,py-cy2)<R+10) dragging='B';
+  cvs.setPointerCapture(e.pointerId);
+});
+cvs.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const rect=cvs.getBoundingClientRect();
+  const px=e.clientX-rect.left,py=e.clientY-rect.top;
+  const W=rect.width;
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  if(dragging==='A'){cx1=clamp(px,R+24,W-R-24);cy1=clamp(py,R+30,H-R-20);}
+  else{cx2=clamp(px,R+24,W-R-24);cy2=clamp(py,R+30,H-R-20);}
+  draw();
+});
+cvs.addEventListener('pointerup',()=>{dragging=null;});
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

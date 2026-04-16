@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>勾股定理拼图证明器 · 初中数学可视化</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f7f6f2;
+      --surface: #ffffff;
+      --surface2: #f2f0ea;
+      --ink: #1a1814;
+      --ink2: #5a5650;
+      --ink3: #a8a49c;
+      --border: #e0ddd6;
+      --color-a: #2a5c8f;
+      --color-a-light: #dceeff;
+      --color-b: #0f6e56;
+      --color-b-light: #d4f5e3;
+      --color-c: #854f0b;
+      --color-c-light: #faeeda;
+      --color-c-dark: #633806;
+      --color-tri: #7a5c2a;
+      --color-tri-fill: rgba(180,140,60,0.22);
+      --radius: 14px;
+      --radius-sm: 8px;
+      --shadow: 0 2px 12px rgba(0,0,0,0.07);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Noto Sans SC', sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; }
+
+    header {
+      background: var(--surface); border-bottom: 2px solid var(--border);
+      padding: 12px 20px; display: flex; align-items: center; gap: 10px;
+      box-shadow: var(--shadow);
+    }
+    header .icon { font-size: 22px; }
+    header h1 { font-size: 17px; font-weight: 700; color: var(--color-c-dark); }
+    header .tag {
+      font-size: 11px; font-weight: 600;
+      background: var(--color-c-light); color: var(--color-c-dark);
+      padding: 3px 10px; border-radius: 20px;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      height: calc(100vh - 57px);
+    }
+
+    #proofPanel {
+      padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden;
+    }
+    .stage-bar { display: flex; gap: 6px; align-items: center; }
+    .stage-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); transition: all 0.3s; }
+    .stage-dot.active { background: var(--color-c); transform: scale(1.4); }
+    .stage-dot.done { background: var(--color-b); }
+    .stage-label { font-size: 12px; color: var(--ink3); margin-left: 6px; font-weight: 500; }
+
+    #mainCanvas {
+      width: 100%; flex: 1; min-height: 0; display: block;
+      background: var(--surface); border-radius: var(--radius);
+      box-shadow: var(--shadow); border: 1.5px solid var(--border);
+    }
+
+    /* 第4步内部的两个排列切换按钮 */
+    #arrangeBar {
+      display: none;
+      gap: 8px; justify-content: center;
+    }
+    #arrangeBar.show { display: flex; }
+    .arr-btn {
+      padding: 8px 18px; border: 2px solid var(--border);
+      border-radius: var(--radius-sm); background: var(--surface);
+      font-size: 13px; font-weight: 600; cursor: pointer; color: var(--ink2);
+      transition: all 0.2s;
+    }
+    .arr-btn.active { border-color: var(--color-c); background: var(--color-c-light); color: var(--color-c-dark); }
+
+    #controlPanel {
+      background: var(--surface); border-left: 2px solid var(--border);
+      padding: 18px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;
+    }
+
+    .card { background: var(--surface2); border-radius: var(--radius-sm); padding: 14px; border: 1.5px solid var(--border); }
+    .card-title { font-size: 11px; font-weight: 700; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+
+    .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .slider-row:last-child { margin-bottom: 0; }
+    .slider-label { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; width: 14px; text-align: center; }
+    .slider-label.la { color: var(--color-a); }
+    .slider-label.lb { color: var(--color-b); }
+    input[type="range"] { flex: 1; height: 6px; -webkit-appearance: none; border-radius: 3px; outline: none; cursor: pointer; }
+    #sliderA { background: linear-gradient(to right, var(--color-a) 0%, var(--color-a) 12.5%, var(--border) 12.5%); }
+    #sliderB { background: linear-gradient(to right, var(--color-b) 0%, var(--color-b) 25%, var(--border) 25%); }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); border: 2.5px solid currentColor; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+    #sliderA::-webkit-slider-thumb { border-color: var(--color-a); }
+    #sliderB::-webkit-slider-thumb { border-color: var(--color-b); }
+    .slider-val { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; width: 28px; text-align: right; }
+    .slider-val.va { color: var(--color-a); }
+    .slider-val.vb { color: var(--color-b); }
+
+    #verifyArea { display: none; }
+    #verifyArea.show { display: block; }
+    .verify-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+    .verify-row:last-child { border-bottom: none; }
+    .verify-label { color: var(--ink2); }
+    .verify-val { font-weight: 600; }
+    .verify-val.va { color: var(--color-a); }
+    .verify-val.vb { color: var(--color-b); }
+    .verify-val.vc { color: var(--color-c); }
+    .verify-eq { margin-top: 10px; padding: 8px 12px; background: var(--surface); border-radius: var(--radius-sm); border: 2px solid var(--color-c); text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--color-c-dark); }
+
+    .stage-btns { display: flex; flex-direction: column; gap: 7px; }
+    .stage-btn {
+      width: 100%; padding: 10px 12px; border: 2px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface); font-family: 'Noto Sans SC', sans-serif; font-size: 12px; font-weight: 500;
+      cursor: pointer; text-align: left; color: var(--ink2); transition: all 0.2s;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .stage-btn:hover { border-color: var(--color-c); color: var(--ink); }
+    .stage-btn.current { border-color: var(--color-c); background: var(--color-c-light); color: var(--color-c-dark); font-weight: 600; }
+    .stage-btn.completed { border-color: var(--color-b); background: var(--color-b-light); color: var(--color-b-dark); }
+    .step-num { width: 20px; height: 20px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+    .stage-btn.current .step-num { background: var(--color-c); color: #fff; }
+    .stage-btn.completed .step-num { background: var(--color-b); color: #fff; }
+    /* 第4步特殊高亮 */
+    .stage-btn.why-btn { border-style: dashed; }
+    .stage-btn.why-btn.current { border-style: solid; background: #fff8e6; border-color: #c87820; color: #7a4a00; }
+    .stage-btn.why-btn.current .step-num { background: #c87820; }
+
+    #feedbackArea {
+      font-size: 12px; line-height: 1.8; color: var(--ink2);
+      padding: 12px; background: var(--surface); border-radius: var(--radius-sm);
+      border-left: 4px solid var(--border); transition: border-color 0.3s;
+      min-height: 60px;
+    }
+    #feedbackArea.highlight { border-color: var(--color-c); }
+    #feedbackArea.why { border-color: #c87820; background: #fff8e6; color: #5a3800; }
+
+    #formulaArea { display: none; }
+    #formulaArea.show { display: block; text-align: center; padding: 12px; background: var(--color-c-light); border-radius: var(--radius-sm); border: 2px dashed var(--color-c); }
+    .formula-text { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: var(--color-c-dark); }
+    .formula-sub { font-size: 11px; color: var(--ink3); margin-top: 4px; }
+
+    .reset-btn { width: 100%; padding: 8px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: transparent; font-family: 'Noto Sans SC', sans-serif; font-size: 11px; color: var(--ink3); cursor: pointer; transition: all 0.15s; }
+    .reset-btn:hover { border-color: var(--ink3); color: var(--ink2); }
+
+    @media (max-width: 720px) {
+      main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; }
+      #proofPanel { height: 60vw; min-height: 300px; }
+      #controlPanel { border-left: none; border-top: 2px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="icon">📐</span>
+  <h1>勾股定理拼图证明器</h1>
+  <span class="tag">初中 · 几何</span>
+</header>
+
+<main>
+  <div id="proofPanel">
+    <div class="stage-bar">
+      <div class="stage-dot active" id="dot1"></div>
+      <div class="stage-dot" id="dot2"></div>
+      <div class="stage-dot" id="dot3"></div>
+      <div class="stage-dot" id="dot4"></div>
+      <span class="stage-label" id="stageLabel">第一步：认识三角形</span>
+    </div>
+    <!-- 第4步切换按钮 -->
+    <div id="arrangeBar">
+      <button class="arr-btn active" id="arrBtn1" onclick="setArrangement(1)">排列一：露出 c²</button>
+      <button class="arr-btn" id="arrBtn2" onclick="setArrangement(2)">排列二：露出 a²＋b²</button>
+    </div>
+    <canvas id="mainCanvas"></canvas>
+  </div>
+
+  <div id="controlPanel">
+    <div class="card">
+      <div class="card-title">调整直角三角形</div>
+      <div class="slider-row">
+        <span class="slider-label la">a</span>
+        <input type="range" id="sliderA" min="1" max="7" step="0.5" value="3">
+        <span class="slider-val va" id="valA">3</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label lb">b</span>
+        <input type="range" id="sliderB" min="1" max="7" step="0.5" value="4">
+        <span class="slider-val vb" id="valB">4</span>
+      </div>
+    </div>
+
+    <div class="card" id="verifyArea">
+      <div class="card-title">面积验证</div>
+      <div class="verify-row"><span class="verify-label">a² =</span><span class="verify-val va" id="va2">9</span></div>
+      <div class="verify-row"><span class="verify-label">b² =</span><span class="verify-val vb" id="vb2">16</span></div>
+      <div class="verify-row"><span class="verify-label">a² + b² =</span><span class="verify-val vc" id="vsum">25</span></div>
+      <div class="verify-row"><span class="verify-label">c² =</span><span class="verify-val vc" id="vc2">25</span></div>
+      <div class="verify-eq">✓ a² + b² = c²</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">探索步骤</div>
+      <div class="stage-btns">
+        <button class="stage-btn current" id="btn1" onclick="goStage(1)">
+          <span class="step-num">1</span>认识直角三角形
+        </button>
+        <button class="stage-btn" id="btn2" onclick="goStage(2)">
+          <span class="step-num">2</span>三边各建一个正方形
+        </button>
+        <button class="stage-btn" id="btn3" onclick="goStage(3)">
+          <span class="step-num">3</span>面积数字相等了……
+        </button>
+        <button class="stage-btn why-btn" id="btn4" onclick="goStage(4)">
+          <span class="step-num">?</span>但为什么相等？（证明）
+        </button>
+      </div>
+    </div>
+
+    <div id="formulaArea">
+      <div class="formula-text">a² + b² = c²</div>
+      <div class="formula-sub">对所有直角三角形恒成立</div>
+    </div>
+
+    <div id="feedbackArea">
+      请先调整滑杆，感受三角形形状，再按步骤探索。
+    </div>
+
+    <button class="reset-btn" onclick="resetAll()">↺ 重置</button>
+  </div>
+</main>
+
+<script>
+// ══════════════════════════════════════════════════════
+// 核心认知动作：分解
+// 关键改进：第4步用"大正方形拼法"解释为什么面积相等
+//   同一个 (a+b)² 大正方形，放入同样4个三角形：
+//   排列一 → 剩余面积 = c²
+//   排列二 → 剩余面积 = a² + b²
+//   两次剩余面积必然相等，所以 c² = a² + b²
+// ══════════════════════════════════════════════════════
+
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+let DPR = window.devicePixelRatio || 1;
+let a = 3, b = 4;
+let stage = 1;
+let arrangement = 1;   // 第4步：1 or 2
+let animProgress = 0;
+let animating = false;
+
+function calcC() { return Math.sqrt(a*a + b*b); }
+
+// ── Canvas 初始化 ────────────────────────────────────
+function initCanvas() {
+  const panel = document.getElementById('proofPanel');
+  const bar = document.getElementById('arrangeBar');
+  const W = panel.clientWidth - 32;
+  const H = panel.clientHeight - (stage === 4 ? bar.offsetHeight + 12 : 0) - 60;
+  canvas.width  = Math.max(200, W) * DPR;
+  canvas.height = Math.max(200, H) * DPR;
+  canvas.style.width  = Math.max(200, W) + 'px';
+  canvas.style.height = Math.max(200, H) + 'px';
+  ctx.scale(DPR, DPR);
+}
+
+// ── 主渲染调度 ────────────────────────────────────────
+function draw() {
+  const W = canvas.width / DPR;
+  const H = canvas.height / DPR;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#fafaf8';
+  ctx.fillRect(0, 0, W, H);
+
+  if (stage <= 3) drawTriangleView(W, H);
+  else            drawProofView(W, H);
+}
+
+// ═══════════════════════════════════════════════════════
+// 第1–3步：经典三边正方形视图
+// ═══════════════════════════════════════════════════════
+function drawTriangleView(W, H) {
+  const c = calcC();
+  const maxDim = Math.max(a + c, b + c) + 1.5;
+  const UNIT = Math.min(W, H) / (maxDim + 2);
+  const cx = W * 0.42, cy = H * 0.54;
+
+  // 三角形顶点
+  const P = {
+    right:  { x: cx,           y: cy },
+    bottom: { x: cx + a*UNIT,  y: cy },
+    top:    { x: cx,           y: cy - b*UNIT }
+  };
+
+  // 正方形（第2、3步）
+  if (stage >= 2) {
+    const p = easeInOut(Math.min(animProgress, 1));
+    drawSquare(P.right, P.bottom,  1, p, a*UNIT, '#dceeff', '#2a5c8f', 'a²', (a*a).toFixed(0));
+    drawSquare(P.top,   P.right,  -1, p, b*UNIT, '#d4f5e3', '#0f6e56', 'b²', (b*b).toFixed(0));
+    if (stage === 3) {
+      drawCSquare(P, c, UNIT, p);
+    }
+  }
+
+  drawTriangle(P);
+  drawRightAngle(P);
+  drawTriangleLabels(P, c, UNIT);
+}
+
+function drawTriangle(P) {
+  ctx.beginPath();
+  ctx.moveTo(P.right.x, P.right.y);
+  ctx.lineTo(P.bottom.x, P.bottom.y);
+  ctx.lineTo(P.top.x, P.top.y);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(200,160,60,0.15)';
+  ctx.fill();
+  ctx.strokeStyle = '#7a5c2a';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+}
+
+function drawRightAngle(P) {
+  const sz = 9;
+  ctx.strokeStyle = '#7a5c2a';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(P.right.x + sz, P.right.y);
+  ctx.lineTo(P.right.x + sz, P.right.y - sz);
+  ctx.lineTo(P.right.x,      P.right.y - sz);
+  ctx.stroke();
+}
+
+function drawTriangleLabels(P, c, UNIT) {
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const fs = Math.max(10, UNIT * 0.42);
+  ctx.font = `600 ${fs}px 'JetBrains Mono', monospace`;
+  ctx.fillStyle = '#2a5c8f';
+  ctx.fillText(`a=${a}`, (P.right.x+P.bottom.x)/2, P.right.y + 15);
+  ctx.fillStyle = '#0f6e56';
+  ctx.fillText(`b=${b}`, P.right.x - 26, (P.right.y+P.top.y)/2);
+  const mx = (P.bottom.x+P.top.x)/2, my = (P.bottom.y+P.top.y)/2;
+  const dx = P.top.x-P.bottom.x, dy = P.top.y-P.bottom.y;
+  const len = Math.sqrt(dx*dx+dy*dy);
+  ctx.fillStyle = '#854f0b';
+  ctx.fillText(`c≈${c.toFixed(2)}`, mx + dy/len*22, my - dx/len*22);
+}
+
+function drawSquare(p1, p2, dir, progress, sideLen, fill, stroke, label, areaStr) {
+  const dx = p2.x-p1.x, dy = p2.y-p1.y;
+  const nx = -dy*dir/sideLen, ny = dx*dir/sideLen;
+  const p3 = { x: p2.x + nx*sideLen*progress, y: p2.y + ny*sideLen*progress };
+  const p4 = { x: p1.x + nx*sideLen*progress, y: p1.y + ny*sideLen*progress };
+
+  ctx.beginPath();
+  ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y); ctx.lineTo(p4.x,p4.y);
+  ctx.closePath();
+  ctx.globalAlpha = progress * 0.85; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke();
+
+  if (progress > 0.6) {
+    const mx = (p1.x+p2.x+p3.x+p4.x)/4, my = (p1.y+p2.y+p3.y+p4.y)/4;
+    ctx.globalAlpha = (progress-0.6)/0.4;
+    ctx.font = `700 13px 'JetBrains Mono', monospace`;
+    ctx.fillStyle = stroke; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, mx, my - 7);
+    ctx.font = `500 11px 'JetBrains Mono', monospace`;
+    ctx.fillText('= '+areaStr, mx, my + 9);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawCSquare(P, c, UNIT, progress) {
+  const x1=P.bottom.x, y1=P.bottom.y, x2=P.top.x, y2=P.top.y;
+  const sideLen = c*UNIT;
+  const dx=x2-x1, dy=y2-y1, len=Math.sqrt(dx*dx+dy*dy);
+  const nx=-dy/len, ny=dx/len;
+  const p3 = { x:x2+nx*sideLen*progress, y:y2+ny*sideLen*progress };
+  const p4 = { x:x1+nx*sideLen*progress, y:y1+ny*sideLen*progress };
+
+  ctx.beginPath();
+  ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.lineTo(p3.x,p3.y); ctx.lineTo(p4.x,p4.y);
+  ctx.closePath();
+  ctx.globalAlpha = progress*0.8; ctx.fillStyle = '#faeeda'; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#854f0b'; ctx.lineWidth = 2.5; ctx.stroke();
+
+  if (progress > 0.6) {
+    const mx=(x1+x2+p3.x+p4.x)/4, my=(y1+y2+p3.y+p4.y)/4;
+    ctx.globalAlpha = (progress-0.6)/0.4;
+    ctx.font = `700 13px 'JetBrains Mono', monospace`;
+    ctx.fillStyle = '#854f0b'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('c²', mx, my-14);
+    ctx.font = `500 11px 'JetBrains Mono', monospace`;
+    ctx.fillText(`= ${(c*c).toFixed(1)}`, mx, my);
+    ctx.fillText(`= ${(a*a).toFixed(0)}+${(b*b).toFixed(0)}`, mx, my+14);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// 第4步：拼图证明视图（核心：为什么面积相等）
+//
+// 逻辑：同一个大正方形 (a+b)²，放入同样4个三角形：
+//   排列一 → 4个三角形围成一圈，中间空出 c² 的正方形
+//   排列二 → 4个三角形拼成两个矩形，剩余 a²（左上）+ b²（右下）
+//   两次去掉的面积相同（都是4个三角形），所以剩余面积必然相等
+//   ∴ c² = a² + b²
+// ═══════════════════════════════════════════════════════
+function drawProofView(W, H) {
+  const S = a + b;
+  const prog = easeInOut(Math.min(animProgress, 1));
+
+  // 大正方形居中显示，留足空白
+  const maxSq = Math.min(W * 0.88, H * 0.88);
+  const u = maxSq / S;  // 每个单位的像素数
+  const ox = (W - S*u) / 2;  // 大正方形左上角 x
+  const oy = (H - S*u) / 2;  // 大正方形左上角 y
+
+  // ── 大正方形外框 ────────────────────────────────
+  ctx.strokeStyle = '#9a8a78';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(ox, oy, S*u, S*u);
+  ctx.setLineDash([]);
+
+  // 大正方形标注 "(a+b)²"
+  ctx.font = `500 11px 'Noto Sans SC', sans-serif`;
+  ctx.fillStyle = '#a8a49c';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText(`大正方形 = (a+b)²`, ox + S*u/2, oy - 4);
+
+  if (arrangement === 1) {
+    drawArrangement1(ox, oy, u, S, prog);
+  } else {
+    drawArrangement2(ox, oy, u, S, prog);
+  }
+}
+
+// 排列一：4个三角形放在边角，中间露出 c² 的倾斜正方形
+// 大正方形坐标系（canvas，左上角 ox,oy，y 向下）
+// 4个三角形的顶点：
+//   T1（左下）：(ox, oy+S·u), (ox+a·u, oy+S·u), (ox, oy+b·u)  [底边 a, 左边 b]
+//   T2（右下）：(ox+a·u, oy+S·u), (ox+S·u, oy+S·u), (ox+S·u, oy+(S-a)·u)
+//   T3（右上）：(ox+S·u, oy+(S-a)·u), (ox+S·u, oy), (ox+b·u, oy)  [注：S-a=b]
+//   T4（左上）：(ox+b·u, oy), (ox, oy), (ox, oy+b·u)
+// 中间倾斜正方形顶点（边长 c）：
+//   (ox+a·u, oy+S·u), (ox+S·u, oy+(S-a)·u), (ox+b·u, oy), (ox, oy+b·u)
+function drawArrangement1(ox, oy, u, S, prog) {
+  // 4个三角形（颜色同向）
+  const triColor = 'rgba(180,140,60,0.28)';
+  const triStroke = '#7a5c2a';
+
+  // T1 左下
+  fillTri(ox,       oy+S*u, ox+a*u, oy+S*u, ox,       oy+b*u, triColor, triStroke, prog);
+  // T2 右下
+  fillTri(ox+a*u, oy+S*u, ox+S*u, oy+S*u, ox+S*u, oy+b*u, triColor, triStroke, prog);
+  // T3 右上  (S-a = b)
+  fillTri(ox+S*u, oy+b*u, ox+S*u, oy,     ox+a*u, oy,     triColor, triStroke, prog);
+  // T4 左上
+  fillTri(ox+a*u, oy,     ox,     oy,     ox,     oy+b*u, triColor, triStroke, prog);
+
+  // 中间倾斜 c² 正方形
+  if (prog > 0.3) {
+    const alpha = Math.min((prog-0.3)/0.5, 1);
+    ctx.globalAlpha = alpha * 0.7;
+    ctx.fillStyle = '#faeeda';
+    ctx.beginPath();
+    ctx.moveTo(ox+a*u, oy+S*u);
+    ctx.lineTo(ox+S*u, oy+b*u);
+    ctx.lineTo(ox+a*u, oy);       // (ox+b·u, oy) wait...
+    // 修正：顶点为 (ox+a·u, oy+S·u), (ox+S·u, oy+b·u), (ox+b·u, oy), (ox, oy+b·u)
+    ctx.closePath();
+
+    ctx.beginPath();
+    ctx.moveTo(ox + a*u, oy + S*u);
+    ctx.lineTo(ox + S*u, oy + b*u);
+    ctx.lineTo(ox + b*u, oy      );
+    ctx.lineTo(ox,       oy + b*u);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#854f0b'; ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // 标注 c²
+    if (alpha > 0.7) {
+      const lx = (ox + a*u + ox + S*u + ox + b*u + ox) / 4;
+      const ly = (oy + S*u + oy + b*u + oy      + oy + b*u) / 4;
+      ctx.globalAlpha = (alpha-0.7)/0.3;
+      ctx.font = `700 ${Math.max(13, u*0.5)}px 'JetBrains Mono', monospace`;
+      ctx.fillStyle = '#854f0b'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('c²', lx, ly - 8);
+      ctx.font = `500 ${Math.max(11, u*0.4)}px 'JetBrains Mono', monospace`;
+      ctx.fillText(`= ${(calcC()*calcC()).toFixed(1)}`, lx, ly + 10);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // 直角标记
+  if (prog > 0.5) {
+    drawSmallRightAngle(ox, oy+S*u, 1, -1);      // T1
+    drawSmallRightAngle(ox+S*u, oy+S*u, -1, -1); // T2
+    drawSmallRightAngle(ox+S*u, oy, -1, 1);      // T3
+    drawSmallRightAngle(ox, oy, 1, 1);            // T4
+  }
+
+  // 边长标注
+  if (prog > 0.8) {
+    ctx.globalAlpha = (prog-0.8)/0.2;
+    labelEdge(ox, oy+S*u, ox+a*u, oy+S*u, `a=${a}`, '#2a5c8f', 14);
+    labelEdge(ox, oy+b*u, ox, oy+S*u, `b=${b}`, '#0f6e56', -18);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// 排列二：4个三角形拼成左下+右上两个矩形，剩余 a²（左上）+ b²（右下）
+// 大正方形被分为四块：
+//   左上 a² : (ox, oy)         宽 a，高 a
+//   右上矩形: (ox+a·u, oy)     宽 b，高 a —— 由T3+T4拼成
+//   左下矩形: (ox, oy+a·u)     宽 a，高 b —— 由T1+T2拼成
+//   右下 b² : (ox+a·u, oy+a·u) 宽 b，高 b
+function drawArrangement2(ox, oy, u, S, prog) {
+  const triColor = 'rgba(180,140,60,0.28)';
+  const triStroke = '#7a5c2a';
+
+  // 左下矩形（宽 a，高 b）由两个三角形填满
+  //   T1：(ox, oy+a·u), (ox+a·u, oy+a·u), (ox, oy+S·u)   右角在左下
+  //   T2：(ox+a·u, oy+a·u), (ox+a·u, oy+S·u), (ox, oy+S·u) 右角在右下
+  fillTri(ox, oy+a*u, ox+a*u, oy+a*u, ox, oy+S*u, triColor, triStroke, prog);
+  fillTri(ox+a*u, oy+a*u, ox+a*u, oy+S*u, ox, oy+S*u, triColor, triStroke, prog);
+
+  // 右上矩形（宽 b，高 a）由两个三角形填满
+  //   T3：(ox+a·u, oy), (ox+S·u, oy), (ox+S·u, oy+a·u)   右角在右上
+  //   T4：(ox+a·u, oy), (ox+S·u, oy+a·u), (ox+a·u, oy+a·u) 右角在右下
+  fillTri(ox+a*u, oy, ox+S*u, oy, ox+S*u, oy+a*u, triColor, triStroke, prog);
+  fillTri(ox+a*u, oy, ox+S*u, oy+a*u, ox+a*u, oy+a*u, triColor, triStroke, prog);
+
+  // a² 正方形（左上，蓝色）
+  if (prog > 0.2) {
+    const alpha = Math.min((prog-0.2)/0.5, 1);
+    ctx.globalAlpha = alpha * 0.75;
+    ctx.fillStyle = '#dceeff';
+    ctx.fillRect(ox, oy, a*u, a*u);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#2a5c8f'; ctx.lineWidth = 2;
+    ctx.strokeRect(ox, oy, a*u, a*u);
+    if (alpha > 0.7) {
+      ctx.globalAlpha = (alpha-0.7)/0.3;
+      ctx.font = `700 ${Math.max(13,u*0.55)}px 'JetBrains Mono', monospace`;
+      ctx.fillStyle = '#2a5c8f'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('a²', ox + a*u/2, oy + a*u/2 - 7);
+      ctx.font = `500 ${Math.max(11,u*0.42)}px 'JetBrains Mono', monospace`;
+      ctx.fillText(`= ${(a*a).toFixed(0)}`, ox + a*u/2, oy + a*u/2 + 9);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // b² 正方形（右下，绿色）
+  if (prog > 0.3) {
+    const alpha = Math.min((prog-0.3)/0.5, 1);
+    ctx.globalAlpha = alpha * 0.75;
+    ctx.fillStyle = '#d4f5e3';
+    ctx.fillRect(ox+a*u, oy+a*u, b*u, b*u);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#0f6e56'; ctx.lineWidth = 2;
+    ctx.strokeRect(ox+a*u, oy+a*u, b*u, b*u);
+    if (alpha > 0.7) {
+      ctx.globalAlpha = (alpha-0.7)/0.3;
+      ctx.font = `700 ${Math.max(13,u*0.55)}px 'JetBrains Mono', monospace`;
+      ctx.fillStyle = '#0f6e56'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('b²', ox + a*u + b*u/2, oy + a*u + b*u/2 - 7);
+      ctx.font = `500 ${Math.max(11,u*0.42)}px 'JetBrains Mono', monospace`;
+      ctx.fillText(`= ${(b*b).toFixed(0)}`, ox + a*u + b*u/2, oy + a*u + b*u/2 + 9);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // 分割线（显示 a 和 b 的边界）
+  if (prog > 0.7) {
+    ctx.globalAlpha = (prog-0.7)/0.3 * 0.4;
+    ctx.strokeStyle = '#c0b8a8'; ctx.lineWidth = 1.5; ctx.setLineDash([4,3]);
+    ctx.beginPath();
+    ctx.moveTo(ox + a*u, oy); ctx.lineTo(ox + a*u, oy + S*u);  // 竖分割线
+    ctx.moveTo(ox, oy + a*u); ctx.lineTo(ox + S*u, oy + a*u);  // 横分割线
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
+
+  // 边长标注
+  if (prog > 0.8) {
+    ctx.globalAlpha = (prog-0.8)/0.2;
+    labelEdge(ox, oy+S*u, ox+a*u, oy+S*u, `a=${a}`, '#2a5c8f', 14);
+    labelEdge(ox+a*u, oy+S*u, ox+S*u, oy+S*u, `b=${b}`, '#0f6e56', 14);
+    labelEdge(ox, oy+b*u, ox, oy+S*u, `a=${a}`, '#2a5c8f', -16);
+    labelEdge(ox, oy, ox, oy+b*u, `b=${b}`, '#0f6e56', -16);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ── 辅助绘图函数 ─────────────────────────────────────
+function fillTri(x1,y1,x2,y2,x3,y3, fill, stroke, alpha) {
+  ctx.beginPath();
+  ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.lineTo(x3,y3); ctx.closePath();
+  ctx.globalAlpha = alpha * 0.85; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+}
+
+function drawSmallRightAngle(x, y, dx, dy) {
+  const sz = 7;
+  ctx.strokeStyle = '#9a8060'; ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(x + dx*sz, y);
+  ctx.lineTo(x + dx*sz, y + dy*sz);
+  ctx.lineTo(x,         y + dy*sz);
+  ctx.stroke();
+}
+
+function labelEdge(x1,y1,x2,y2, text, color, offset) {
+  const mx = (x1+x2)/2, my = (y1+y2)/2;
+  const dx = x2-x1, dy = y2-y1, len = Math.sqrt(dx*dx+dy*dy);
+  const nx = -dy/len, ny = dx/len;
+  ctx.font = `600 11px 'JetBrains Mono', monospace`;
+  ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, mx + nx*offset, my + ny*offset);
+}
+
+function easeInOut(t) { return t<0.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+// ── 阶段控制 ─────────────────────────────────────────
+function goStage(n) {
+  if (n > stage + 1) return;   // 不允许跳步
+  stage = n;
+  animProgress = 0;
+  arrangement = 1;
+  updateUI();
+  initCanvas();
+  animateIn();
+}
+
+function setArrangement(n) {
+  arrangement = n;
+  document.getElementById('arrBtn1').className = 'arr-btn' + (n===1 ? ' active' : '');
+  document.getElementById('arrBtn2').className = 'arr-btn' + (n===2 ? ' active' : '');
+  animProgress = 0;
+  animateIn();
+  updateFeedback();
+}
+
+function animateIn() {
+  if (stage === 1) { draw(); return; }
+  animating = true;
+  let start = null;
+  const dur = stage === 4 ? 900 : 700;
+  function step(ts) {
+    if (!start) start = ts;
+    animProgress = Math.min((ts-start)/dur, 1);
+    draw();
+    if (animProgress < 1) requestAnimationFrame(step);
+    else animating = false;
+  }
+  requestAnimationFrame(step);
+}
+
+function updateUI() {
+  // 进度点
+  ['dot1','dot2','dot3','dot4'].forEach((id,i) => {
+    const d = document.getElementById(id);
+    d.className = 'stage-dot' + (i+1===stage ? ' active' : i+1<stage ? ' done' : '');
+  });
+  const labels = ['','第一步：认识三角形','第二步：建立正方形','第三步：面积数字相等','第四步：拼图证明（为什么相等）'];
+  document.getElementById('stageLabel').textContent = labels[stage];
+
+  // 按钮
+  for (let i=1;i<=4;i++) {
+    const btn = document.getElementById('btn'+i);
+    const base = i===4 ? 'stage-btn why-btn' : 'stage-btn';
+    btn.className = base + (i===stage ? ' current' : i<stage ? ' completed' : '');
+  }
+
+  // 验证区（第2步后显示）
+  document.getElementById('verifyArea').className = stage>=2 ? 'card show' : 'card';
+  if (stage>=2) updateVerify();
+
+  // 公式（第3步后显示）
+  document.getElementById('formulaArea').className = stage>=3 ? 'show' : '';
+
+  // 排列切换按钮（第4步显示）
+  document.getElementById('arrangeBar').className = stage===4 ? 'show' : '';
+
+  updateFeedback();
+}
+
+function updateFeedback() {
+  const fb = document.getElementById('feedbackArea');
+  if (stage === 4) {
+    fb.className = 'why';
+    if (arrangement === 1) {
+      fb.innerHTML = `<strong>排列一：</strong>把4个（黄色）三角形放在大正方形四角，<br>中间空出来的区域恰好是斜边的正方形 <strong>c²</strong>。<br><br>↑ 点击"排列二"，看同样4个三角形换一种摆法。`;
+    } else {
+      fb.innerHTML = `<strong>排列二：</strong>同样4个三角形拼成两个矩形（上右+左下），<br>剩余空间变成了 <strong>a²</strong>（左上，蓝色）+ <strong>b²</strong>（右下，绿色）。<br><br>两次都是：大正方形 − 4个三角形<br>∴ <strong>c² = a² + b²</strong>，这就是为什么！`;
+    }
+  } else {
+    fb.className = stage===3 ? 'highlight' : '';
+    const msgs = {
+      1: '先看这个直角三角形。拖动滑杆改变 <strong>a</strong>（蓝）和 <strong>b</strong>（绿）的长度，观察斜边 c 的变化。',
+      2: '在三条边上各建一个正方形。蓝色=a²，绿色=b²，橙色=c²。调整滑杆，再进入第3步。',
+      3: '你看到了：数字上 a²＋b² = c²。但这只是验证了结果——<strong>为什么</strong>会相等？点击第四步看证明。',
+    };
+    fb.innerHTML = msgs[stage] || '';
+  }
+}
+
+function updateVerify() {
+  const c = calcC();
+  const a2=a*a, b2=b*b, c2=+(c*c).toFixed(2);
+  document.getElementById('va2').textContent = a2;
+  document.getElementById('vb2').textContent = b2;
+  document.getElementById('vsum').textContent = a2+b2;
+  document.getElementById('vc2').textContent = c2;
+}
+
+// ── 滑杆 ─────────────────────────────────────────────
+function updateSliders() {
+  a = parseFloat(document.getElementById('sliderA').value);
+  b = parseFloat(document.getElementById('sliderB').value);
+  document.getElementById('valA').textContent = a;
+  document.getElementById('valB').textContent = b;
+  const pA = (a-1)/6*100, pB = (b-1)/6*100;
+  document.getElementById('sliderA').style.background = `linear-gradient(to right, var(--color-a) 0%, var(--color-a) ${pA}%, var(--border) ${pA}%)`;
+  document.getElementById('sliderB').style.background = `linear-gradient(to right, var(--color-b) 0%, var(--color-b) ${pB}%, var(--border) ${pB}%)`;
+  animProgress = stage <= 1 ? 0 : 1;
+  draw();
+  if (stage >= 2) updateVerify();
+}
+
+function resetAll() {
+  a=3; b=4; stage=1; arrangement=1; animProgress=0;
+  document.getElementById('sliderA').value = 3;
+  document.getElementById('sliderB').value = 4;
+  updateSliders();
+  updateUI();
+  draw();
+}
+
+// ── 初始化 ───────────────────────────────────────────
+document.getElementById('sliderA').addEventListener('input', updateSliders);
+document.getElementById('sliderB').addEventListener('input', updateSliders);
+
+window.addEventListener('load', () => { initCanvas(); updateUI(); draw(); });
+window.addEventListener('resize', () => { initCanvas(); draw(); });
+</script>
+</body>
+</html>

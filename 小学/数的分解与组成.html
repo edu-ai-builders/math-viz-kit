@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="grade" content="小学"><meta name="topic" content="数与运算">
+<meta name="difficulty" content="低"><meta name="priority" content="A">
+<meta name="cognitive" content="分解">
+<meta name="desc" content="拖动分割线把一排方块分成两组，先操作再看算式，理解数的分解与守恒">
+<title>数的分解与组成 · 小学数学</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ── 教学法：
+   V1 核心动态关系：同一个数，无论怎么拆，总量不变（数的守恒）
+   V3 分步揭示：初始只见方块整体；操作后出现分组标注；最后出现算式
+   V5 操作先于符号：先拖动分割，算式在第2步才浮现
+   V6 分割线向右 = 左组数字增大（手势与数量方向一致）
+   V7 唯一认知动作：分解
+   V8 概念反馈：无论几种分法，总数始终不变 */
+:root{
+  --bg:#fffaf4;--surface:#fff;--ink:#1a1410;--ink2:#6b5a48;--ink3:#b8a890;
+  --border:#e8ddd0;--amber:#c87820;--amber-l:#fff4e0;--amber-d:#7a4000;
+  --blue:#2a70c0;--blue-l:#e8f2ff;--green:#1a9060;--green-l:#e0faee;
+  --radius:14px;--shadow:0 2px 14px rgba(0,0,0,.07)
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;padding:16px 12px}
+
+header{text-align:center;margin-bottom:18px}
+header .emoji{font-size:32px;margin-bottom:4px}
+header h1{font-size:19px;font-weight:700;color:var(--amber-d)}
+header .tag{display:inline-block;margin-top:6px;font-size:11px;font-weight:600;
+  background:var(--amber-l);color:var(--amber-d);padding:3px 12px;border-radius:20px}
+
+.wrap{width:100%;max-width:520px;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--surface);border-radius:var(--radius);padding:18px;
+  box-shadow:var(--shadow);border:1.5px solid var(--border)}
+.card-label{font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;
+  letter-spacing:.08em;margin-bottom:12px}
+
+/* 数字选择 */
+.num-picker{display:flex;gap:7px;flex-wrap:wrap}
+.np-btn{width:42px;height:42px;border-radius:9px;border:2px solid var(--border);
+  background:var(--surface);font-size:17px;font-weight:700;cursor:pointer;
+  transition:all .15s;color:var(--ink2)}
+.np-btn:hover{border-color:var(--amber);color:var(--amber-d)}
+.np-btn.sel{border-color:var(--amber);background:var(--amber-l);color:var(--amber-d)}
+
+/* Canvas区 */
+#canvas{width:100%;display:block;border-radius:10px;background:#fdf7ef;
+  border:1.5px solid var(--border);cursor:ew-resize;touch-action:none}
+
+/* 算式（V3：初始隐藏，操作后才出现） */
+#equationArea{
+  text-align:center;opacity:0;transition:opacity .4s ease;
+  font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;
+  padding:8px 0;min-height:40px
+}
+#equationArea.show{opacity:1}
+#eqLeft{color:var(--blue)}
+#eqRight{color:var(--green)}
+#eqTotal{color:var(--amber-d)}
+
+/* 探索记录 */
+#waysRow{display:flex;flex-wrap:wrap;gap:7px}
+.way-tag{padding:5px 12px;border-radius:20px;border:1.5px solid var(--border);
+  font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--ink2);
+  background:var(--surface);transition:all .2s;cursor:pointer}
+.way-tag:hover{border-color:var(--amber);background:var(--amber-l);color:var(--amber-d)}
+.way-tag.cur{border-color:var(--amber);background:var(--amber-l);color:var(--amber-d);font-weight:700}
+
+/* 概念反馈（V8） */
+#feedback{font-size:13px;line-height:1.75;color:var(--ink2);padding:12px 14px;
+  background:var(--amber-l);border-radius:10px;border-left:4px solid var(--amber);min-height:50px}
+
+/* 阶段按钮 */
+.stage-bar{display:flex;gap:8px}
+.stg-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:9px;
+  background:var(--surface);font-family:'Noto Sans SC',sans-serif;font-size:12px;
+  font-weight:600;cursor:pointer;color:var(--ink2);transition:all .15s}
+.stg-btn:hover{border-color:var(--amber);color:var(--amber-d)}
+.stg-btn.cur{border-color:var(--amber);background:var(--amber-l);color:var(--amber-d)}
+</style>
+</head>
+<body>
+<header>
+  <div class="emoji">🧱</div>
+  <h1>数的分解与组成</h1>
+  <span class="tag">小学 · 数与运算 · 分解</span>
+</header>
+
+<div class="wrap">
+  <!-- 选择数字 -->
+  <div class="card">
+    <div class="card-label">选一个数</div>
+    <div class="num-picker" id="numPicker"></div>
+  </div>
+
+  <!-- 主可视化：方块 + 拖动分割线 -->
+  <div class="card">
+    <div class="card-label" id="canvasLabel">拖动中间的分割线，把方块分成两组</div>
+    <canvas id="canvas" height="110"></canvas>
+    <!-- V3：算式初始隐藏，操作后显示 -->
+    <div id="equationArea">
+      <span id="eqLeft">?</span>
+      <span style="color:var(--ink3)"> + </span>
+      <span id="eqRight">?</span>
+      <span style="color:var(--ink3)"> = </span>
+      <span id="eqTotal">?</span>
+    </div>
+  </div>
+
+  <!-- 分步阶段 -->
+  <div class="card">
+    <div class="card-label">探索步骤</div>
+    <div class="stage-bar">
+      <button class="stg-btn cur" id="stg1">① 拖动分割</button>
+      <button class="stg-btn" id="stg2">② 看所有分法</button>
+    </div>
+  </div>
+
+  <!-- 探索过的分法（第2步出现） -->
+  <div class="card" id="waysCard" style="display:none">
+    <div class="card-label">你试过的分法</div>
+    <div id="waysRow"></div>
+  </div>
+
+  <!-- V8 概念反馈 -->
+  <div class="card">
+    <div class="card-label">你发现了什么？</div>
+    <div id="feedback">先拖动上方的分割线，把方块分成左右两组。</div>
+  </div>
+</div>
+
+<script>
+// ── 教学法注解 ──
+// V1：分割线位置 → 左右组的数量，无论在哪里，左+右始终=总数（守恒）
+// V6：分割线向右 → 左边数字增大（空间方向与数量方向一致）
+// V3：算式默认不可见，第一次拖动后才出现
+// V8：收集所有分法后，揭示"总数永远不变"
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let DPR = window.devicePixelRatio || 1;
+
+let target = 7;
+let splitAt = 3;       // 左边几个（0 ~ target）
+let dragging = false;
+let touched = false;   // 是否已经拖动过
+let triedWays = new Set(); // 已探索的分法 "a+b"
+let stage = 1;
+
+// ── 初始化 ──
+function init() {
+  // 数字选择按钮
+  const picker = document.getElementById('numPicker');
+  picker.innerHTML = '';
+  for (let i = 2; i <= 10; i++) {
+    const b = document.createElement('button');
+    b.className = 'np-btn' + (i === target ? ' sel' : '');
+    b.textContent = i;
+    b.onclick = () => setTarget(i);
+    picker.appendChild(b);
+  }
+  splitAt = Math.floor(target / 2);
+  triedWays.clear();
+  touched = false;
+  document.getElementById('equationArea').classList.remove('show');
+  document.getElementById('feedback').textContent = '先拖动上方的分割线，把方块分成左右两组。';
+  document.getElementById('waysCard').style.display = 'none';
+  document.getElementById('waysRow').innerHTML = '';
+  setStage(1);
+  resizeCanvas();
+  draw();
+}
+
+function setTarget(n) {
+  target = n;
+  document.querySelectorAll('.np-btn').forEach((b, i) => {
+    b.className = 'np-btn' + (i + 2 === n ? ' sel' : '');
+  });
+  init();
+}
+
+// ── Canvas 尺寸 ──
+function resizeCanvas() {
+  const W = canvas.parentElement.clientWidth - 36;
+  canvas.width = W * DPR;
+  canvas.height = 110 * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = '110px';
+  ctx.scale(DPR, DPR);
+}
+
+// ── 绘制 ──
+function draw() {
+  const W = canvas.width / DPR;
+  const H = canvas.height / DPR;
+  ctx.clearRect(0, 0, W, H);
+
+  const BLOCK = Math.min(44, (W - 60) / target);
+  const GAP = 5;
+  const totalW = target * BLOCK + (target - 1) * GAP;
+  const startX = (W - totalW) / 2;
+  const blockY = (H - BLOCK) / 2;
+
+  // 方块
+  for (let i = 0; i < target; i++) {
+    const bx = startX + i * (BLOCK + GAP);
+    const isLeft = i < splitAt;
+    ctx.fillStyle = isLeft ? '#bcd8f8' : '#b8f0d0';
+    ctx.strokeStyle = isLeft ? '#2a70c0' : '#1a9060';
+    ctx.lineWidth = 2;
+    roundRect(ctx, bx, blockY, BLOCK, BLOCK, 7);
+    ctx.fill();
+    ctx.stroke();
+
+    // 方块里的数字
+    ctx.font = `700 ${Math.round(BLOCK * 0.45)}px 'JetBrains Mono',monospace`;
+    ctx.fillStyle = isLeft ? '#1a4a90' : '#0a6040';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(i + 1, bx + BLOCK / 2, blockY + BLOCK / 2);
+  }
+
+  // 分割线（V6：可拖动，越靠右左边数越多）
+  const splitX = splitAt > 0
+    ? startX + splitAt * (BLOCK + GAP) - GAP / 2
+    : startX - 8;
+  ctx.strokeStyle = '#c87820';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(splitX, blockY - 10);
+  ctx.lineTo(splitX, blockY + BLOCK + 10);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 分割线把手
+  ctx.fillStyle = '#c87820';
+  ctx.beginPath();
+  ctx.arc(splitX, blockY + BLOCK / 2, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('⟺', splitX, blockY + BLOCK / 2);
+
+  // 计数标注
+  if (touched) {
+    ctx.font = `700 ${Math.round(BLOCK * 0.42)}px 'JetBrains Mono',monospace`;
+    ctx.textBaseline = 'top';
+    // 左组数量
+    if (splitAt > 0) {
+      const leftMid = startX + (splitAt - 1) * (BLOCK + GAP) / 2 + BLOCK / 2;
+      ctx.fillStyle = '#1a4a90';
+      ctx.textAlign = 'center';
+      ctx.fillText(splitAt, startX + splitAt * (BLOCK + GAP) / 2 - GAP / 2, blockY + BLOCK + 6);
+    }
+    // 右组数量
+    if (target - splitAt > 0) {
+      const rStart = startX + splitAt * (BLOCK + GAP);
+      const rMid = rStart + (target - splitAt - 1) * (BLOCK + GAP) / 2 + BLOCK / 2;
+      ctx.fillStyle = '#0a6040';
+      ctx.textAlign = 'center';
+      ctx.fillText(target - splitAt, rMid, blockY + BLOCK + 6);
+    }
+  }
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// ── 坐标 → splitAt ──
+function xToSplit(clientX) {
+  const rect = canvas.getBoundingClientRect();
+  const W = canvas.width / DPR;
+  const x = (clientX - rect.left) * (W / rect.width);
+  const BLOCK = Math.min(44, (W - 60) / target);
+  const GAP = 5;
+  const totalW = target * BLOCK + (target - 1) * GAP;
+  const startX = (W - totalW) / 2;
+  let n = Math.round((x - startX) / (BLOCK + GAP));
+  return Math.max(0, Math.min(target, n));
+}
+
+// ── 拖动事件 ──
+canvas.addEventListener('pointerdown', e => { dragging = true; canvas.setPointerCapture(e.pointerId); updateSplit(e.clientX); });
+canvas.addEventListener('pointermove', e => { if (dragging) updateSplit(e.clientX); });
+canvas.addEventListener('pointerup', () => { dragging = false; });
+
+function updateSplit(clientX) {
+  const newSplit = xToSplit(clientX);
+  if (newSplit === splitAt && touched) return;
+  splitAt = newSplit;
+  touched = true;
+
+  draw();
+
+  // V3：第一次操作后显示算式
+  document.getElementById('equationArea').classList.add('show');
+  document.getElementById('eqLeft').textContent = splitAt;
+  document.getElementById('eqRight').textContent = target - splitAt;
+  document.getElementById('eqTotal').textContent = target;
+
+  // 记录分法
+  if (splitAt > 0 && splitAt < target) {
+    const key = `${splitAt}+${target - splitAt}`;
+    triedWays.add(key);
+  }
+
+  // V8 概念反馈
+  updateFeedback();
+}
+
+function updateFeedback() {
+  const fb = document.getElementById('feedback');
+  const n = triedWays.size;
+  if (splitAt === 0 || splitAt === target) {
+    fb.textContent = '把分割线移到中间，把方块分成两组！';
+  } else if (n === 1) {
+    fb.innerHTML = `你把 ${target} 分成了 <strong>${splitAt} 和 ${target - splitAt}</strong>。再试试其他分法。`;
+  } else if (n < Math.floor(target / 2)) {
+    fb.innerHTML = `你已经试了 ${n} 种分法。<strong>不管怎么分，左边+右边总是等于 ${target}</strong>。`;
+  } else {
+    fb.innerHTML = `✨ 你探索了 ${n} 种分法！<strong>无论把 ${target} 分成哪两部分，加起来永远是 ${target}。</strong>这就是"数的守恒"。`;
+    // 进入第2阶段提示
+    setStage(2);
+  }
+}
+
+function setStage(n) {
+  stage = n;
+  document.getElementById('stg1').className = 'stg-btn' + (n === 1 ? ' cur' : '');
+  document.getElementById('stg2').className = 'stg-btn' + (n === 2 ? ' cur' : '');
+  if (n === 2) {
+    document.getElementById('waysCard').style.display = 'block';
+    renderWays();
+  }
+}
+
+document.getElementById('stg1').onclick = () => setStage(1);
+document.getElementById('stg2').onclick = () => { if (touched) { setStage(2); renderWays(); } };
+
+function renderWays() {
+  const all = [];
+  for (let i = 1; i < target; i++) all.push(`${i}+${target - i}`);
+  const row = document.getElementById('waysRow');
+  row.innerHTML = '';
+  all.forEach(key => {
+    const tag = document.createElement('div');
+    tag.className = 'way-tag' + (triedWays.has(key) ? ' cur' : '');
+    tag.textContent = key + ' = ' + target;
+    tag.onclick = () => {
+      const [a] = key.split('+').map(Number);
+      splitAt = a;
+      touched = true;
+      triedWays.add(key);
+      draw();
+      document.getElementById('equationArea').classList.add('show');
+      document.getElementById('eqLeft').textContent = a;
+      document.getElementById('eqRight').textContent = target - a;
+      document.getElementById('eqTotal').textContent = target;
+      renderWays();
+      updateFeedback();
+    };
+    row.appendChild(tag);
+  });
+}
+
+// ── 响应式 ──
+window.addEventListener('load', () => { resizeCanvas(); draw(); init(); });
+window.addEventListener('resize', () => { resizeCanvas(); draw(); });
+</script>
+</body>
+</html>

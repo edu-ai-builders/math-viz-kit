@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>圆与直线位置关系实验室 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="解析几何">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="圆与直线相交/相切/相离的判别，圆心到直线距离d与半径r的大小关系决定位置关系">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .result-box{text-align:center;font-size:22px;font-weight:700;padding:14px;border-radius:var(--radius);transition:all .3s;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 解析几何 · 认知动作：比较</div>
+  <h1>圆与直线位置关系实验室</h1>
+  <p class="sub">圆心到直线的距离 d 与半径 r 的关系决定一切——相交、相切、相离</p>
+</header>
+<main>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">圆心到直线距离 d</div><div class="stat-val" id="dVal" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">半径 r</div><div class="stat-val" id="rVal" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">交点个数</div><div class="stat-val" id="intCount" style="color:var(--amber)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">圆心 x₀</div>
+      <div class="sl-val" id="cxLabel">0.0</div>
+      <input type="range" id="cxSl" min="-4" max="4" step="0.5" value="0">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">圆心 y₀</div>
+      <div class="sl-val" id="cyLabel">0.0</div>
+      <input type="range" id="cySl" min="-4" max="4" step="0.5" value="0">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">半径 r</div>
+      <div class="sl-val" id="radLabel" style="color:var(--teal)">2.0</div>
+      <input type="range" id="radSl" min="0.5" max="4" step="0.5" value="2">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">直线斜率 k</div>
+      <div class="sl-val" id="kLabel" style="color:var(--amber)">1.0</div>
+      <input type="range" id="kSl" min="-4" max="4" step="0.5" value="1">
+    </div>
+  </div>
+  <div class="sl-row" style="padding:0 0 4px">
+    <div style="font-size:13px;color:var(--ink2)">直线截距 b（y轴）</div>
+    <div style="font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--amber)" id="bLineLabel">3.0</div>
+    <input type="range" id="bLineSl" min="-6" max="6" step="0.5" value="3" style="accent-color:var(--amber);cursor:pointer;width:100%">
+  </div>
+  <div class="result-box" id="resultBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 相交/相切/相离的临界变化只有动态才能感受
+// PEDAGOGY V2 表征桥接: d与r的比较 ↔ 图形位置 ↔ 方程判别
+// PEDAGOGY V4 信号聚焦: 蓝=圆，橙=直线，青=距离线，红点=交点
+// PEDAGOGY V7 单一认知动作: 比较（d与r哪个大）
+// PEDAGOGY V8 概念反馈: 揭示"d<r相交，d=r相切，d>r相离"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=380;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  red:'#b84040',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function ptLineDist(px,py,k,b){
+  // Distance from (px,py) to kx-y+b=0: |k*px - py + b| / sqrt(k²+1)
+  return Math.abs(k*px-py+b)/Math.sqrt(k*k+1);
+}
+
+function lineIntersections(cx,cy,r,k,b){
+  // Circle: (x-cx)²+(y-cy)²=r², Line: y=kx+b → kx-y+b=0
+  const d=ptLineDist(cx,cy,k,b);
+  if(d>r+1e-9) return [];
+  // Foot of perpendicular from center to line
+  const fx=(cx+k*(cy-b))/(k*k+1);
+  const fy=k*fx+b;
+  if(d>r-1e-9) return [{x:fx,y:fy}]; // tangent
+  const dt=Math.sqrt(r*r-d*d)/Math.sqrt(k*k+1);
+  return [
+    {x:fx-dt,y:k*(fx-dt)+b},
+    {x:fx+dt,y:k*(fx+dt)+b}
+  ];
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const cx=parseFloat(document.getElementById('cxSl').value);
+  const cy=parseFloat(document.getElementById('cySl').value);
+  const r=parseFloat(document.getElementById('radSl').value);
+  const k=parseFloat(document.getElementById('kSl').value);
+  const bLine=parseFloat(document.getElementById('bLineSl').value);
+
+  const RANGE=6;
+  const margin={left:44,right:20,top:16,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const xToP=x=>margin.left+(x+RANGE)/(2*RANGE)*plotW;
+  const yToP=y=>margin.top+(RANGE-y)/(2*RANGE)*plotH;
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let i=-RANGE;i<=RANGE;i++){
+    ctx.beginPath();ctx.moveTo(xToP(i),margin.top);ctx.lineTo(xToP(i),margin.top+plotH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(i));ctx.lineTo(margin.left+plotW,yToP(i));ctx.stroke();
+  }
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(0));ctx.lineTo(margin.left+plotW,yToP(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(0),margin.top);ctx.lineTo(xToP(0),margin.top+plotH);ctx.stroke();
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+  for(let i=-RANGE;i<=RANGE;i+=1){if(i!==0)ctx.fillText(String(i),xToP(i),yToP(0)+3);}
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let i=-RANGE;i<=RANGE;i+=1){if(i!==0)ctx.fillText(String(i),margin.left-3,yToP(i));}
+
+  // Line: y=kx+bLine
+  ctx.strokeStyle=C.amberD;ctx.lineWidth=2;ctx.setLineDash([]);
+  const x1=-RANGE,y1=k*x1+bLine;
+  const x2=RANGE,y2=k*x2+bLine;
+  ctx.beginPath();ctx.moveTo(xToP(x1),yToP(y1));ctx.lineTo(xToP(x2),yToP(y2));ctx.stroke();
+  ctx.fillStyle=C.amberD;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(`y=${k}x${bLine>=0?'+'+bLine:bLine}`,margin.left+4,margin.top+4);
+
+  // Distance line from center to line
+  const d=ptLineDist(cx,cy,k,bLine);
+  const fx=(cx+k*(cy-bLine))/(k*k+1);
+  const fy=k*fx+bLine;
+  ctx.strokeStyle=C.teal;ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(xToP(cx),yToP(cy));ctx.lineTo(xToP(fx),yToP(fy));ctx.stroke();
+  ctx.setLineDash([]);
+  // Right angle marker at foot
+  const angle=Math.atan(k);
+  ctx.save();ctx.translate(xToP(fx),yToP(fy));ctx.rotate(-angle);
+  ctx.strokeStyle=C.teal;ctx.lineWidth=1.5;
+  const sq=7;ctx.strokeRect(0,-sq,sq,sq);
+  ctx.restore();
+  // d label
+  const midDx=(xToP(cx)+xToP(fx))/2;
+  const midDy=(yToP(cy)+yToP(fy))/2;
+  ctx.fillStyle=C.teal;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText(`d=${d.toFixed(2)}`,midDx,midDy-4);
+
+  // Circle
+  const pts=lineIntersections(cx,cy,r,k,bLine);
+  const rel=d<r-0.01?'相交':d<r+0.01?'相切':'相离';
+  const circColor=rel==='相交'?C.blue:rel==='相切'?C.teal:C.ink3;
+  ctx.strokeStyle=circColor;ctx.lineWidth=2.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.arc(xToP(cx),yToP(cy),r*plotW/(2*RANGE),0,Math.PI*2);ctx.stroke();
+
+  // Center dot
+  ctx.fillStyle=circColor;ctx.beginPath();ctx.arc(xToP(cx),yToP(cy),5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=circColor;ctx.font=`bold 12px 'Noto Sans SC',sans-serif`;ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText(`圆心(${cx},${cy})`,xToP(cx)+6,yToP(cy)-4);
+
+  // Intersection points
+  pts.forEach(p=>{
+    ctx.fillStyle=C.red;ctx.beginPath();ctx.arc(xToP(p.x),yToP(p.y),6,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=C.red;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='bottom';
+    ctx.fillText(`(${p.x.toFixed(1)},${p.y.toFixed(1)})`,xToP(p.x)+6,yToP(p.y)-4);
+  });
+
+  // Update stats
+  document.getElementById('dVal').textContent=d.toFixed(3);
+  document.getElementById('rVal').textContent=r.toFixed(1);
+  document.getElementById('intCount').textContent=String(pts.length);
+  document.getElementById('cxLabel').textContent=cx.toFixed(1);
+  document.getElementById('cyLabel').textContent=cy.toFixed(1);
+  document.getElementById('radLabel').textContent=r.toFixed(1);
+  document.getElementById('kLabel').textContent=k.toFixed(1);
+  document.getElementById('bLineLabel').textContent=bLine.toFixed(1);
+
+  // Result box
+  const rb=document.getElementById('resultBox');
+  const relColor=rel==='相交'?C.blue:rel==='相切'?C.teal:C.ink2;
+  rb.style.background=rel==='相交'?C.blueL:rel==='相切'?C.tealL:C.amberL;
+  rb.style.color=relColor;
+  rb.style.border=`2px solid ${relColor}`;
+  rb.textContent=`圆与直线${rel}（${pts.length}个交点）`;
+
+  // PEDAGOGY V8
+  document.getElementById('fb').innerHTML=
+    `圆心 (${cx},${cy}) 到直线 y=${k}x${bLine>=0?'+'+bLine:bLine} 的距离 d = <strong>${d.toFixed(3)}</strong>，半径 r = <strong>${r.toFixed(1)}</strong>。<br>` +
+    `<strong>判别法则：</strong>d < r → 相交（2个交点）；d = r → 相切（1个交点）；d > r → 相离（0个交点）。<br>` +
+    `当前：${rel==='相切'?'d = r，恰好相切，切点唯一':rel==='相交'?`d < r，直线穿过圆，有 ${pts.length} 个交点`:'d > r，直线在圆外，无交点'}。`;
+}
+
+['cxSl','cySl','radSl','kSl','bLineSl'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

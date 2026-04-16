@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>正交投影与最小二乘实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="线性代数">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="逼近">
+  <meta name="desc" content="b向列空间的正交投影=最小二乘解，残差向量⊥列空间，可视化Ax=b无解→A(Ax̂)=b̂">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:crosshair;}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .info-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink2);}
+    .info-box strong{color:var(--ink);font-size:13px;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 线性代数 · 认知动作：逼近</div>
+  <h1>正交投影与最小二乘实验室</h1>
+  <p class="sub">点击设置向量 b，观察它到列空间的正交投影——即 Ax=b 的最小二乘解</p>
+</header>
+<main>
+  <canvas id="cvs"></canvas>
+  <div class="info-grid">
+    <div class="info-box" id="vecInfo"><strong>向量坐标</strong><br>加载中...</div>
+    <div class="info-box" id="equInfo"><strong>方程信息</strong><br>加载中...</div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 正交投影只有配合拖动b向量才能感受"最近点"
+// PEDAGOGY V2 表征桥接: 几何图形 + 代数方程 + 残差数值三联动
+// PEDAGOGY V5 操作先于符号: 先点击移动b，感受投影，再给出正规方程
+// PEDAGOGY V7 单一认知动作: 逼近（b到列空间的最近点）
+// PEDAGOGY V8 概念反馈: "残差e=b-b̂与列向量a₁垂直——这是最小二乘的几何本质"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 360;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da'
+};
+
+// We show a 2D scenario: column space = span of a = [2,1], b is a free vector
+// Least squares: x̂ = (aᵀa)⁻¹ aᵀb, b_hat = a*x̂
+const a = [2, 1]; // column vector
+let bVec = [1, 2.5]; // user-controlled b vector
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function mathToCanvas(x, y, W) {
+  const scale = Math.min(W, H) * 0.18;
+  const cx = W/2, cy = H/2;
+  return [cx + x*scale, cy - y*scale];
+}
+
+function canvasToMath(px, py, W) {
+  const scale = Math.min(W, H) * 0.18;
+  const cx = W/2, cy = H/2;
+  return [(px-cx)/scale, (cy-py)/scale];
+}
+
+function dot(u, v) { return u[0]*v[0]+u[1]*v[1]; }
+function scale_(v, s) { return [v[0]*s, v[1]*s]; }
+function add_(u,v) { return [u[0]+v[0], u[1]+v[1]]; }
+function sub_(u,v) { return [u[0]-v[0], u[1]-v[1]]; }
+function norm(v) { return Math.sqrt(dot(v,v)); }
+
+function getLeastSquares() {
+  // For single column: x̂ = (aᵀb)/(aᵀa)
+  const xHat = dot(a, bVec) / dot(a, a);
+  const bHat = scale_(a, xHat);
+  const residual = sub_(bVec, bHat);
+  return { xHat, bHat, residual };
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+
+  const { xHat, bHat, residual } = getLeastSquares();
+  const scale = Math.min(W, H) * 0.18;
+  const cx = W/2, cy = H/2;
+
+  function mc(x,y) { return [cx+x*scale, cy-y*scale]; }
+
+  // Grid
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  for (let x=-4; x<=4; x++) {
+    const [xx,] = mc(x,0);
+    ctx.beginPath(); ctx.moveTo(xx, 20); ctx.lineTo(xx, H-20); ctx.stroke();
+  }
+  for (let y=-3; y<=3; y++) {
+    const [,yy] = mc(0,y);
+    ctx.beginPath(); ctx.moveTo(20, yy); ctx.lineTo(W-20, yy); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Axes
+  ctx.strokeStyle = C.ink3; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx, 20); ctx.lineTo(cx, H-20); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(20, cy); ctx.lineTo(W-20, cy); ctx.stroke();
+
+  // Column space line (span of a = [2,1]) — extended line through origin
+  const aLen = norm(a);
+  const aDir = [a[0]/aLen, a[1]/aLen];
+  const lineEnd = scale_(aDir, 4);
+  const lineStart = scale_(aDir, -4);
+  ctx.strokeStyle = C.blue + '60'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(...mc(...lineStart)); ctx.lineTo(...mc(...lineEnd)); ctx.stroke();
+  ctx.fillStyle = C.blue; ctx.font = `bold 12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText('列空间 Col(A) = span(a)', mc(...lineEnd)[0]+4, mc(...lineEnd)[1]);
+
+  // Column vector a
+  drawArrow(mc(0,0), mc(...a), C.blue, 3, `a=(${a[0]},${a[1]})`);
+
+  // b vector
+  drawArrow(mc(0,0), mc(...bVec), C.amber, 3, `b=(${bVec[0].toFixed(1)},${bVec[1].toFixed(1)})`);
+
+  // b_hat (projection)
+  drawArrow(mc(0,0), mc(...bHat), C.teal, 3, `b̂=(${bHat[0].toFixed(2)},${bHat[1].toFixed(2)})`);
+
+  // Residual (from b_hat to b)
+  ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+  ctx.beginPath(); ctx.moveTo(...mc(...bHat)); ctx.lineTo(...mc(...bVec)); ctx.stroke();
+  ctx.setLineDash([]);
+  // Right angle marker
+  const eMid = add_(bHat, scale_(residual, 0.5));
+  drawRightAngle(mc(...bHat), mc(...bVec), mc(...a), 10);
+
+  // Residual label
+  const rMid = mc((bHat[0]+bVec[0])/2+0.1, (bHat[1]+bVec[1])/2);
+  ctx.fillStyle = '#dc2626'; ctx.font = `bold 11px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(`e=(${residual[0].toFixed(2)},${residual[1].toFixed(2)})`, rMid[0]+4, rMid[1]);
+
+  // Origin dot
+  ctx.fillStyle = C.ink;
+  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2); ctx.fill();
+
+  // Update info
+  document.getElementById('vecInfo').innerHTML =
+    `<strong>向量坐标</strong><br>` +
+    `列向量 a = (${a[0]}, ${a[1]})<br>` +
+    `向量 b = (${bVec[0].toFixed(2)}, ${bVec[1].toFixed(2)})<br>` +
+    `投影 b̂ = (${bHat[0].toFixed(3)}, ${bHat[1].toFixed(3)})<br>` +
+    `残差 e = b-b̂ = (${residual[0].toFixed(3)}, ${residual[1].toFixed(3)})`;
+  document.getElementById('equInfo').innerHTML =
+    `<strong>方程信息</strong><br>` +
+    `求解 ax = b（过定方程）<br>` +
+    `x̂ = (aᵀb)/(aᵀa) = ${xHat.toFixed(4)}<br>` +
+    `b̂ = a·x̂ = ${a[0]}×${xHat.toFixed(3)} + ... <br>` +
+    `‖e‖ = ${norm(residual).toFixed(4)}（最小可能残差）`;
+
+  updateFeedback(residual);
+}
+
+function drawArrow([x1,y1],[x2,y2],col,lw,label) {
+  const dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy);
+  if(len<2) return;
+  const ax=dx/len,ay=dy/len;
+  ctx.strokeStyle=col;ctx.lineWidth=lw;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.fillStyle=col;
+  ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-ax*12+ay*5,y2-ay*12-ax*5);ctx.lineTo(x2-ax*12-ay*5,y2-ay*12+ax*5);ctx.closePath();ctx.fill();
+  if(label){ctx.font=`bold 11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillStyle=col;ctx.fillText(label,x2,y2-14);}
+}
+
+function drawRightAngle([px,py],[bx,by],[ax,ay], size) {
+  // Draw right angle symbol at px,py
+  const eDir = [(bx-px)/Math.sqrt((bx-px)**2+(by-py)**2), (by-py)/Math.sqrt((bx-px)**2+(by-py)**2)];
+  const aDir = [(ax-px)/Math.sqrt((ax-px)**2+(ay-py)**2), (ay-py)/Math.sqrt((ax-px)**2+(ay-py)**2)];
+  const sq1 = [px+eDir[0]*size, py+eDir[1]*size];
+  const sq2 = [px+aDir[0]*size, py+aDir[1]*size];
+  const sq3 = [sq1[0]+aDir[0]*size, sq1[1]+aDir[1]*size];
+  ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(...sq1); ctx.lineTo(...sq3); ctx.lineTo(...sq2); ctx.stroke();
+}
+
+function updateFeedback(residual) {
+  const { xHat, bHat } = getLeastSquares();
+  const aDotE = dot(a, residual);
+  document.getElementById('fb').innerHTML =
+    `<strong>正交投影 = 最小二乘解</strong>：b̂ = Col(A)中离b最近的向量，即b在列空间上的正交投影。<br>` +
+    `<strong>关键性质</strong>：残差 e = b - b̂ ⊥ 列向量 a（∵ aᵀe = ${aDotE.toFixed(6)} ≈ 0）<br>` +
+    `正规方程 AᵀAx̂ = Aᵀb → x̂ = ${xHat.toFixed(4)}，此时 ‖Ax-b‖² 取最小值。<br>` +
+    `<strong>点击画布</strong>改变 b 向量，观察投影如何跟随移动，残差始终⊥列空间。`;
+}
+
+cvs.addEventListener('click', e => {
+  const rect = cvs.getBoundingClientRect();
+  const [mx, my] = canvasToMath(e.clientX-rect.left, e.clientY-rect.top, rect.width);
+  bVec = [mx, my];
+  draw();
+});
+
+window.addEventListener('resize', () => { setup(); draw(); });
+setup(); draw();
+</script>
+</body>
+</html>

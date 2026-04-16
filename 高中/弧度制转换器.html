@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>弧度制转换器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="三角函数">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="拖动角度，角度制与弧度制实时联动，弧长直观展示弧度的物理含义">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:640px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:640px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:grab;}
+    .val-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .val-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center;}
+    .val-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .val-num{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;}
+    .special-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .sp-btn{padding:5px 12px;border:2px solid var(--border);border-radius:20px;font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);font-weight:700;}
+    .sp-btn:hover{background:var(--blue-light);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 三角函数 · 认知动作：变换</div>
+  <h1>弧度制转换器</h1>
+  <p class="sub">弧度 = 弧长 / 半径，拖动角，看弧长直观理解弧度含义</p>
+</header>
+<main>
+  <canvas id="cvs"></canvas>
+  <div class="val-grid">
+    <div class="val-box"><div class="val-label">角度制（°）</div><div class="val-num" id="degVal" style="color:var(--blue)">90°</div></div>
+    <div class="val-box"><div class="val-label">弧度制（rad）</div><div class="val-num" id="radVal" style="color:var(--teal)">π/2</div></div>
+  </div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;">
+    <div style="font-size:12px;color:var(--ink2);margin-bottom:8px;">常用特殊角：</div>
+    <div class="special-row">
+      <button class="sp-btn" onclick="setDeg(30)">30° = π/6</button>
+      <button class="sp-btn" onclick="setDeg(45)">45° = π/4</button>
+      <button class="sp-btn" onclick="setDeg(60)">60° = π/3</button>
+      <button class="sp-btn" onclick="setDeg(90)">90° = π/2</button>
+      <button class="sp-btn" onclick="setDeg(180)">180° = π</button>
+      <button class="sp-btn" onclick="setDeg(270)">270° = 3π/2</button>
+      <button class="sp-btn" onclick="setDeg(360)">360° = 2π</button>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 弧度的物理意义"弧长/半径"只有动态才能感受
+// PEDAGOGY V2 表征桥接: 角度（°）与弧度（rad）双向联动
+// PEDAGOGY V6 动作—数学一致: 拖动旋转=改变角度，弧长随之变化
+// PEDAGOGY V8 概念反馈: "当弧长=半径时，角度恰好是1弧度≈57.3°"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 300;
+let deg = 90;
+let isDragging = false;
+
+function setDeg(d) { deg=d; draw(); updateInfo(); }
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=H*dpr;
+  ctx.scale(dpr,dpr); cvs.style.height=H+'px';
+}
+
+function niceRad(rad) {
+  const fracs = [{n:0,d:1},{n:1,d:6},{n:1,d:4},{n:1,d:3},{n:1,d:2},{n:2,d:3},{n:3,d:4},{n:5,d:6},{n:1,d:1},{n:7,d:6},{n:5,d:4},{n:4,d:3},{n:3,d:2},{n:5,d:3},{n:7,d:4},{n:11,d:6},{n:2,d:1}];
+  const v=rad/Math.PI;
+  for(const f of fracs){
+    if(Math.abs(v-f.n/f.d)<0.002){
+      if(f.n===0) return '0';
+      if(f.d===1) return `${f.n}π`;
+      return `${f.n===1?'':f.n}π/${f.d}`;
+    }
+  }
+  return rad.toFixed(4)+' rad';
+}
+
+function draw() {
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const cx=W*0.42, cy=H*0.55, R=Math.min(W*0.3,H*0.4);
+
+  // Circle
+  ctx.strokeStyle='#e4e2da'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.stroke();
+
+  // Reference radius (rightward, 3 o'clock = 0°)
+  const startAng=-Math.PI/2; // 12 o'clock = 0°, or use right=0
+  const useAng=0; // start from 3 o'clock
+  ctx.strokeStyle='#a8a69f'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+R,cy); ctx.stroke();
+
+  const rad=deg*Math.PI/180;
+  const endAng=useAng-rad; // counter-clockwise for typical math convention? Use clockwise display
+  // Display: start from right (0°), go counter-clockwise (standard math)
+  // For visual, let's go counter-clockwise from 3-o'clock
+  const ex=cx+Math.cos(-rad)*R, ey=cy+Math.sin(-rad)*R;
+
+  // Angle arc (pie fill)
+  ctx.fillStyle='#2a5c8f20';
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,0,-rad,true); ctx.closePath(); ctx.fill();
+
+  // Arc highlight (the actual arc)
+  ctx.strokeStyle='#0f6e56'; ctx.lineWidth=6;
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,-rad,true); ctx.stroke();
+
+  // Angle arc (smaller)
+  ctx.strokeStyle='#2a5c8f'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(cx,cy,R*0.25,0,-rad,true); ctx.stroke();
+
+  // Radius to endpoint
+  ctx.strokeStyle='#2a5c8f'; ctx.lineWidth=2.5;
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ex,ey); ctx.stroke();
+
+  // Arc length indicator: compare to R
+  const arcLen = rad*R;
+  ctx.strokeStyle='#854f0b'; ctx.lineWidth=3;
+  // Show arc length as a line segment starting from (cx+R+20, cy)
+  const lx=cx+R+30;
+  ctx.beginPath(); ctx.moveTo(lx,cy); ctx.lineTo(lx,cy-arcLen); ctx.stroke();
+  // Brace
+  ctx.strokeStyle='#854f0b'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(lx-5,cy); ctx.lineTo(lx+5,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(lx-5,cy-arcLen); ctx.lineTo(lx+5,cy-arcLen); ctx.stroke();
+  // R indicator
+  ctx.beginPath(); ctx.moveTo(lx+20,cy); ctx.lineTo(lx+20,cy-R); ctx.stroke();
+  ctx.strokeStyle='#2a5c8f'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(lx+15,cy); ctx.lineTo(lx+25,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(lx+15,cy-R); ctx.lineTo(lx+25,cy-R); ctx.stroke();
+
+  ctx.fillStyle='#854f0b'; ctx.font=`bold 11px 'JetBrains Mono',monospace`;
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText('弧长', lx+8, cy-arcLen/2);
+  ctx.fillStyle='#2a5c8f';
+  ctx.fillText('R', lx+28, cy-R/2);
+
+  // Labels
+  ctx.fillStyle='#2a5c8f'; ctx.font=`bold 14px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  const labAng=-rad/2;
+  ctx.fillText(deg===0?'0':deg+'°', cx+Math.cos(labAng)*R*0.38, cy+Math.sin(labAng)*R*0.38);
+
+  // Endpoint dot
+  ctx.fillStyle='#2a5c8f';
+  ctx.beginPath(); ctx.arc(ex,ey,5,0,Math.PI*2); ctx.fill();
+
+  // Center
+  ctx.fillStyle='#1a1814';
+  ctx.beginPath(); ctx.arc(cx,cy,4,0,Math.PI*2); ctx.fill();
+
+  // "1 rad" marker
+  const oneRadAng=-1;
+  const ore=cx+Math.cos(oneRadAng)*R, ory=cy+Math.sin(oneRadAng)*R;
+  ctx.strokeStyle='#dc2626'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.arc(cx,cy,R*0.15,0,-1,true); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#dc2626'; ctx.font=`10px 'JetBrains Mono',monospace`;
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText('1 rad≈57.3°', cx+R*0.18, cy-R*0.08);
+}
+
+function updateInfo() {
+  const rad=deg*Math.PI/180;
+  document.getElementById('degVal').textContent=deg+'°';
+  document.getElementById('radVal').textContent=niceRad(rad);
+  const fb=document.getElementById('fb');
+  fb.innerHTML=`弧度 = 弧长 / 半径 = <strong>${rad.toFixed(4)}</strong> rad<br>` +
+    `换算公式：<strong>弧度 = 角度 × π / 180</strong>；角度 = 弧度 × 180 / π<br>` +
+    `绿色弧长 = ${rad.toFixed(3)} × R（当 R=1 时弧长数值就等于弧度）。` +
+    (Math.abs(rad-1)<0.05?'<br><strong>此时弧长≈半径，这正是1弧度的定义！</strong>':'');
+}
+
+cvs.addEventListener('pointerdown',e=>{isDragging=true;cvs.setPointerCapture(e.pointerId);});
+cvs.addEventListener('pointermove',e=>{
+  if(!isDragging) return;
+  const r=cvs.getBoundingClientRect();
+  const cx=r.width*0.42, cy=H*0.55;
+  const x=e.clientX-r.left-cx, y=e.clientY-r.top-cy;
+  let a=(-Math.atan2(y,x)*180/Math.PI+360)%360;
+  a=Math.round(a/5)*5; // snap to 5°
+  deg=Math.max(5,Math.min(360,a));
+  draw(); updateInfo();
+});
+cvs.addEventListener('pointerup',()=>{isDragging=false;});
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); draw(); updateInfo();
+</script>
+</body>
+</html>

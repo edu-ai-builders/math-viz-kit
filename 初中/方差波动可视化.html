@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>方差与波动 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="统计">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="拖动数据点，实时更新均值/方差/标准差，理解波动程度的度量">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto Sans SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:default;}
+    .preset-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .pr-btn{padding:7px 14px;border:2px solid var(--border);border-radius:20px;font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .pr-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 统计 · 认知动作：比较</div>
+  <h1>方差与波动</h1>
+  <p class="sub">拖动数据点上下移动，实时看均值/方差/标准差的变化——理解"波动"的数学度量</p>
+</header>
+<main>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">均值 x̄</div><div class="stat-val" id="meanVal" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">方差 s²</div><div class="stat-val" id="varVal" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">标准差 s</div><div class="stat-val" id="stdVal" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">极差</div><div class="stat-val" id="rangeVal" style="color:var(--ink2)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="preset-row">
+    <button class="pr-btn" onclick="loadPreset('equal')">所有相等（方差=0）</button>
+    <button class="pr-btn" onclick="loadPreset('spread')">极端分散</button>
+    <button class="pr-btn" onclick="loadPreset('cluster')">紧密聚集</button>
+    <button class="pr-btn" onclick="loadPreset('outlier')">含异常值</button>
+    <button class="pr-btn" onclick="loadPreset('random')">随机数据</button>
+  </div>
+  <div class="fb" id="fb">用鼠标拖动任意数据点（蓝色圆点）上下移动，观察方差的变化。</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 方差随数据变化的实时响应是静态无法做到的
+// PEDAGOGY V5 操作先于符号: 先拖数据看方差变化，再理解公式
+// PEDAGOGY V6 动作-数学一致: 拖点远离均值=方差增大（偏差平方增大）
+// PEDAGOGY V7 单一认知动作: 比较（数据点偏离均值的程度）
+// PEDAGOGY V8 概念反馈: 揭示"方差=偏差平方的平均值"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=320;
+const N=8;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+// Data range: 0-100
+let data=[60,70,55,80,65,75,58,72];
+let dragging=-1;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function loadPreset(name){
+  const presets={
+    equal:[65,65,65,65,65,65,65,65],
+    spread:[10,20,80,90,15,85,25,75],
+    cluster:[62,64,65,66,63,65,64,63],
+    outlier:[60,62,63,61,65,64,62,5],
+    random:Array.from({length:N},()=>Math.round(20+Math.random()*70))
+  };
+  data=[...presets[name]];
+  draw();
+}
+
+function stats(){
+  const mean=data.reduce((s,v)=>s+v,0)/N;
+  const variance=data.reduce((s,v)=>s+(v-mean)**2,0)/N;
+  const std=Math.sqrt(variance);
+  const range=Math.max(...data)-Math.min(...data);
+  return {mean,variance,std,range};
+}
+
+function dataToY(v,H2,margin){
+  // v: 0-100, y: top-bottom
+  return margin.top+(100-v)/100*(H2-margin.top-margin.bottom);
+}
+
+function yToData(py,H2,margin){
+  const v=100-(py-margin.top)/(H2-margin.top-margin.bottom)*100;
+  return Math.max(0,Math.min(100,v));
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const margin={left:44,right:16,top:20,bottom:30};
+  const plotW=W-margin.left-margin.right;
+  const {mean,variance,std} = stats();
+  const xStep=plotW/(N+1);
+
+  // Background y-grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let v=0;v<=100;v+=20){
+    const y=dataToY(v,H,margin);
+    ctx.beginPath();ctx.moveTo(margin.left,y);ctx.lineTo(margin.left+plotW,y);ctx.stroke();
+    ctx.fillStyle=C.ink3;ctx.font=`10px 'JetBrains Mono',monospace`;ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(String(v),margin.left-4,y);
+  }
+
+  // Mean line
+  const meanY=dataToY(mean,H,margin);
+  ctx.strokeStyle=C.blue;ctx.lineWidth=2;ctx.setLineDash([8,4]);
+  ctx.beginPath();ctx.moveTo(margin.left,meanY);ctx.lineTo(margin.left+plotW,meanY);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.blue;ctx.font=`bold 12px 'Noto Sans SC',sans-serif`;ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText(`均值 x̄=${mean.toFixed(1)}`,margin.left+4,meanY-3);
+
+  // Std bands (±1σ)
+  const sigmaTopY=dataToY(mean+std,H,margin);
+  const sigmaBotY=dataToY(mean-std,H,margin);
+  ctx.fillStyle=C.blueL+'66';
+  ctx.fillRect(margin.left,Math.min(sigmaTopY,sigmaBotY),plotW,Math.abs(sigmaBotY-sigmaTopY));
+  ctx.strokeStyle=C.blue+'44';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(margin.left,sigmaTopY);ctx.lineTo(margin.left+plotW,sigmaTopY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(margin.left,sigmaBotY);ctx.lineTo(margin.left+plotW,sigmaBotY);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.blue+'66';ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText('±σ',margin.left+plotW-24,sigmaTopY+3);
+
+  // Deviation squares (small squares showing (xi - mean)^2 magnitude)
+  data.forEach((v,i)=>{
+    const x=margin.left+(i+1)*xStep;
+    const y=dataToY(v,H,margin);
+    const dev=v-mean;
+    // Draw deviation line
+    ctx.strokeStyle=C.amber+'99';ctx.lineWidth=1.5;ctx.setLineDash([3,2]);
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,meanY);ctx.stroke();
+    ctx.setLineDash([]);
+    // Deviation label
+    ctx.fillStyle=C.amber;ctx.font=`10px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline=dev>0?'bottom':'top';
+    ctx.fillText((dev>0?'+':'')+dev.toFixed(1),x,dev>0?y-2:y+2);
+  });
+
+  // Connecting line
+  ctx.strokeStyle=C.blue+'66';ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();
+  data.forEach((v,i)=>{
+    const x=margin.left+(i+1)*xStep;
+    const y=dataToY(v,H,margin);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // Data points
+  data.forEach((v,i)=>{
+    const x=margin.left+(i+1)*xStep;
+    const y=dataToY(v,H,margin);
+    ctx.fillStyle=i===dragging?C.amber:C.blue;
+    ctx.beginPath();ctx.arc(x,y,9,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font=`bold 10px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(String(i+1),x,y);
+    // Value above
+    ctx.fillStyle=C.ink2;ctx.font=`11px 'Noto Sans SC',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText(v.toFixed(0),x,y-12);
+  });
+
+  // Update stats
+  const {variance:var2,std:std2,range} = stats();
+  document.getElementById('meanVal').textContent=mean.toFixed(1);
+  document.getElementById('varVal').textContent=var2.toFixed(1);
+  document.getElementById('stdVal').textContent=std2.toFixed(2);
+  document.getElementById('rangeVal').textContent=range.toFixed(0);
+
+  // PEDAGOGY V8
+  const fb=document.getElementById('fb');
+  const devsq=data.map(v=>((v-mean)**2).toFixed(1)).join(' + ');
+  fb.innerHTML=`均值 x̄ = ${mean.toFixed(1)}，方差 = <strong>Σ(xᵢ-x̄)²/n</strong> = (${devsq}) / ${N} = <strong>${var2.toFixed(1)}</strong>。<br>` +
+    `标准差 σ = √方差 = <strong>${std2.toFixed(2)}</strong>（与原数据单位相同，更直观）。方差越大，数据波动越${var2>200?'<strong>大</strong>（离散）':'<strong>小</strong>（集中）'}。`;
+}
+
+cvs.addEventListener('pointerdown',e=>{
+  const rect=cvs.getBoundingClientRect();
+  const px=e.clientX-rect.left,py=e.clientY-rect.top;
+  const W=rect.width;
+  const margin={left:44,right:16,top:20,bottom:30};
+  const plotW=W-margin.left-margin.right;
+  const xStep=plotW/(N+1);
+  data.forEach((v,i)=>{
+    const x=margin.left+(i+1)*xStep;
+    const y=dataToY(v,H,margin);
+    if(Math.hypot(px-x,py-y)<16){ dragging=i; cvs.setPointerCapture(e.pointerId); cvs.style.cursor='grabbing'; }
+  });
+});
+
+cvs.addEventListener('pointermove',e=>{
+  if(dragging<0) return;
+  const rect=cvs.getBoundingClientRect();
+  const py=e.clientY-rect.top;
+  data[dragging]=Math.round(yToData(py,H,{top:20,bottom:30}));
+  draw();
+});
+
+cvs.addEventListener('pointerup',()=>{ dragging=-1; cvs.style.cursor='default'; draw(); });
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

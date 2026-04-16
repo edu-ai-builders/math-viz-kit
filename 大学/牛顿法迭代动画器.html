@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>牛顿法迭代动画器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="数值分析">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="逼近">
+  <meta name="desc" content="牛顿法求根：从初始点出发，切线与x轴的交点逐步逼近方程根">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:ew-resize;}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .fn-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .fn-btn{padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);transition:all .2s;text-align:center;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--amber);}
+    input[type=range]{accent-color:var(--amber);cursor:pointer;width:100%;}
+    .btn-row{display:flex;gap:8px;}
+    .btn{padding:9px 16px;border:2px solid var(--blue);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--blue);color:#fff;font-weight:600;}
+    .btn-outline{background:var(--surface);color:var(--blue);}
+    .iter-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:12px;max-height:120px;overflow-y:auto;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 数值分析 · 认知动作：逼近</div>
+  <h1>牛顿法迭代动画器</h1>
+  <p class="sub">切线交x轴 → 新的近似根 → 再作切线……每步误差平方收缩</p>
+</header>
+<main>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn(0,this)">x²−2（√2）</button>
+    <button class="fn-btn" onclick="setFn(1,this)">x³−x−2</button>
+    <button class="fn-btn" onclick="setFn(2,this)">cos(x)−x</button>
+    <button class="fn-btn" onclick="setFn(3,this)">e^x−3</button>
+    <button class="fn-btn" onclick="setFn(4,this)">x³−3x+2</button>
+    <button class="fn-btn" onclick="setFn(5,this)">sin(x)</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">迭代步数</div><div class="stat-val" id="iterN" style="color:var(--blue)">0</div></div>
+    <div class="stat"><div class="stat-lbl">当前 xₙ</div><div class="stat-val" id="curX" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">f(xₙ)</div><div class="stat-val" id="curFx" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">误差</div><div class="stat-val" id="curErr" style="color:var(--ink)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">初始值 x₀（拖动画布）</div>
+      <div class="sl-val" id="x0Label">2.0</div>
+      <input type="range" id="x0Sl" min="-4" max="4" step="0.1" value="2">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">显示步数</div>
+      <div class="sl-val" id="stepLabel" style="color:var(--blue)">1</div>
+      <input type="range" id="stepSl" min="0" max="10" step="1" value="1" style="accent-color:var(--blue)">
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn" onclick="nextStep()">下一步</button>
+    <button class="btn" onclick="runAll()">运行到收敛</button>
+    <button class="btn btn-outline" onclick="resetIter()">重置</button>
+  </div>
+  <div class="iter-box" id="iterBox">（尚未开始迭代）</div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 切线到根的跳跃只有逐步动画才能理解
+// PEDAGOGY V3 分步揭示: 每次点击"下一步"揭示一次迭代
+// PEDAGOGY V5 操作先于符号: 先看切线，再理解公式x_{n+1}=x_n-f/f'
+// PEDAGOGY V6 动作-数学一致: 滑杆位置=x₀位置
+// PEDAGOGY V7 单一认知动作: 逼近（每步更靠近根）
+// PEDAGOGY V8 概念反馈: 揭示"牛顿法二次收敛：误差平方"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=360;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  red:'#c0392b',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+const FNS=[
+  {label:'x²−2',   f:x=>x**2-2,     df:x=>2*x,     root:Math.sqrt(2)},
+  {label:'x³−x−2', f:x=>x**3-x-2,   df:x=>3*x**2-1,root:1.5213},
+  {label:'cos(x)−x',f:x=>Math.cos(x)-x, df:x=>-Math.sin(x)-1, root:0.7391},
+  {label:'e^x−3',  f:x=>Math.exp(x)-3, df:x=>Math.exp(x), root:Math.log(3)},
+  {label:'x³−3x+2',f:x=>x**3-3*x+2, df:x=>3*x**2-3, root:1.0},
+  {label:'sin(x)', f:x=>Math.sin(x), df:x=>Math.cos(x), root:0},
+];
+
+let fnIdx=0;
+let iterHistory=[]; // x values
+let x0=2;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setFn(i,btn){
+  fnIdx=i;
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  resetIter();
+}
+
+function resetIter(){
+  x0=parseFloat(document.getElementById('x0Sl').value);
+  iterHistory=[x0];
+  document.getElementById('stepSl').value=0;
+  document.getElementById('iterBox').textContent='（尚未迭代，当前初始值 x₀='+x0.toFixed(4)+'）';
+  draw();
+}
+
+function nextStep(){
+  if(iterHistory.length===0) iterHistory=[x0];
+  const fn=FNS[fnIdx];
+  const xn=iterHistory[iterHistory.length-1];
+  const fxn=fn.f(xn);
+  const dfxn=fn.df(xn);
+  if(Math.abs(dfxn)<1e-10){
+    document.getElementById('fb').innerHTML='导数为0，牛顿法失败（遇到极值点）。请更换初始值。';
+    return;
+  }
+  const xnext=xn-fxn/dfxn;
+  if(!isFinite(xnext)||Math.abs(xnext)>20){
+    document.getElementById('fb').innerHTML='迭代发散，请更换初始值。';
+    return;
+  }
+  iterHistory.push(xnext);
+  document.getElementById('stepSl').max=String(iterHistory.length-1);
+  document.getElementById('stepSl').value=String(iterHistory.length-1);
+  draw();
+}
+
+function runAll(){
+  for(let i=0;i<15;i++){
+    const last=iterHistory[iterHistory.length-1];
+    const fn=FNS[fnIdx];
+    if(Math.abs(fn.f(last))<1e-12) break;
+    nextStep();
+  }
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const fn=FNS[fnIdx];
+  const showStep=parseInt(document.getElementById('stepSl').value);
+  x0=parseFloat(document.getElementById('x0Sl').value);
+
+  const RANGE=4;
+  const margin={left:44,right:20,top:16,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const xToP=x=>margin.left+(x+RANGE)/(2*RANGE)*plotW;
+  const yToP=y=>margin.top+(3-y)/6*plotH;
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let i=-RANGE;i<=RANGE;i++){
+    ctx.beginPath();ctx.moveTo(xToP(i),margin.top);ctx.lineTo(xToP(i),margin.top+plotH);ctx.stroke();
+  }
+  for(let i=-3;i<=3;i++){
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(i));ctx.lineTo(margin.left+plotW,yToP(i));ctx.stroke();
+  }
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(0));ctx.lineTo(margin.left+plotW,yToP(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(0),margin.top);ctx.lineTo(xToP(0),margin.top+plotH);ctx.stroke();
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+  for(let i=-RANGE;i<=RANGE;i++) if(i!==0) ctx.fillText(String(i),xToP(i),yToP(0)+3);
+
+  // Function curve
+  ctx.strokeStyle=C.blue;ctx.lineWidth=2.5;ctx.setLineDash([]);
+  ctx.beginPath();let first=true;
+  for(let px=0;px<=plotW;px+=2){
+    const x=(px/plotW)*(2*RANGE)-RANGE;
+    const y=fn.f(x);
+    if(!isFinite(y)||Math.abs(y)>6){first=true;continue;}
+    first?(ctx.moveTo(margin.left+px,yToP(y)),first=false):ctx.lineTo(margin.left+px,yToP(y));
+  }
+  ctx.stroke();
+  ctx.fillStyle=C.blue;ctx.font=`bold 13px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(`f(x)=${fn.label}`,margin.left+4,margin.top+4);
+
+  // True root marker
+  ctx.strokeStyle=C.teal;ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(xToP(fn.root),margin.top);ctx.lineTo(xToP(fn.root),margin.top+plotH);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.teal;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText(`根≈${fn.root.toFixed(4)}`,xToP(fn.root),margin.top+2);
+
+  // Draw iterations up to showStep
+  const COLORS=['#c47a0e','#7b3f9e','#b84040','#0a7a8a','#5a7a2a','#c0392b','#e74c3c','#9b59b6','#1abc9c'];
+  const iters=Math.min(showStep,iterHistory.length-1);
+  for(let step=0;step<iters;step++){
+    const xn=iterHistory[step];
+    const xnext=iterHistory[step+1];
+    const fxn=fn.f(xn);
+    const dfxn=fn.df(xn);
+    const col=COLORS[step%COLORS.length];
+    // Vertical drop to curve
+    ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.setLineDash([3,2]);
+    ctx.beginPath();ctx.moveTo(xToP(xn),yToP(0));ctx.lineTo(xToP(xn),yToP(fxn));ctx.stroke();
+    // Tangent line
+    const tang_x1=xn-1.5,tang_x2=xn+1.5;
+    ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.setLineDash([]);
+    ctx.beginPath();ctx.moveTo(xToP(tang_x1),yToP(fxn+dfxn*(tang_x1-xn)));ctx.lineTo(xToP(tang_x2),yToP(fxn+dfxn*(tang_x2-xn)));ctx.stroke();
+    // Dot at (xn, fxn)
+    ctx.fillStyle=col;ctx.beginPath();ctx.arc(xToP(xn),yToP(fxn),5,0,Math.PI*2);ctx.fill();
+    // Dot at (xnext, 0)
+    ctx.fillStyle=col;ctx.beginPath();ctx.arc(xToP(xnext),yToP(0),5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=col;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(`x${step+1}=${xnext.toFixed(4)}`,xToP(xnext),yToP(0)+4);
+  }
+  // x0 dot
+  ctx.fillStyle=C.amberD;ctx.beginPath();ctx.arc(xToP(iterHistory[0]),yToP(0),7,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=C.amberD;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText(`x₀=${iterHistory[0].toFixed(2)}`,xToP(iterHistory[0]),yToP(0)-8);
+
+  // Update stats
+  const curX=iterHistory[Math.min(iters,iterHistory.length-1)];
+  const curFx=fn.f(curX);
+  const err=Math.abs(curX-fn.root);
+  document.getElementById('iterN').textContent=String(iters);
+  document.getElementById('curX').textContent=curX.toFixed(6);
+  document.getElementById('curFx').textContent=Math.abs(curFx)<1e-12?'≈0':curFx.toFixed(6);
+  document.getElementById('curErr').textContent=err<1e-12?'<1e-12':err.toFixed(6);
+  document.getElementById('x0Label').textContent=iterHistory[0].toFixed(2);
+  document.getElementById('stepLabel').textContent=String(iters);
+
+  // Update iter box
+  const lines=iterHistory.slice(0,iters+1).map((x,i)=>{
+    const fx=fn.f(x);
+    return `x${i}=${x.toFixed(8)}  f(x)=${fx.toFixed(6)}`;
+  }).join('\n');
+  document.getElementById('iterBox').textContent=lines||'（尚未迭代）';
+
+  // PEDAGOGY V8
+  const errs=iterHistory.slice(0,iters+1).map(x=>Math.abs(x-fn.root));
+  let convNote='';
+  if(errs.length>=3){
+    const ratio=errs[errs.length-1]>1e-15?errs[errs.length-1]/(errs[errs.length-2]**2):'—';
+    convNote=`收敛比: |eₙ₊₁|/|eₙ|² ≈ ${typeof ratio==='number'?ratio.toFixed(3):ratio}（接近常数=二次收敛）。`;
+  }
+  document.getElementById('fb').innerHTML=
+    `<strong>牛顿法：x_{n+1} = xₙ − f(xₙ)/f'(xₙ)</strong>（在 xₙ 处作切线，切线交x轴为下一个近似值）。<br>` +
+    `当前误差：${err<1e-12?'< 1e-12（已收敛至机器精度）':err.toFixed(8)}。${convNote}<br>` +
+    `<strong>二次收敛</strong>：每迭代一次，有效数字翻倍——从0.1误差到0.01，再到0.0001，极快！<br>` +
+    `注意：初始值选在根附近才能收敛；选在导数为0附近或多根函数中可能发散或跳到错误的根。`;
+}
+
+document.getElementById('x0Sl').addEventListener('input',()=>{resetIter();});
+document.getElementById('stepSl').addEventListener('input',draw);
+cvs.addEventListener('pointerdown',e=>{
+  const rect=cvs.getBoundingClientRect();
+  const W=rect.width;
+  const margin={left:44,right:20};
+  const plotW=W-margin.left-margin.right;
+  const RANGE=4;
+  const x=((e.clientX-rect.left)-margin.left)/plotW*(2*RANGE)-RANGE;
+  document.getElementById('x0Sl').value=Math.max(-4,Math.min(4,x));
+  resetIter();
+});
+window.addEventListener('resize',()=>{setup();draw();});
+setup();resetIter();
+</script>
+</body>
+</html>

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>旋转体体积生成器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="微积分">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="平面曲线绕轴旋转生成三维旋转体，动画演示圆盘法/壳层法，可视化体积积分的几何意义">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .fn-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .fn-btn{padding:6px 14px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);font-family:'JetBrains Mono',monospace;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .layout{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    canvas.dark{background:#0a0a12;}
+    .formula-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--blue);line-height:1.8;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+    @media(max-width:540px){.layout{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 微积分 · 认知动作：变换</div>
+  <h1>旋转体体积生成器</h1>
+  <p class="sub">平面曲线绕轴旋转生成三维实体，动画演示圆盘法积分</p>
+</header>
+<main>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn('parabola',this)">y=√x 绕x轴</button>
+    <button class="fn-btn" onclick="setFn('linear',this)">y=x 绕x轴</button>
+    <button class="fn-btn" onclick="setFn('sine',this)">y=sin(x) 绕x轴</button>
+    <button class="fn-btn" onclick="setFn('invsq',this)">y=1/x 绕x轴</button>
+  </div>
+  <div class="layout">
+    <div>
+      <div style="font-size:11px;font-weight:700;color:var(--ink2);margin-bottom:4px;">平面截面（拖动旋转）</div>
+      <canvas id="cvs2d"></canvas>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;color:var(--ink2);margin-bottom:4px;">旋转体（拖动旋转视角）</div>
+      <canvas id="cvs3d" class="dark"></canvas>
+    </div>
+  </div>
+  <div class="formula-box" id="formulaBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 旋转体体积只有3D旋转动画才能"看见"
+// PEDAGOGY V5 操作先于符号: 先看旋转，再看积分公式
+// PEDAGOGY V8 概念反馈: 解释圆盘法的积分意义
+
+const cvs2d=document.getElementById('cvs2d');
+const ctx2=cvs2d.getContext('2d');
+const cvs3d=document.getElementById('cvs3d');
+const ctx3=cvs3d.getContext('2d');
+const H=260;
+let fn='parabola';
+let rotAngle=0.4;
+let rotY=Math.PI/4;
+let dragging3d=false,lastMx=0;
+let animPhase=0;
+let animId=null;
+
+const FNS={
+  parabola:{f:x=>Math.sqrt(Math.max(0,x)),a:0,b:2,label:'y=√x，x∈[0,2]',vol:r=>`V = π∫₀² x dx = π[x²/2]₀² = 2π ≈ ${(2*Math.PI).toFixed(3)}`,volVal:2*Math.PI,desc:'圆盘法：V=π∫₀² (√x)² dx = π∫₀² x dx = 2π。每个截面是半径为√x的圆盘。'},
+  linear:{f:x=>x,a:0,b:2,label:'y=x，x∈[0,2]',vol:r=>`V = π∫₀² x² dx = π[x³/3]₀² = 8π/3 ≈ ${(8*Math.PI/3).toFixed(3)}`,volVal:8*Math.PI/3,desc:'绕x轴旋转：V=π∫₀² x² dx = 8π/3。每个截面是半径为x的圆盘，生成圆锥体。'},
+  sine:{f:x=>Math.sin(x),a:0,b:Math.PI,label:'y=sin(x)，x∈[0,π]',vol:r=>`V = π∫₀^π sin²(x) dx = π²/2 ≈ ${(Math.PI*Math.PI/2).toFixed(3)}`,volVal:Math.PI*Math.PI/2,desc:'V=π∫₀^π sin²(x) dx = π²/2。正弦曲线旋转体中间圆满、两端尖细。'},
+  invsq:{f:x=>1/x,a:1,b:3,label:'y=1/x，x∈[1,3]',vol:r=>`V = π∫₁³ (1/x)² dx = π[-1/x]₁³ = 2π/3 ≈ ${(2*Math.PI/3).toFixed(3)}`,volVal:2*Math.PI/3,desc:'V=π∫₁³ 1/x² dx = 2π/3。双曲线旋转体（Gabriel号角形状）。'},
+};
+
+function setup(){
+  const dpr=window.devicePixelRatio||1;
+  function sz(c){const r=c.getBoundingClientRect();c.width=r.width*dpr;c.height=H*dpr;c.getContext('2d').scale(dpr,dpr);c.style.height=H+'px';}
+  sz(cvs2d);sz(cvs3d);
+}
+
+function setFn(k,btn){
+  fn=k;
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw2d();draw3d();updateInfo();
+}
+
+function draw2d(){
+  const r=cvs2d.getBoundingClientRect();
+  const W=r.width;
+  ctx2.clearRect(0,0,W,H);
+  const F=FNS[fn];
+  const {a,b,f}=F;
+  const pad={l:40,r:15,t:15,b:30};
+  const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+  const xRange=[Math.max(0,a-0.3),b+0.3];
+  const yMax=Math.max(...[a,b,(a+b)/2].map(f))+0.3;
+  const yRange=[-yMax*0.3,yMax];
+
+  function toX(x){return pad.l+(x-xRange[0])/(xRange[1]-xRange[0])*cw;}
+  function toY(y){return pad.t+ch-(y-yRange[0])/(yRange[1]-yRange[0])*ch;}
+
+  // Draw disks
+  const nDisks=12;
+  for(let i=0;i<nDisks;i++){
+    const x1=a+i/nDisks*(b-a);
+    const x2=a+(i+1)/nDisks*(b-a);
+    const xm=(x1+x2)/2;
+    const r_=f(xm);
+    const px1=toX(x1),px2=toX(x2);
+    const py_top=toY(r_),py_bot=toY(-r_);
+    ctx2.fillStyle=`rgba(42,92,143,${0.1+i/nDisks*0.15})`;
+    ctx2.fillRect(px1,py_top,px2-px1,py_bot-py_top);
+    ctx2.strokeStyle='#2a5c8f44';ctx2.lineWidth=1;
+    ctx2.strokeRect(px1,py_top,px2-px1,py_bot-py_top);
+  }
+
+  // Axes
+  ctx2.strokeStyle='#6b6860';ctx2.lineWidth=1.5;
+  ctx2.beginPath();ctx2.moveTo(pad.l,toY(0));ctx2.lineTo(W-pad.r,toY(0));ctx2.stroke();
+  ctx2.beginPath();ctx2.moveTo(toX(xRange[0]),pad.t);ctx2.lineTo(toX(xRange[0]),pad.t+ch);ctx2.stroke();
+
+  // Function curve (positive)
+  ctx2.strokeStyle='#2a5c8f';ctx2.lineWidth=2.5;
+  ctx2.beginPath();let first=true;
+  for(let i=0;i<=200;i++){
+    const x=a+i/200*(b-a);
+    const y=f(x);
+    if(!isFinite(y)){first=true;continue;}
+    if(first){ctx2.moveTo(toX(x),toY(y));first=false;}
+    else ctx2.lineTo(toX(x),toY(y));
+  }
+  ctx2.stroke();
+
+  // Mirror (negative)
+  ctx2.strokeStyle='#2a5c8f88';ctx2.lineWidth=1.5;ctx2.setLineDash([4,3]);
+  ctx2.beginPath();first=true;
+  for(let i=0;i<=200;i++){
+    const x=a+i/200*(b-a);
+    const y=-f(x);
+    if(!isFinite(y)){first=true;continue;}
+    if(first){ctx2.moveTo(toX(x),toY(y));first=false;}
+    else ctx2.lineTo(toX(x),toY(y));
+  }
+  ctx2.stroke();ctx2.setLineDash([]);
+
+  // Shaded region
+  ctx2.fillStyle='#2a5c8f22';
+  ctx2.beginPath();ctx2.moveTo(toX(a),toY(0));
+  for(let i=0;i<=100;i++){const x=a+i/100*(b-a);ctx2.lineTo(toX(x),toY(f(x)));}
+  ctx2.lineTo(toX(b),toY(0));ctx2.closePath();ctx2.fill();
+
+  // Labels
+  ctx2.fillStyle='#a8a69f';ctx2.font=`9px 'JetBrains Mono',monospace`;
+  [Math.ceil(xRange[0]),Math.ceil(xRange[0]+1),Math.ceil(b)].forEach(x=>{
+    if(x<xRange[0]||x>xRange[1]) return;
+    ctx2.textAlign='center';ctx2.textBaseline='top';ctx2.fillText(x,toX(x),toY(0)+3);
+  });
+  ctx2.fillStyle='#2a5c8f';ctx2.font=`bold 11px 'JetBrains Mono',monospace`;
+  ctx2.textAlign='left';ctx2.textBaseline='top';
+  ctx2.fillText(F.label,pad.l+4,pad.t+2);
+}
+
+function draw3d(){
+  const r=cvs3d.getBoundingClientRect();
+  const W=r.width;
+  ctx3.clearRect(0,0,W,H);
+  const F=FNS[fn];
+  const {a,b,f}=F;
+  const cx=W/2,cy=H/2;
+
+  // Draw 3D revolution surface using isometric-like projection
+  const steps=40,asteps=20;
+  const scale=Math.min(W,H)*0.25;
+
+  function proj(x,y,z){
+    // Rotate around x-axis by rotAngle, then around y by rotY
+    const y2=y*Math.cos(rotAngle)-z*Math.sin(rotAngle);
+    const z2=y*Math.sin(rotAngle)+z*Math.cos(rotAngle);
+    const x3=x*Math.cos(rotY)+z2*Math.sin(rotY);
+    const z3=-x*Math.sin(rotY)+z2*Math.cos(rotY);
+    return [cx+x3*scale,cy-y2*scale];
+  }
+
+  // Draw torus slices
+  for(let i=0;i<steps;i++){
+    const t=i/steps;
+    const xw=a+t*(b-a);
+    const rad=f(xw);
+    if(!isFinite(rad)||rad<0) continue;
+    const xNorm=(xw-a)/(b-a)*2-1; // map to [-1,1]
+
+    // Draw circle at this x
+    for(let j=0;j<asteps;j++){
+      const angle1=2*Math.PI*j/asteps;
+      const angle2=2*Math.PI*(j+1)/asteps;
+      const y1=rad*Math.cos(angle1),z1=rad*Math.sin(angle1);
+      const y2=rad*Math.cos(angle2),z2=rad*Math.sin(angle2);
+
+      const [px1,py1]=proj(xNorm,y1,z1);
+      const [px2,py2]=proj(xNorm,y2,z2);
+
+      // Connect to next x slice
+      if(i<steps-1){
+        const t2=(i+1)/steps;
+        const xw2=a+t2*(b-a);
+        const rad2=f(xw2);
+        const xNorm2=(xw2-a)/(b-a)*2-1;
+        const [px3,py3]=proj(xNorm2,y2,z2);
+        const [px4,py4]=proj(xNorm2,y1,z1);
+
+        // Color based on z depth
+        const avgZ=(z1+z2)/2;
+        const brightness=Math.floor(80+avgZ*60);
+        const alpha=0.3+avgZ*0.2;
+        ctx3.fillStyle=`rgba(42,92,143,${Math.max(0,Math.min(0.6,alpha))})`;
+        ctx3.strokeStyle=`rgba(42,92,143,${Math.max(0,Math.min(0.8,alpha+0.2))})`;
+        ctx3.lineWidth=0.5;
+        ctx3.beginPath();ctx3.moveTo(px1,py1);ctx3.lineTo(px2,py2);ctx3.lineTo(px3,py3);ctx3.lineTo(px4,py4);ctx3.closePath();
+        ctx3.fill();ctx3.stroke();
+      }
+    }
+  }
+
+  // Draw axis line
+  const [ax1,ay1]=proj(-1.2,0,0);
+  const [ax2,ay2]=proj(1.3,0,0);
+  ctx3.strokeStyle='#555';ctx3.lineWidth=1.5;ctx3.setLineDash([]);
+  ctx3.beginPath();ctx3.moveTo(ax1,ay1);ctx3.lineTo(ax2,ay2);ctx3.stroke();
+  ctx3.fillStyle='#888';ctx3.font=`10px 'JetBrains Mono',monospace`;
+  ctx3.textAlign='left';ctx3.textBaseline='middle';
+  ctx3.fillText('x轴（旋转轴）',ax2+4,ay2);
+
+  // Curve outline
+  ctx3.strokeStyle='#60a8d4';ctx3.lineWidth=2;
+  ctx3.beginPath();let first=true;
+  for(let i=0;i<=100;i++){
+    const x=a+i/100*(b-a);
+    const y=f(x);
+    if(!isFinite(y)){first=true;continue;}
+    const xNorm=(x-a)/(b-a)*2-1;
+    const [px,py]=proj(xNorm,y,0);
+    if(first){ctx3.moveTo(px,py);first=false;}
+    else ctx3.lineTo(px,py);
+  }
+  ctx3.stroke();
+}
+
+function updateInfo(){
+  const F=FNS[fn];
+  document.getElementById('formulaBox').innerHTML=
+    `<strong>圆盘法（绕x轴）</strong>：V = π ∫ₐᵇ [f(x)]² dx<br>${F.vol()}<br>每个截面是半径为 f(x) 的圆盘，面积=πr²=π[f(x)]²`;
+  document.getElementById('fb').innerHTML=
+    `<strong>旋转体体积（圆盘法）</strong>：将区间[a,b]分成n个小段，每段绕轴旋转产生一个圆盘，圆盘体积=π·r²·Δx。对所有圆盘体积求和取极限，得到定积分。<br>
+    ${F.desc}<br>
+    左图蓝色矩形就是"圆盘"的截面，右图是实际旋转体（可拖动旋转查看3D效果）。`;
+}
+
+cvs3d.addEventListener('pointerdown',e=>{dragging3d=true;lastMx=e.clientX;cvs3d.setPointerCapture(e.pointerId);});
+cvs3d.addEventListener('pointermove',e=>{
+  if(!dragging3d) return;
+  rotY+=(e.clientX-lastMx)*0.01;
+  lastMx=e.clientX;
+  draw3d();
+});
+cvs3d.addEventListener('pointerup',()=>{dragging3d=false;});
+
+window.addEventListener('resize',()=>{setup();draw2d();draw3d();});
+setup();draw2d();draw3d();updateInfo();
+</script>
+</body>
+</html>

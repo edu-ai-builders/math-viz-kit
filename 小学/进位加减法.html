@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>进位加减法竖式实验室 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="加减法">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="动态竖式展示进位与退位过程，理解十进制进退位的本质">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--red:#b84040;--red-light:#fce8e8;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:480px;padding:20px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:3px 10px;display:inline-block;margin-bottom:6px;}
+    h1{font-size:20px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:3px;}
+    main{width:100%;max-width:480px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .mode-row{display:flex;gap:6px;}
+    .mode-btn{flex:1;padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;cursor:pointer;background:var(--surface);color:var(--ink2);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .input-area{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+    .num-row{display:flex;gap:8px;align-items:center;}
+    .num-input{width:100px;padding:8px 10px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:20px;font-family:'JetBrains Mono',monospace;text-align:center;outline:none;transition:border-color .2s;}
+    .num-input:focus{border-color:var(--blue);}
+    .op-label{font-size:24px;font-family:'JetBrains Mono',monospace;color:var(--ink2);min-width:24px;text-align:center;}
+    .go-btn{padding:9px 20px;background:var(--blue);color:#fff;border:none;border-radius:var(--radius-sm);font-size:15px;font-family:inherit;cursor:pointer;transition:background .2s;}
+    .go-btn:hover{background:var(--blue-dark, #0c447c);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .step-nav{display:flex;gap:6px;}
+    .nav-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;cursor:pointer;background:var(--surface);color:var(--ink);transition:all .2s;}
+    .nav-btn:hover:not(:disabled){background:var(--blue-light);}
+    .nav-btn:disabled{opacity:.4;cursor:default;}
+    .nav-btn.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:10px 14px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 加减法 · 认知动作：变换</div>
+  <h1>进位加减法竖式实验室</h1>
+  <p class="sub">逐步展示进位与退位的每一步变换，理解十进制的本质</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('add',this)">加法（进位）</button>
+    <button class="mode-btn" onclick="setMode('sub',this)">减法（退位）</button>
+  </div>
+  <div class="input-area">
+    <div class="num-row">
+      <input class="num-input" id="numA" type="number" min="1" max="999" value="47">
+      <span class="op-label" id="opLabel">＋</span>
+      <input class="num-input" id="numB" type="number" min="1" max="999" value="35">
+      <button class="go-btn" onclick="startCalc()">开始演示</button>
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="step-nav">
+    <button class="nav-btn" id="prevBtn" onclick="prevStep()" disabled>← 上一步</button>
+    <button class="nav-btn primary" id="nextBtn" onclick="nextStep()" disabled>下一步 →</button>
+    <button class="nav-btn" onclick="startCalc()">重新开始</button>
+  </div>
+  <div class="fb" id="fb">输入两个数字，点击"开始演示"，逐步观察进位或退位的过程。</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 竖式中的进位/退位是静态图无法传达的动态过程
+// PEDAGOGY V3 分步揭示: 每步单独展示，用户控制节奏
+// PEDAGOGY V5 操作先于符号: 先看动画再理解规则
+// PEDAGOGY V6 动作-数学一致: "向上飞"的进位块对应十进制进位
+// PEDAGOGY V7 单一认知动作: 变换（十→百，十→个）
+// PEDAGOGY V8 概念反馈: 揭示进退位的本质
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 360;
+let mode = 'add';
+let numA = 0, numB = 0;
+let steps = [];
+let curStep = -1;
+let animT = 0, animFrame = null;
+
+const C = {
+  blue:'#2a5c8f', blueL:'#e8f0f8', teal:'#0f6e56', tealL:'#e1f5ee',
+  amber:'#854f0b', amberL:'#faeeda', red:'#b84040', redL:'#fce8e8',
+  ink:'#1a1814', ink2:'#6b6860', ink3:'#a8a69f', border:'#e4e2da', surf:'#fff'
+};
+
+function setup(){
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr; ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function setMode(m, btn){
+  mode = m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('opLabel').textContent = m==='add'?'＋':'－';
+  clearCalc();
+}
+
+function clearCalc(){
+  steps = []; curStep = -1;
+  document.getElementById('nextBtn').disabled = true;
+  document.getElementById('prevBtn').disabled = true;
+  document.getElementById('fb').textContent = '输入两个数字，点击"开始演示"，逐步观察进位或退位的过程。';
+  if(animFrame){cancelAnimationFrame(animFrame);animFrame=null;}
+  ctx.clearRect(0,0,cvs.getBoundingClientRect().width,H);
+  drawIdleState();
+}
+
+function drawIdleState(){
+  const W = cvs.getBoundingClientRect().width;
+  ctx.fillStyle = C.ink3;
+  ctx.font = `16px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('请输入数字后点击开始演示', W/2, H/2);
+}
+
+// Build steps for addition
+function buildAddSteps(a, b){
+  const sa = String(a).padStart(3,'0');
+  const sb = String(b).padStart(3,'0');
+  const result = [];
+  const carries = [0,0,0,0]; // carries[0]=ones carry, [1]=tens carry, [2]=hundreds carry
+  const digits = ['个位','十位','百位'];
+  const pos = [2,1,0]; // index in string (ones, tens, hundreds)
+
+  // step 0: show the two numbers
+  result.push({type:'setup', a, b, computed:[], carries:[0,0,0]});
+
+  let carryArr = [0,0,0];
+  for(let col=0;col<3;col++){
+    const da = parseInt(sa[pos[col]]);
+    const db = parseInt(sb[pos[col]]);
+    const sum = da + db + carryArr[col];
+    const digit = sum % 10;
+    const newCarry = Math.floor(sum/10);
+    const newCarries = [...carryArr];
+    if(col<2) newCarries[col+1] = newCarry;
+    result.push({
+      type:'col', col, da, db, carry:carryArr[col], sum, digit, newCarry,
+      carries:[...newCarries], computed:result.length>0?[...result[result.length-1].computed||[]]:[],
+      colName: digits[col], overflow: newCarry>0
+    });
+    const prev = result[result.length-1];
+    prev.computed = [...(result.length>1?result[result.length-2].computed||[]:[]), digit];
+    carryArr = newCarries;
+  }
+  // final answer
+  const ans = a+b;
+  result.push({type:'answer', a, b, ans, carries:carryArr});
+  return result;
+}
+
+// Build steps for subtraction
+function buildSubSteps(a, b){
+  if(a < b){ [a,b]=[b,a]; } // ensure a >= b
+  const sa = String(a).padStart(3,'0');
+  const sb = String(b).padStart(3,'0');
+  const result = [];
+  const digits = ['个位','十位','百位'];
+  const pos = [2,1,0];
+
+  result.push({type:'setup', a, b, computed:[], borrows:[0,0,0]});
+
+  let borrowArr = [0,0,0];
+  for(let col=0;col<3;col++){
+    let da = parseInt(sa[pos[col]]) - borrowArr[col];
+    const db = parseInt(sb[pos[col]]);
+    let borrow = 0;
+    if(da < db){da+=10; borrow=1;}
+    const diff = da - db;
+    const newBorrows = [...borrowArr];
+    if(col<2) newBorrows[col+1] = borrow;
+    result.push({
+      type:'col', col, da: parseInt(sa[pos[col]]), db, borrow:borrowArr[col], diff,
+      newBorrow:borrow, borrows:[...newBorrows],
+      computed:result.length>1?[...result[result.length-1].computed||[]]:[],
+      colName:digits[col], needBorrow:borrow>0
+    });
+    result[result.length-1].computed = [...(result.length>2?result[result.length-2].computed||[]:[]), diff];
+    borrowArr = newBorrows;
+  }
+  result.push({type:'answer', a, b, ans:a-b, borrows:borrowArr});
+  return result;
+}
+
+function startCalc(){
+  if(animFrame){cancelAnimationFrame(animFrame);animFrame=null;}
+  numA = parseInt(document.getElementById('numA').value)||0;
+  numB = parseInt(document.getElementById('numB').value)||0;
+  if(numA<1||numA>999||numB<1||numB>999){
+    document.getElementById('fb').textContent='请输入1到999之间的整数。';
+    return;
+  }
+  steps = mode==='add' ? buildAddSteps(numA,numB) : buildSubSteps(numA,numB);
+  curStep = 0;
+  document.getElementById('nextBtn').disabled = false;
+  document.getElementById('prevBtn').disabled = true;
+  drawStep(0);
+  updateFeedback(0);
+}
+
+function nextStep(){
+  if(curStep < steps.length-1){ curStep++; drawStep(curStep); updateFeedback(curStep); }
+  document.getElementById('prevBtn').disabled = curStep<=0;
+  document.getElementById('nextBtn').disabled = curStep>=steps.length-1;
+}
+
+function prevStep(){
+  if(curStep>0){ curStep--; drawStep(curStep); updateFeedback(curStep); }
+  document.getElementById('prevBtn').disabled = curStep<=0;
+  document.getElementById('nextBtn').disabled = curStep>=steps.length-1;
+}
+
+function drawStep(idx){
+  const W = cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const s = steps[idx];
+  const cx = W/2;
+
+  // Layout: large vertical form
+  const colW = 54, colGap = 10;
+  const cols = 3; // hundreds, tens, ones
+  const startX = cx - (cols*colW + (cols-1)*colGap)/2;
+  const rowH = 64;
+  const topY = 60;
+
+  // Column labels
+  const colLabels = ['百位','十位','个位'];
+  const colColors = [C.amber, C.teal, C.blue];
+  for(let c=0;c<3;c++){
+    const cx2 = startX + c*(colW+colGap) + colW/2;
+    ctx.fillStyle = colColors[c]+'33';
+    ctx.beginPath(); ctx.roundRect(cx2-colW/2, topY-30, colW, H-20, 6); ctx.fill();
+    ctx.fillStyle = colColors[c];
+    ctx.font = `bold 12px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(colLabels[c], cx2, topY-16);
+  }
+
+  // Parse digits
+  const sa = String(s.a||numA).padStart(3,'0');
+  const sb = String(s.b||numB).padStart(3,'0');
+
+  // Highlight current column
+  if(s.type==='col'){
+    const hc = s.col; // 0=ones, 1=tens, 2=hundreds → column index = 2-col
+    const ci = 2-hc;
+    const cx2 = startX + ci*(colW+colGap) + colW/2;
+    ctx.fillStyle = colColors[hc]+'55';
+    ctx.beginPath(); ctx.roundRect(cx2-colW/2, topY-30, colW, H-20, 6); ctx.fill();
+  }
+
+  // Draw number A
+  for(let c=0;c<3;c++){
+    const cx2 = startX + c*(colW+colGap) + colW/2;
+    const isActive = s.type==='col' && (2-s.col)===c;
+    ctx.fillStyle = isActive ? colColors[2-c] : C.ink;
+    ctx.font = `bold 32px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(sa[c], cx2, topY+rowH*0);
+  }
+
+  // Operator + number B
+  ctx.fillStyle = C.ink2;
+  ctx.font = `bold 26px 'JetBrains Mono',monospace`;
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  ctx.fillText(mode==='add'?'+':'−', startX-8, topY+rowH*1);
+
+  for(let c=0;c<3;c++){
+    const cx2 = startX + c*(colW+colGap) + colW/2;
+    const isActive = s.type==='col' && (2-s.col)===c;
+    ctx.fillStyle = isActive ? colColors[2-c] : C.ink;
+    ctx.font = `bold 32px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(sb[c], cx2, topY+rowH*1);
+  }
+
+  // Divider line
+  ctx.strokeStyle = C.ink2; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(startX-14, topY+rowH*1.5); ctx.lineTo(startX+(cols*colW+(cols-1)*colGap)+4, topY+rowH*1.5); ctx.stroke();
+
+  // Draw carries/borrows above
+  if(s.type==='col' || s.type==='answer'){
+    const arr = mode==='add' ? (s.carries||[]) : (s.borrows||[]);
+    for(let c=0;c<3;c++){
+      const ci = 2-c; // column index
+      const cx2 = startX + ci*(colW+colGap) + colW/2;
+      if(arr[c]>0){
+        ctx.fillStyle = C.red;
+        ctx.font = `bold 18px 'JetBrains Mono',monospace`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(mode==='add'?'¹':'¹', cx2+colW/2-4, topY+rowH*0-20);
+        if(mode==='sub'){
+          // show borrow annotation on the upper digit
+          ctx.fillStyle = C.red+'aa';
+          ctx.font = `12px 'Noto Sans SC',sans-serif`;
+          ctx.fillText('借1', cx2, topY+rowH*0-32);
+        }
+      }
+    }
+  }
+
+  // Draw computed digits
+  const computed = s.computed || [];
+  const ansStr = String(mode==='add'?(numA+numB):(Math.max(numA,numB)-Math.min(numA,numB))).padStart(3,'0');
+  for(let c=0;c<3;c++){
+    const colIdx = 2-c; // ones=col2, tens=col1, hundreds=col0
+    if(computed.length > c){
+      const cx2 = startX + colIdx*(colW+colGap) + colW/2;
+      ctx.fillStyle = C.teal;
+      ctx.font = `bold 32px 'JetBrains Mono',monospace`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(String(computed[c]), cx2, topY+rowH*2.2);
+    }
+  }
+
+  // Answer row
+  if(s.type==='answer'){
+    const ans = mode==='add'?numA+numB:Math.max(numA,numB)-Math.min(numA,numB);
+    const ansS = String(ans).padStart(3,'0');
+    for(let c=0;c<3;c++){
+      const cx2 = startX + c*(colW+colGap) + colW/2;
+      ctx.fillStyle = C.teal;
+      ctx.font = `bold 36px 'JetBrains Mono',monospace`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(ansS[c], cx2, topY+rowH*2.2);
+    }
+    // Show equation
+    const eq = mode==='add' ? `${numA} + ${numB} = ${ans}` : `${Math.max(numA,numB)} - ${Math.min(numA,numB)} = ${ans}`;
+    ctx.fillStyle = C.blue;
+    ctx.font = `bold 18px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(eq, cx, topY+rowH*3.4);
+  }
+
+  // Step indicator
+  ctx.fillStyle = C.ink3;
+  ctx.font = `12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  ctx.fillText(`步骤 ${idx+1} / ${steps.length}`, W-12, 8);
+}
+
+function updateFeedback(idx){
+  const s = steps[idx];
+  const fb = document.getElementById('fb');
+  if(s.type==='setup'){
+    fb.innerHTML = `准备计算 <strong>${s.a} ${mode==='add'?'+':'−'} ${s.b}</strong>。将每一位对齐，从<strong>个位</strong>开始逐列计算。`;
+  } else if(s.type==='col'){
+    if(mode==='add'){
+      let msg = `<strong>${s.colName}</strong>：${s.da} + ${s.db}`;
+      if(s.carry>0) msg += ` + 进位${s.carry}`;
+      msg += ` = ${s.sum}`;
+      if(s.overflow) msg += `，<strong style="color:var(--red)">向${['十','百','千'][s.col]}位进1</strong>，本位写 ${s.digit}`;
+      else msg += `，写下 ${s.digit}`;
+      fb.innerHTML = msg;
+    } else {
+      let msg = `<strong>${s.colName}</strong>：`;
+      if(s.needBorrow) msg += `上面的数字不够减，<strong style="color:var(--red)">向高位借1（当10）</strong>，${s.da+10} − ${s.db} = ${s.diff}`;
+      else msg += `${s.da} − ${s.db}${s.borrow?' − 借走的1':''}`;
+      if(s.borrow) msg += `（已扣除借出的1）`;
+      msg += ` = <strong>${s.diff}</strong>`;
+      fb.innerHTML = msg;
+    }
+  } else if(s.type==='answer'){
+    const ans = mode==='add'?numA+numB:Math.max(numA,numB)-Math.min(numA,numB);
+    // PEDAGOGY V8
+    fb.innerHTML = `计算完成！<strong>${mode==='add'?numA+' + '+numB:Math.max(numA,numB)+' − '+Math.min(numA,numB)} = ${ans}</strong>。<br>进位的本质：<strong>10个低位 = 1个高位</strong>，退位的本质：<strong>向高位借1当10用</strong>。这就是十进制（逢十进一）的规律！`;
+  }
+}
+
+window.addEventListener('resize',()=>{setup();if(curStep>=0)drawStep(curStep);else drawIdleState();});
+setup(); drawIdleState();
+</script>
+</body>
+</html>

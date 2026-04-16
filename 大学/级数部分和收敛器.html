@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>级数部分和收敛器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="数学分析">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="等比级数、调和级数、p-级数等典型级数的部分和数列动态图，直观对比收敛与发散">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .series-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .s-btn{padding:8px 4px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);font-size:11px;font-weight:700;text-align:center;transition:all .15s;}
+    .s-btn small{display:block;font-size:10px;font-weight:400;color:var(--ink2);font-family:'JetBrains Mono',monospace;margin-top:2px;}
+    .s-btn.active{color:#fff;border-color:transparent;}
+    .s-btn.converge{background:var(--teal);}
+    .s-btn.diverge{background:#dc2626;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .info-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+    .info-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;text-align:center;}
+    .info-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;}
+    .info-lbl{font-size:11px;color:var(--ink2);margin-top:2px;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 数学分析 · 认知动作：累积</div>
+  <h1>级数部分和收敛器</h1>
+  <p class="sub">部分和数列Sₙ的动态曲线，直观对比级数收敛与发散</p>
+</header>
+<main>
+  <div class="series-grid" id="seriesGrid"></div>
+  <canvas id="cvs"></canvas>
+  <div class="info-row">
+    <div class="info-item"><div class="info-val" id="sv1" style="color:var(--blue)">—</div><div class="info-lbl">S₁₀₀</div></div>
+    <div class="info-item"><div class="info-val" id="sv2">—</div><div class="info-lbl">理论极限</div></div>
+    <div class="info-item"><div class="info-val" id="sv3">—</div><div class="info-lbl">收敛状态</div></div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V3 分步揭示: 部分和曲线逐项累积，感受收敛速率
+// PEDAGOGY V4 信号聚焦: 收敛级数蓝色+虚线极限，发散级数红色
+// PEDAGOGY V8 概念反馈: 说明收敛/发散判据
+
+const SERIES=[
+  {id:'geo_half',label:'等比级数 r=1/2',formula:'Σ(1/2)ⁿ',an:n=>Math.pow(0.5,n),limit:2,converge:true,
+   desc:'等比级数 |r|=1/2 < 1，收敛于 a/(1-r) = 1/(1-0.5) = 2。等比级数收敛条件：|r|<1。'},
+  {id:'harmonic',label:'调和级数',formula:'Σ1/n',an:n=>1/n,limit:Infinity,converge:false,
+   desc:'调和级数发散（虽然通项→0，但发散！）这是一个反例，说明通项趋零不足以保证级数收敛。'},
+  {id:'pseries2',label:'p-级数 p=2',formula:'Σ1/n²',an:n=>1/(n*n),limit:Math.PI*Math.PI/6,converge:true,
+   desc:'p-级数 p=2>1 收敛，极限=π²/6 ≈ 1.6449（巴塞尔问题，欧拉于1735年求解）。'},
+  {id:'pseries_half',label:'p-级数 p=0.5',formula:'Σ1/√n',an:n=>1/Math.sqrt(n),limit:Infinity,converge:false,
+   desc:'p-级数 p=0.5<1 发散。p-级数：p>1收敛，p≤1发散。'},
+  {id:'alternating',label:'交错调和级数',formula:'Σ(-1)ⁿ/n',an:n=>Math.pow(-1,n)/n,limit:Math.log(2),converge:true,
+   desc:'交错调和级数收敛于 ln2 ≈ 0.693（Leibniz判别法：交错且单调趋零则收敛）。'},
+  {id:'geo_2',label:'等比级数 r=2',formula:'Σ2ⁿ（r>1发散）',an:n=>Math.pow(2,n),limit:Infinity,converge:false,
+   desc:'等比级数 r=2>1，部分和指数增长，明显发散。'},
+];
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=280;
+let curSeries=SERIES[0];
+const N=100;
+
+function buildGrid(){
+  const g=document.getElementById('seriesGrid');
+  g.innerHTML=SERIES.map((s,i)=>`
+    <button class="s-btn ${i===0?'active':''}${s.converge?' converge':' diverge'}" onclick="selectSeries(${i},this)">
+      ${s.label}<small>${s.formula}</small>
+    </button>
+  `).join('');
+}
+
+function selectSeries(i,btn){
+  document.querySelectorAll('.s-btn').forEach(b=>{b.classList.remove('active');});
+  btn.classList.add('active');
+  curSeries=SERIES[i];
+  draw();
+}
+
+function getPartialSums(s,n){
+  const sums=[0];
+  let acc=0;
+  for(let k=1;k<=n;k++){
+    acc+=s.an(k);
+    sums.push(acc);
+  }
+  return sums;
+}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const s=curSeries;
+  const sums=getPartialSums(s,N);
+
+  const maxS=Math.min(Math.max(...sums.filter(isFinite)),s.limit===Infinity?sums[N]:s.limit*1.5);
+  const minS=Math.min(0,...sums.filter(isFinite));
+  const range=Math.max(maxS-minS,0.5);
+
+  const pad={l:55,r:15,t:20,b:30};
+  const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+
+  function toX(n_){return pad.l+n_/N*cw;}
+  function toY(v){return pad.t+ch-(Math.min(Math.max(v,minS-range*0.1),maxS+range*0.1)-minS)/(range*1.2)*ch;}
+
+  // Grid
+  ctx.strokeStyle='#e4e2da';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+  [0,25,50,75,100].forEach(n_=>{ctx.beginPath();ctx.moveTo(toX(n_),pad.t);ctx.lineTo(toX(n_),pad.t+ch);ctx.stroke();});
+  const yStep=range/4;
+  for(let v=Math.ceil(minS/yStep)*yStep;v<=maxS;v+=yStep){
+    ctx.beginPath();ctx.moveTo(pad.l,toY(v));ctx.lineTo(W-pad.r,toY(v));ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // x axis at y=0
+  if(minS<0&&maxS>0){ctx.strokeStyle='#6b6860';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(pad.l,toY(0));ctx.lineTo(W-pad.r,toY(0));ctx.stroke();}
+  ctx.strokeStyle='#6b6860';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pad.l,pad.t+ch);ctx.lineTo(W-pad.r,pad.t+ch);ctx.stroke();
+
+  // Labels
+  ctx.fillStyle='#a8a69f';ctx.font=`9px 'JetBrains Mono',monospace`;
+  [0,25,50,75,100].forEach(n_=>{ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(n_,toX(n_),pad.t+ch+4);});
+  for(let v=Math.ceil(minS/yStep)*yStep;v<=maxS;v+=yStep){
+    ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(v.toFixed(2),pad.l-3,toY(v));
+  }
+
+  // Limit line
+  if(isFinite(s.limit)){
+    ctx.strokeStyle='#0f6e5680';ctx.lineWidth=1.5;ctx.setLineDash([5,4]);
+    ctx.beginPath();ctx.moveTo(pad.l,toY(s.limit));ctx.lineTo(W-pad.r,toY(s.limit));ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#0f6e56';ctx.font=`10px 'JetBrains Mono',monospace`;
+    ctx.textAlign='right';ctx.textBaseline='bottom';
+    ctx.fillText(`极限=${s.limit.toFixed(4)}`,W-pad.r,toY(s.limit)-2);
+  }
+
+  // Partial sums line
+  ctx.strokeStyle=s.converge?'#2a5c8f':'#dc2626';ctx.lineWidth=2.5;
+  ctx.beginPath();
+  sums.forEach((sv,n_)=>{
+    if(!isFinite(sv)||sv>maxS*5) return;
+    if(n_===0) ctx.moveTo(toX(n_),toY(sv));
+    else ctx.lineTo(toX(n_),toY(sv));
+  });
+  ctx.stroke();
+
+  // Last term contributions (small bars)
+  for(let n_=1;n_<=Math.min(30,N);n_++){
+    const an=s.an(n_);
+    if(!isFinite(an)||Math.abs(an)>range) continue;
+    const x=toX(n_);
+    ctx.fillStyle=s.converge?'#2a5c8f44':'#dc262644';
+    const prevY=toY(sums[n_-1]),currY=toY(sums[n_]);
+    ctx.fillRect(x-2,Math.min(prevY,currY),4,Math.abs(currY-prevY));
+  }
+
+  const sn100=sums[N];
+  document.getElementById('sv1').textContent=isFinite(sn100)?sn100.toFixed(4):'∞';
+  document.getElementById('sv2').textContent=isFinite(s.limit)?s.limit.toFixed(4):'发散';
+  const sv3=document.getElementById('sv3');
+  sv3.textContent=s.converge?'收敛 ✓':'发散 ✗';
+  sv3.style.color=s.converge?'var(--teal)':'#dc2626';
+
+  document.getElementById('fb').innerHTML=
+    `<strong>${s.label}</strong>：${s.desc}<br>
+    图中纵轴为部分和Sₙ=a₁+a₂+⋯+aₙ，横轴为项数n。${s.converge?'蓝色曲线趋向绿色虚线极限值。':'红色曲线持续增大（或震荡不收敛）。'}`;
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();buildGrid();draw();
+</script>
+</body>
+</html>

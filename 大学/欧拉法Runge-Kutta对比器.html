@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>欧拉法/Runge-Kutta对比器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="常微分方程">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="同一初值问题用欧拉法、改进欧拉法、RK4方法求解，与精确解同屏对比，展示数值方法的精度差异">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .eq-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .eq-btn{padding:7px 14px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);font-family:'JetBrains Mono',monospace;}
+    .eq-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .ctrl-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;}
+    .ctrl-group{display:flex;align-items:center;gap:6px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);}
+    input[type=range]{accent-color:var(--blue);width:100px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--blue);min-width:40px;}
+    .check-row{display:flex;gap:12px;flex-wrap:wrap;}
+    .check-item{display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .error-table{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;}
+    .error-table table{width:100%;border-collapse:collapse;}
+    .error-table th{background:var(--bg);font-size:11px;padding:5px 10px;text-align:center;border-bottom:1px solid var(--border);}
+    .error-table td{font-size:12px;font-family:'JetBrains Mono',monospace;padding:5px 10px;text-align:center;border-bottom:1px solid var(--border);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 常微分方程 · 认知动作：比较</div>
+  <h1>欧拉法 / Runge-Kutta 对比器</h1>
+  <p class="sub">数值解与精确解同屏对比，理解步长对精度的影响</p>
+</header>
+<main>
+  <div class="eq-row">
+    <button class="eq-btn active" onclick="setEq('exp',this)">y'=-y, y(0)=1</button>
+    <button class="eq-btn" onclick="setEq('osc',this)">y'=-y+sin(x)</button>
+    <button class="eq-btn" onclick="setEq('logistic',this)">y'=y(1-y)</button>
+    <button class="eq-btn" onclick="setEq('stiff',this)">y'=-10y（刚性）</button>
+  </div>
+  <div class="ctrl-panel">
+    <div class="ctrl-group">
+      <span class="ctrl-label">步长 h =</span>
+      <input type="range" id="slH" min="0.05" max="1" step="0.05" value="0.3" oninput="updateH()">
+      <span class="ctrl-val" id="hLbl">0.3</span>
+    </div>
+    <div class="check-row">
+      <label class="check-item"><input type="checkbox" id="showEuler" checked onchange="draw()"><span style="color:#b84040">■</span> 欧拉法</label>
+      <label class="check-item"><input type="checkbox" id="showHeun" checked onchange="draw()"><span style="color:#854f0b">■</span> 改进欧拉</label>
+      <label class="check-item"><input type="checkbox" id="showRK4" checked onchange="draw()"><span style="color:#0f6e56">■</span> RK4</label>
+      <label class="check-item"><input type="checkbox" id="showExact" checked onchange="draw()"><span style="color:#2a5c8f">■</span> 精确解</label>
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="error-table">
+    <table>
+      <thead><tr><th>方法</th><th>精度阶</th><th>x=1处误差</th><th>x=2处误差</th><th>x=3处误差</th></tr></thead>
+      <tbody id="errorBody"></tbody>
+    </table>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V2 表征桥接: 数值解曲线与精确解同屏叠加，误差一目了然
+// PEDAGOGY V4 信号聚焦: 4种方法用不同颜色，步长越大误差越明显
+// PEDAGOGY V8 概念反馈: 解释各方法的精度阶和适用场景
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=300;
+let eq='exp';
+let h=0.3;
+
+const EQS={
+  exp:{
+    f:(x,y)=>-y,
+    exact:x=>Math.exp(-x),
+    y0:1,x0:0,xEnd:4,
+    label:"y' = -y, y(0)=1",
+    yRange:[-0.2,1.2],
+    desc:"简单指数衰减，精确解y=e⁻ˣ。欧拉法在大步长时会出现明显误差甚至震荡。"
+  },
+  osc:{
+    f:(x,y)=>-y+Math.sin(x),
+    exact:x=>(Math.exp(-x)*(Math.sin(0)-Math.cos(0)+1)+Math.sin(x)-Math.cos(x)+Math.exp(-x))/2,
+    y0:0,x0:0,xEnd:5,
+    yRange:[-0.8,1],
+    label:"y' = -y + sin(x), y(0)=0",
+    desc:"含外力项的一阶线性ODE，解是指数衰减+正弦振动的叠加。"
+  },
+  logistic:{
+    f:(x,y)=>y*(1-y),
+    exact:x=>1/(1+Math.exp(-x)),
+    y0:0.1,x0:0,xEnd:6,
+    yRange:[-0.1,1.2],
+    label:"y' = y(1-y), y(0)=0.1",
+    desc:"Logistic增长方程，精确解为Sigmoid函数。用于人口增长、传染病传播等模型。"
+  },
+  stiff:{
+    f:(x,y)=>-10*y,
+    exact:x=>Math.exp(-10*x),
+    y0:1,x0:0,xEnd:2,
+    yRange:[-0.2,1.2],
+    label:"y' = -10y, y(0)=1（刚性方程）",
+    desc:"刚性方程：当h>0.2时欧拉法不稳定（震荡爆炸）。RK4稳定步长要求h<0.28。"
+  }
+};
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function updateH(){
+  h=parseFloat(document.getElementById('slH').value);
+  document.getElementById('hLbl').textContent=h.toFixed(2);
+  draw();
+}
+
+function setEq(e,btn){
+  eq=e;
+  document.querySelectorAll('.eq-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function euler(f,y0,x0,xEnd,h){
+  const pts=[[x0,y0]];
+  let x=x0,y=y0;
+  while(x<xEnd-h/2){
+    y=y+h*f(x,y);
+    x+=h;
+    if(!isFinite(y)||Math.abs(y)>1e6) break;
+    pts.push([x,y]);
+  }
+  return pts;
+}
+
+function heun(f,y0,x0,xEnd,h){
+  const pts=[[x0,y0]];
+  let x=x0,y=y0;
+  while(x<xEnd-h/2){
+    const k1=f(x,y);
+    const yp=y+h*k1;
+    const k2=f(x+h,yp);
+    y=y+h/2*(k1+k2);
+    x+=h;
+    if(!isFinite(y)||Math.abs(y)>1e6) break;
+    pts.push([x,y]);
+  }
+  return pts;
+}
+
+function rk4(f,y0,x0,xEnd,h){
+  const pts=[[x0,y0]];
+  let x=x0,y=y0;
+  while(x<xEnd-h/2){
+    const k1=f(x,y);
+    const k2=f(x+h/2,y+h*k1/2);
+    const k3=f(x+h/2,y+h*k2/2);
+    const k4=f(x+h,y+h*k3);
+    y=y+h/6*(k1+2*k2+2*k3+k4);
+    x+=h;
+    if(!isFinite(y)||Math.abs(y)>1e6) break;
+    pts.push([x,y]);
+  }
+  return pts;
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const E=EQS[eq];
+  const xRange=[E.x0,E.xEnd];
+  const yRange=E.yRange;
+  const pad={l:45,r:15,t:20,b:30};
+  const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+
+  function toX(x){return pad.l+(x-xRange[0])/(xRange[1]-xRange[0])*cw;}
+  function toY(y){return pad.t+ch-(y-yRange[0])/(yRange[1]-yRange[0])*ch;}
+
+  // Grid
+  ctx.strokeStyle='#e4e2da';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+  for(let x=xRange[0];x<=xRange[1];x++){ctx.beginPath();ctx.moveTo(toX(x),pad.t);ctx.lineTo(toX(x),pad.t+ch);ctx.stroke();}
+  for(let y=yRange[0];y<=yRange[1];y+=0.5){ctx.beginPath();ctx.moveTo(pad.l,toY(y));ctx.lineTo(W-pad.r,toY(y));ctx.stroke();}
+  ctx.setLineDash([]);
+  if(yRange[0]<0&&yRange[1]>0){ctx.strokeStyle='#6b6860';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(pad.l,toY(0));ctx.lineTo(W-pad.r,toY(0));ctx.stroke();}
+
+  // Labels
+  ctx.fillStyle='#a8a69f';ctx.font=`9px 'JetBrains Mono',monospace`;
+  for(let x=xRange[0];x<=xRange[1];x++){ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(x,toX(x),pad.t+ch+3);}
+  for(let y=yRange[0];y<=yRange[1];y+=0.5){ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(y.toFixed(1),pad.l-3,toY(y));}
+
+  function plotLine(pts,color,dash=[]){
+    if(!pts.length) return;
+    ctx.strokeStyle=color;ctx.lineWidth=dash.length?1.5:2.5;ctx.setLineDash(dash);
+    ctx.beginPath();
+    pts.forEach(([x,y],i)=>{
+      const px=toX(x),py=toY(y);
+      if(i===0) ctx.moveTo(px,py);
+      else ctx.lineTo(px,py);
+    });
+    ctx.stroke();ctx.setLineDash([]);
+    // Dots
+    pts.forEach(([x,y])=>{
+      ctx.fillStyle=color;ctx.beginPath();ctx.arc(toX(x),toY(y),3,0,Math.PI*2);ctx.fill();
+    });
+  }
+
+  const eulerPts=euler(E.f,E.y0,E.x0,E.xEnd,h);
+  const heunPts=heun(E.f,E.y0,E.x0,E.xEnd,h);
+  const rk4Pts=rk4(E.f,E.y0,E.x0,E.xEnd,h);
+
+  // Exact
+  if(document.getElementById('showExact').checked){
+    const exactPts=[];
+    for(let i=0;i<=200;i++){const x=E.x0+i/200*(E.xEnd-E.x0);exactPts.push([x,E.exact(x)]);}
+    ctx.strokeStyle='#2a5c8f';ctx.lineWidth=3;
+    ctx.beginPath();exactPts.forEach(([x,y],i)=>{const px=toX(x),py=toY(y);if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);});ctx.stroke();
+  }
+  if(document.getElementById('showRK4').checked) plotLine(rk4Pts,'#0f6e56',[]);
+  if(document.getElementById('showHeun').checked) plotLine(heunPts,'#854f0b',[5,3]);
+  if(document.getElementById('showEuler').checked) plotLine(eulerPts,'#b84040',[8,4]);
+
+  // Error table
+  const checkX=[1,2,3].filter(x=>x<=E.xEnd);
+  const methods=[
+    {name:'欧拉法',color:'#b84040',ord:'O(h)',pts:eulerPts},
+    {name:'改进欧拉',color:'#854f0b',ord:'O(h²)',pts:heunPts},
+    {name:'RK4',color:'#0f6e56',ord:'O(h⁴)',pts:rk4Pts},
+  ];
+
+  function interpY(pts,xq){
+    for(let i=0;i<pts.length-1;i++){
+      if(pts[i][0]<=xq&&pts[i+1][0]>=xq){
+        const t=(xq-pts[i][0])/(pts[i+1][0]-pts[i][0]);
+        return pts[i][1]*(1-t)+pts[i+1][1]*t;
+      }
+    }
+    return null;
+  }
+
+  const tbody=document.getElementById('errorBody');
+  tbody.innerHTML=methods.map(m=>`<tr>
+    <td style="color:${m.color};font-weight:700">${m.name}</td>
+    <td>${m.ord}</td>
+    ${checkX.map(x=>{
+      const yNum=interpY(m.pts,x);
+      const yEx=E.exact(x);
+      if(yNum===null) return '<td>—</td>';
+      const err=Math.abs(yNum-yEx);
+      return `<td style="color:${err<1e-3?'#0f6e56':err<0.05?'#854f0b':'#dc2626'}">${err.toExponential(2)}</td>`;
+    }).join('')}
+  </tr>`).join('');
+
+  document.getElementById('fb').innerHTML=
+    `<strong>${E.label}</strong>：步长 h=${h.toFixed(2)}。${E.desc}<br>
+    <strong>精度对比</strong>：欧拉法O(h)每步误差正比h，RK4 O(h⁴)误差正比h⁴。步长减半，欧拉误差减半，RK4误差减为1/16。`;
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

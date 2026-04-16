@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>散度/旋度直观演示器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="多元微积分">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="散度（源汇）和旋度（旋转）的粒子动画直观演示，理解微元的膨胀与旋转性质">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .layout{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+    .panel-title{padding:8px 12px;font-size:13px;font-weight:700;background:var(--bg);border-bottom:1px solid var(--border);}
+    .panel-title.div-title{color:var(--blue);}
+    .panel-title.curl-title{color:#dc2626;}
+    canvas{width:100%;display:block;background:#0a0a14;}
+    .formula-row{padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink2);background:var(--bg);}
+    .examples-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .ex-btn{padding:5px 12px;border:2px solid var(--border);border-radius:20px;font-size:11px;cursor:pointer;background:var(--surface);}
+    .ex-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+    @media(max-width:500px){.layout{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 多元微积分 · 认知动作：变换</div>
+  <h1>散度 / 旋度直观演示器</h1>
+  <p class="sub">粒子动画展示向量场的膨胀（散度）和旋转（旋度）特性</p>
+</header>
+<main>
+  <div class="examples-row">
+    <button class="ex-btn active" onclick="setExample('source_curl',this)">纯源（散度>0）</button>
+    <button class="ex-btn" onclick="setExample('sink_curl',this)">纯汇（散度<0）</button>
+    <button class="ex-btn" onclick="setExample('pure_curl',this)">纯旋（旋度≠0）</button>
+    <button class="ex-btn" onclick="setExample('both',this)">源+旋叠加</button>
+    <button class="ex-btn" onclick="setExample('shear',this)">剪切场</button>
+  </div>
+  <div class="layout">
+    <div class="panel">
+      <div class="panel-title div-title">散度 ∇·F（膨胀/收缩）</div>
+      <canvas id="cvsDivI"></canvas>
+      <div class="formula-row" id="divFormula">∇·F = ∂Fx/∂x + ∂Fy/∂y</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title curl-title">旋度 ∇×F（旋转）</div>
+      <canvas id="cvsCurl"></canvas>
+      <div class="formula-row" id="curlFormula">∇×F = ∂Fy/∂x - ∂Fx/∂y</div>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 散度和旋度必须用"微元粒子动画"才能感受
+// PEDAGOGY V4 信号聚焦: 散度用膨胀收缩粒子团，旋度用旋转粒子环
+// PEDAGOGY V7 单一认知动作: 变换（感受向量场微分性质）
+
+const cvsD=document.getElementById('cvsDivI');
+const cvsC=document.getElementById('cvsCurl');
+const ctxD=cvsD.getContext('2d');
+const ctxC=cvsC.getContext('2d');
+const H=200;
+
+const EXAMPLES={
+  source_curl:{
+    F:(x,y)=>[x,y],
+    div:(x,y)=>2,
+    curl:(x,y)=>0,
+    label:'F=(x,y)',
+    desc:'纯源场：散度∇·F=2（处处为正），旋度=0。每个微元体积膨胀，没有旋转。代表均匀膨胀流体或点电荷场。'
+  },
+  sink_curl:{
+    F:(x,y)=>[-x,-y],
+    div:(x,y)=>-2,
+    curl:(x,y)=>0,
+    label:'F=(-x,-y)',
+    desc:'纯汇场：散度∇·F=-2（处处为负），旋度=0。微元体积收缩，没有旋转。代表均匀收缩流体或引力中心。'
+  },
+  pure_curl:{
+    F:(x,y)=>[-y,x],
+    div:(x,y)=>0,
+    curl:(x,y)=>2,
+    label:'F=(-y,x)',
+    desc:'纯旋场：散度=0（无膨胀收缩），旋度∇×F=2（正值=逆时针旋转）。代表刚体旋转流体。'
+  },
+  both:{
+    F:(x,y)=>[x-y,x+y],
+    div:(x,y)=>2,
+    curl:(x,y)=>2,
+    label:'F=(x-y, x+y)',
+    desc:'散度+旋度：∇·F=2（膨胀）且∇×F=2（旋转）。微元同时膨胀并逆时针旋转，是螺旋扩散场。'
+  },
+  shear:{
+    F:(x,y)=>[y,0],
+    div:(x,y)=>0,
+    curl:(x,y)=>-1,
+    label:'F=(y,0)',
+    desc:'剪切场：散度=0，旋度∇×F=-1（顺时针旋转）。虽然流线都是水平的，但微元在旋转（剪切变形）。'
+  }
+};
+
+let example='source_curl';
+let divParticles=[],curlParticles=[];
+let animId=null;
+
+function setExample(k,btn){
+  document.querySelectorAll('.ex-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  example=k;
+  initParticles();
+  const E=EXAMPLES[k];
+  const cx=0,cy=0; // evaluate at center
+  const d=E.div(0,0),c=E.curl(0,0);
+  document.getElementById('divFormula').textContent=`∇·F = ${d} (${d>0?'膨胀':d<0?'收缩':'无散度'})`;
+  document.getElementById('curlFormula').textContent=`∇×F = ${c} (${c>0?'逆时针旋转':c<0?'顺时针旋转':'无旋度'})`;
+  document.getElementById('fb').innerHTML=`<strong>${E.label}</strong>：${E.desc}<br>
+  左图：小方块代表微元，边界粒子展示体积变化（散度=体积变化率）。<br>
+  右图：圆圈粒子展示旋转性（旋度=微元角速度的2倍）。`;
+}
+
+function initParticles(){
+  const E=EXAMPLES[example];
+  // Div particles: square of particles around each center
+  divParticles=[];
+  for(let ci=-1;ci<=1;ci++) for(let cj=-1;cj<=1;cj++){
+    const cx=ci,cy=cj;
+    const r=0.3;
+    // 8 particles on boundary
+    for(let k=0;k<8;k++){
+      const ang=2*Math.PI*k/8;
+      divParticles.push({
+        x:cx+r*Math.cos(ang),y:cy+r*Math.sin(ang),
+        cx,cy,r,ang,
+        baseAng:ang,alive:true,age:0,maxAge:120
+      });
+    }
+  }
+
+  // Curl particles: rings around centers
+  curlParticles=[];
+  for(let ci=-1;ci<=1;ci++) for(let cj=-1;cj<=1;cj++){
+    const cx=ci,cy=cj;
+    const r=0.3;
+    for(let k=0;k<8;k++){
+      const ang=2*Math.PI*k/8;
+      curlParticles.push({x:cx+r*Math.cos(ang),y:cy+r*Math.sin(ang),cx,cy,ang,r,alive:true,age:0,maxAge:150});
+    }
+  }
+}
+
+function setupCanvases(){
+  const dpr=window.devicePixelRatio||1;
+  [cvsD,cvsC].forEach(cv=>{const r=cv.getBoundingClientRect();cv.width=r.width*dpr;cv.height=H*dpr;cv.getContext('2d').scale(dpr,dpr);cv.style.height=H+'px';});
+}
+
+function project(x,y,W){
+  const cx=W/2,cy=H/2,scale=W*0.12;
+  return [cx+x*scale,cy-y*scale];
+}
+
+function animate(){
+  const E=EXAMPLES[example];
+  const wd=cvsD.getBoundingClientRect().width;
+  const wc=cvsC.getBoundingClientRect().width;
+
+  ctxD.fillStyle='rgba(10,10,20,0.15)';ctxD.fillRect(0,0,wd,H);
+  ctxC.fillStyle='rgba(10,10,20,0.15)';ctxC.fillRect(0,0,wc,H);
+
+  const dt=0.03;
+
+  // Div particles
+  divParticles.forEach(p=>{
+    p.age++;
+    if(p.age>p.maxAge){
+      p.age=0;
+      p.r=0.3;
+    }
+    const [fx,fy]=E.F(p.x,p.y);
+    p.x+=fx*dt*0.08;p.y+=fy*dt*0.08;
+    // Compute relative displacement from center
+    const rx=p.x-p.cx,ry=p.y-p.cy;
+    const [px,py]=project(p.x,p.y,wd);
+    const alpha=Math.min(0.9,p.age/10)*Math.max(0,(p.maxAge-p.age)/20);
+    const d=E.div(p.cx,p.cy);
+    const hue=d>0?210:d<0?0:120;
+    ctxD.fillStyle=`hsla(${hue},80%,60%,${alpha})`;
+    ctxD.beginPath();ctxD.arc(px,py,2,0,Math.PI*2);ctxD.fill();
+  });
+
+  // Curl particles
+  curlParticles.forEach(p=>{
+    p.age++;
+    if(p.age>p.maxAge){p.age=0;p.ang=p.ang+0.1;}
+    const c=E.curl(p.cx,p.cy);
+    p.ang+=c*dt*0.3;
+    const [fx,fy]=E.F(p.x,p.y);
+    p.x+=fx*dt*0.05;p.y+=fy*dt*0.05;
+    // Keep on ring
+    const dx=p.x-p.cx,dy=p.y-p.cy;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist>0.05){p.x=p.cx+dx/dist*p.r;p.y=p.cy+dy/dist*p.r;}
+    const [px,py]=project(p.cx+p.r*Math.cos(p.ang),p.cy+p.r*Math.sin(p.ang),wc);
+    const alpha=Math.min(0.9,p.age/10)*Math.max(0,(p.maxAge-p.age)/20);
+    const c2=E.curl(p.cx,p.cy);
+    const hue=c2>0?120:c2<0?0:200;
+    ctxC.fillStyle=`hsla(${hue},80%,60%,${alpha})`;
+    ctxC.beginPath();ctxC.arc(px,py,2,0,Math.PI*2);ctxC.fill();
+  });
+
+  // Draw arrows on both
+  [[ctxD,wd],[ctxC,wc]].forEach(([ctx2,W])=>{
+    const gn=8;
+    for(let i=0;i<=gn;i++) for(let j=0;j<=gn;j++){
+      const x=(i/gn-0.5)*4,y=(j/gn-0.5)*4;
+      const [fx,fy]=E.F(x,y);
+      const len=Math.sqrt(fx*fx+fy*fy);
+      if(!isFinite(len)||len<1e-6) continue;
+      const s=0.08;
+      const [px1,py1]=project(x,y,W);
+      const [px2,py2]=project(x+fx/Math.max(len,0.5)*s,y+fy/Math.max(len,0.5)*s,W);
+      ctx2.strokeStyle='rgba(255,255,255,0.15)';ctx2.lineWidth=1;
+      ctx2.beginPath();ctx2.moveTo(px1,py1);ctx2.lineTo(px2,py2);ctx2.stroke();
+    }
+  });
+
+  animId=requestAnimationFrame(animate);
+}
+
+window.addEventListener('resize',()=>{setupCanvases();initParticles();});
+setupCanvases();
+setExample('source_curl',document.querySelector('.ex-btn'));
+animate();
+</script>
+</body>
+</html>

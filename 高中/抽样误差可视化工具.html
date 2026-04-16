@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>抽样误差可视化工具 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="统计">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="模拟">
+  <meta name="desc" content="多次重复抽样演示抽样误差，直观理解样本均值的波动性与样本量的关系">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .ctrl-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .ctrl-group{display:flex;flex-direction:column;gap:4px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);display:flex;justify-content:space-between;}
+    .ctrl-label strong{font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);width:100%;}
+    .btn-row{display:flex;gap:8px;margin-top:4px;}
+    .btn{padding:8px 20px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-family:'Noto Sans SC',sans-serif;font-weight:700;}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-secondary{background:var(--surface);border:2px solid var(--border);color:var(--ink2);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .stat-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;text-align:center;}
+    .stat-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--blue);}
+    .stat-lbl{font-size:11px;color:var(--ink2);margin-top:2px;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 统计 · 认知动作：模拟</div>
+  <h1>抽样误差可视化工具</h1>
+  <p class="sub">多次重复抽样，观察样本均值的波动规律</p>
+</header>
+<main>
+  <div class="ctrl-panel">
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>样本量 n</span><strong id="nLbl">30</strong></div>
+      <input type="range" id="slN" min="5" max="200" step="5" value="30" oninput="updateLabels()">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>总体均值 μ</span><strong id="muLbl">50</strong></div>
+      <input type="range" id="slMu" min="10" max="90" step="5" value="50" oninput="updateLabels()">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>总体标准差 σ</span><strong id="sigmaLbl">10</strong></div>
+      <input type="range" id="slSigma" min="2" max="30" step="1" value="10" oninput="updateLabels()">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>重复次数</span><strong>100次</strong></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="runSimulation()">抽样100次</button>
+        <button class="btn btn-secondary" onclick="clearSim()">清除</button>
+      </div>
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="stats-row" id="statsRow">
+    <div class="stat-item"><div class="stat-val" id="sv1">—</div><div class="stat-lbl">总体均值 μ</div></div>
+    <div class="stat-item"><div class="stat-val" id="sv2">—</div><div class="stat-lbl">样本均值均值</div></div>
+    <div class="stat-item"><div class="stat-val" id="sv3">—</div><div class="stat-lbl">样本均值标准差</div></div>
+    <div class="stat-item"><div class="stat-val" id="sv4">—</div><div class="stat-lbl">理论值 σ/√n</div></div>
+  </div>
+  <div class="fb" id="fb">点击"抽样100次"按钮开始模拟，观察样本均值的分布规律。</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 抽样误差只有"多次抽样"才能真正感受
+// PEDAGOGY V3 分步揭示: 每次点击累积100次抽样结果
+// PEDAGOGY V8 概念反馈: 解释标准误差公式 σ/√n
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=280;
+let allMeans=[];
+
+function normalRandom(){
+  // Box-Muller transform
+  let u=0,v=0;
+  while(u===0) u=Math.random();
+  while(v===0) v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function updateLabels(){
+  document.getElementById('nLbl').textContent=document.getElementById('slN').value;
+  document.getElementById('muLbl').textContent=document.getElementById('slMu').value;
+  document.getElementById('sigmaLbl').textContent=document.getElementById('slSigma').value;
+}
+
+function runSimulation(){
+  const n=parseInt(document.getElementById('slN').value);
+  const mu=parseFloat(document.getElementById('slMu').value);
+  const sigma=parseFloat(document.getElementById('slSigma').value);
+  for(let t=0;t<100;t++){
+    let sum=0;
+    for(let i=0;i<n;i++) sum+=mu+sigma*normalRandom();
+    allMeans.push(sum/n);
+  }
+  draw();
+  updateStats();
+}
+
+function clearSim(){
+  allMeans=[];
+  draw();
+  document.getElementById('fb').textContent='点击"抽样100次"按钮开始模拟，观察样本均值的分布规律。';
+  ['sv1','sv2','sv3','sv4'].forEach(id=>document.getElementById(id).textContent='—');
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const mu=parseFloat(document.getElementById('slMu').value);
+  const sigma=parseFloat(document.getElementById('slSigma').value);
+  const n=parseInt(document.getElementById('slN').value);
+  const se=sigma/Math.sqrt(n);
+
+  const pad={l:50,r:20,t:30,b:40};
+  const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+
+  // X range: mu ± 4*sigma (population) and mu ± 4*se (sample means)
+  const xMin=mu-4*sigma, xMax=mu+4*sigma;
+  const range=xMax-xMin;
+
+  function toX(v){return pad.l+(v-xMin)/range*cw;}
+  function toY(p){return pad.t+ch-p*ch;}
+
+  // Grid
+  ctx.strokeStyle='#e4e2da';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+  ctx.beginPath();ctx.moveTo(pad.l,toY(0.5));ctx.lineTo(W-pad.r,toY(0.5));ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Population distribution curve
+  ctx.strokeStyle='#c8c5be';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+  ctx.beginPath();
+  let first=true;
+  for(let i=0;i<=200;i++){
+    const x=xMin+i/200*range;
+    const y=Math.exp(-0.5*((x-mu)/sigma)**2)/(sigma*Math.sqrt(2*Math.PI));
+    const yScaled=y*sigma*2.5*0.8; // normalize to ~0.8 height
+    if(first){ctx.moveTo(toX(x),toY(yScaled));first=false;}
+    else ctx.lineTo(toX(x),toY(yScaled));
+  }
+  ctx.stroke();ctx.setLineDash([]);
+
+  // Population curve label
+  ctx.fillStyle='#a8a69f';ctx.font=`10px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center';ctx.fillText('总体分布 N(μ,σ²)',toX(mu+sigma*1.8),toY(0.5));
+
+  // Histogram of sample means
+  if(allMeans.length>0){
+    const bins=30;
+    const histMin=mu-4*se,histMax=mu+4*se;
+    const binW=(histMax-histMin)/bins;
+    const counts=new Array(bins).fill(0);
+    allMeans.forEach(m=>{
+      const bi=Math.floor((m-histMin)/binW);
+      if(bi>=0&&bi<bins) counts[bi]++;
+    });
+    const maxCount=Math.max(...counts);
+    counts.forEach((c,i)=>{
+      if(c===0) return;
+      const x1=toX(histMin+i*binW);
+      const x2=toX(histMin+(i+1)*binW);
+      const barH=(c/maxCount)*0.85*ch;
+      ctx.fillStyle='#2a5c8f44';
+      ctx.fillRect(x1,pad.t+ch-barH,x2-x1-1,barH);
+      ctx.strokeStyle='#2a5c8f';ctx.lineWidth=1;
+      ctx.strokeRect(x1,pad.t+ch-barH,x2-x1-1,barH);
+    });
+
+    // Theoretical sampling distribution curve
+    ctx.strokeStyle='#2a5c8f';ctx.lineWidth=2.5;
+    ctx.beginPath();first=true;
+    for(let i=0;i<=200;i++){
+      const x=xMin+i/200*range;
+      const y=Math.exp(-0.5*((x-mu)/se)**2)/(se*Math.sqrt(2*Math.PI));
+      const yScaled=y*se*2.5*0.85;
+      if(first){ctx.moveTo(toX(x),toY(yScaled));first=false;}
+      else ctx.lineTo(toX(x),toY(yScaled));
+    }
+    ctx.stroke();
+  }
+
+  // μ line
+  ctx.strokeStyle='#854f0b';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(toX(mu),pad.t);ctx.lineTo(toX(mu),pad.t+ch);ctx.stroke();
+  ctx.fillStyle='#854f0b';ctx.font=`bold 11px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText('μ='+mu,toX(mu),pad.t+2);
+
+  // X axis
+  ctx.strokeStyle='#6b6860';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(pad.l,pad.t+ch);ctx.lineTo(W-pad.r,pad.t+ch);ctx.stroke();
+  ctx.fillStyle='#a8a69f';ctx.font=`9px 'JetBrains Mono',monospace`;
+  for(let x=Math.ceil(xMin/10)*10;x<=xMax;x+=10){
+    const px=toX(x);
+    if(px<pad.l||px>W-pad.r) continue;
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(x,px,pad.t+ch+4);
+  }
+
+  // Title
+  ctx.fillStyle='#6b6860';ctx.font=`11px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(`已抽 ${allMeans.length} 次，每次 n=${n}`,pad.l+4,8);
+}
+
+function updateStats(){
+  const mu=parseFloat(document.getElementById('slMu').value);
+  const sigma=parseFloat(document.getElementById('slSigma').value);
+  const n=parseInt(document.getElementById('slN').value);
+  const se=sigma/Math.sqrt(n);
+
+  const avg=allMeans.reduce((a,b)=>a+b,0)/allMeans.length;
+  const std=Math.sqrt(allMeans.reduce((s,m)=>s+(m-avg)**2,0)/allMeans.length);
+
+  document.getElementById('sv1').textContent=mu.toFixed(1);
+  document.getElementById('sv2').textContent=avg.toFixed(2);
+  document.getElementById('sv3').textContent=std.toFixed(3);
+  document.getElementById('sv4').textContent=se.toFixed(3);
+
+  const relErr=Math.abs(std-se)/se*100;
+  document.getElementById('fb').innerHTML=
+    `<strong>抽样误差</strong>：即使从同一总体抽样，每次的样本均值都不同，这种差异叫"抽样误差"。<br>
+    <strong>关键规律</strong>：样本均值的标准差 ≈ σ/√n = ${sigma}/√${n} = ${se.toFixed(3)}。<br>
+    当前实验：样本均值标准差=${std.toFixed(3)}，与理论值误差${relErr.toFixed(1)}%。<br>
+    <strong>增大n</strong>：样本量越大，抽样误差越小（±误差与√n成反比）。`;
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

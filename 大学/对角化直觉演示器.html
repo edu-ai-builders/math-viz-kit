@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>对角化直觉演示器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="线性代数">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="矩阵变换与对角化：在原坐标系和特征基坐标系下对比向量变换效果，直观理解P⁻¹AP=Λ">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .matrix-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .mat-btn{padding:6px 14px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);font-family:'JetBrains Mono',monospace;}
+    .mat-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .layout{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .panel{display:flex;flex-direction:column;gap:4px;}
+    .panel-title{font-size:11px;font-weight:700;color:var(--ink2);}
+    canvas{width:100%;display:block;border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--border);}
+    .eigen-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--blue);line-height:1.8;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+    @media(max-width:520px){.layout{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 线性代数 · 认知动作：变换</div>
+  <h1>对角化直觉演示器</h1>
+  <p class="sub">在标准基和特征基两个坐标系下对比矩阵变换，理解 P⁻¹AP = Λ</p>
+</header>
+<main>
+  <div class="matrix-row">
+    <button class="mat-btn active" onclick="setMatrix('stretch',this)">拉伸矩阵</button>
+    <button class="mat-btn" onclick="setMatrix('shear',this)">剪切矩阵</button>
+    <button class="mat-btn" onclick="setMatrix('rotation',this)">旋转矩阵</button>
+    <button class="mat-btn" onclick="setMatrix('sym',this)">对称矩阵</button>
+  </div>
+  <div class="layout">
+    <div class="panel">
+      <div class="panel-title">标准基坐标系（A的作用）</div>
+      <canvas id="cvsStd"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">特征基坐标系（Λ的作用）</div>
+      <canvas id="cvsEig"></canvas>
+    </div>
+  </div>
+  <div class="eigen-box" id="eigenBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V2 表征桥接: 标准基视图和特征基视图联动，直观理解对角化的意义
+// PEDAGOGY V4 信号聚焦: 特征向量方向高亮，特征值作为缩放因子显示
+// PEDAGOGY V8 概念反馈: 解释P⁻¹AP=Λ的几何意义
+
+const cvsS=document.getElementById('cvsStd');
+const ctxS=cvsS.getContext('2d');
+const cvsE=document.getElementById('cvsEig');
+const ctxE=cvsE.getContext('2d');
+const H=260;
+const xRange=[-3,3],yRange=[-3,3];
+
+const MATRICES={
+  stretch:{
+    A:[[2,0],[0,0.5]],
+    label:'A = [[2,0],[0,0.5]]',
+    desc:'对角矩阵本身就是对角化的：特征值λ₁=2(x方向拉伸)，λ₂=0.5(y方向压缩)，特征向量即坐标轴方向。对角化在标准基下和特征基下结果完全相同。'
+  },
+  shear:{
+    A:[[1,1],[0,1]],
+    label:'A = [[1,1],[0,1]]（剪切）',
+    desc:'剪切矩阵：λ₁=λ₂=1（重特征值），只有一个线性无关特征向量，不可对角化（缺陷矩阵）。在特征基下尽可能简化，但无法完全对角化。'
+  },
+  rotation:{
+    A:[[Math.cos(Math.PI/4),-Math.sin(Math.PI/4)],[Math.sin(Math.PI/4),Math.cos(Math.PI/4)]],
+    label:'A = 旋转45°矩阵',
+    desc:'旋转矩阵：实特征值不存在（复特征值e^(±iθ)），实数域下不可对角化。在复数域可对角化，实数域中用实Jordan标准形表示。'
+  },
+  sym:{
+    A:[[3,1],[1,3]],
+    label:'A = [[3,1],[1,3]]（对称）',
+    desc:'实对称矩阵：谱定理保证可对角化，特征向量互相正交。λ₁=4, λ₂=2，特征向量为(1,1)/√2和(1,-1)/√2（45°方向）。'
+  }
+};
+
+let mat='stretch';
+
+function setupCanvases(){
+  const dpr=window.devicePixelRatio||1;
+  [cvsS,cvsE].forEach(cv=>{const r=cv.getBoundingClientRect();cv.width=r.width*dpr;cv.height=H*dpr;cv.getContext('2d').scale(dpr,dpr);cv.style.height=H+'px';});
+}
+
+function eigenDecomp(A){
+  const tr=A[0][0]+A[1][1];
+  const det=A[0][0]*A[1][1]-A[0][1]*A[1][0];
+  const disc=tr*tr-4*det;
+  if(disc<-1e-10) return null; // Complex
+  const sq=Math.sqrt(Math.max(0,disc));
+  const l1=(tr+sq)/2,l2=(tr-sq)/2;
+  function eigVec(l){
+    if(Math.abs(A[0][1])>1e-10){
+      const v=[A[0][1],l-A[0][0]];const n=Math.sqrt(v[0]**2+v[1]**2);return [v[0]/n,v[1]/n];
+    }
+    if(Math.abs(A[1][0])>1e-10){
+      const v=[l-A[1][1],A[1][0]];const n=Math.sqrt(v[0]**2+v[1]**2);return [v[0]/n,v[1]/n];
+    }
+    return l===l1?[1,0]:[0,1];
+  }
+  return {l1,l2,v1:eigVec(l1),v2:eigVec(l2)};
+}
+
+function matMul(A,v){return [A[0][0]*v[0]+A[0][1]*v[1],A[1][0]*v[0]+A[1][1]*v[1]];}
+
+function drawCanvas(ctxC,W,A,eigen,showEigenBase){
+  ctxC.clearRect(0,0,W,H);
+  const pad=30;const cw=W-2*pad,ch=H-2*pad;
+  function toX(x){return pad+(x-xRange[0])/(xRange[1]-xRange[0])*cw;}
+  function toY(y){return pad+ch*(1-(y-yRange[0])/(yRange[1]-yRange[0]));}
+
+  // Grid (unit grid or eigen-base grid)
+  if(!showEigenBase){
+    ctxC.strokeStyle='#e4e2da';ctxC.lineWidth=1;ctxC.setLineDash([2,2]);
+    for(let x=xRange[0];x<=xRange[1];x++){ctxC.beginPath();ctxC.moveTo(toX(x),pad);ctxC.lineTo(toX(x),pad+ch);ctxC.stroke();}
+    for(let y=yRange[0];y<=yRange[1];y++){ctxC.beginPath();ctxC.moveTo(pad,toY(y));ctxC.lineTo(W-pad,toY(y));ctxC.stroke();}
+  } else if(eigen){
+    // Draw eigen-base grid
+    ctxC.strokeStyle='#2a5c8f20';ctxC.lineWidth=1;
+    for(let t=-4;t<=4;t+=0.5){
+      const l1=t*eigen.v1[0],l2=t*eigen.v1[1];
+      const x1=l1-eigen.v2[0]*4,y1=l2-eigen.v2[1]*4;
+      const x2=l1+eigen.v2[0]*4,y2=l2+eigen.v2[1]*4;
+      ctxC.beginPath();ctxC.moveTo(toX(x1),toY(y1));ctxC.lineTo(toX(x2),toY(y2));ctxC.stroke();
+    }
+    for(let t=-4;t<=4;t+=0.5){
+      const l1=t*eigen.v2[0],l2=t*eigen.v2[1];
+      const x1=l1-eigen.v1[0]*4,y1=l2-eigen.v1[1]*4;
+      const x2=l1+eigen.v1[0]*4,y2=l2+eigen.v1[1]*4;
+      ctxC.beginPath();ctxC.moveTo(toX(x1),toY(y1));ctxC.lineTo(toX(x2),toY(y2));ctxC.stroke();
+    }
+  }
+  ctxC.setLineDash([]);
+
+  // Axes
+  ctxC.strokeStyle='#6b6860';ctxC.lineWidth=1.5;
+  ctxC.beginPath();ctxC.moveTo(pad,toY(0));ctxC.lineTo(W-pad,toY(0));ctxC.stroke();
+  ctxC.beginPath();ctxC.moveTo(toX(0),pad);ctxC.lineTo(toX(0),pad+ch);ctxC.stroke();
+
+  // Unit circle (before transform)
+  ctxC.strokeStyle='#a8a69f';ctxC.lineWidth=1;ctxC.setLineDash([3,3]);
+  ctxC.beginPath();
+  for(let i=0;i<=64;i++){const a=2*Math.PI*i/64;ctxC.lineTo(toX(Math.cos(a)),toY(Math.sin(a)));}
+  ctxC.stroke();ctxC.setLineDash([]);
+
+  // Transformed unit circle
+  ctxC.strokeStyle='#2a5c8f';ctxC.lineWidth=2;
+  ctxC.beginPath();
+  for(let i=0;i<=64;i++){
+    const a=2*Math.PI*i/64;
+    const [x,y]=[Math.cos(a),Math.sin(a)];
+    const [tx,ty]=matMul(A,[x,y]);
+    if(i===0) ctxC.moveTo(toX(tx),toY(ty));
+    else ctxC.lineTo(toX(tx),toY(ty));
+  }
+  ctxC.stroke();
+
+  // Standard basis vectors and transforms
+  const e1=[1,0],e2=[0,1];
+  const te1=matMul(A,e1),te2=matMul(A,e2);
+
+  function arrow(x1,y1,x2,y2,col,lbl){
+    ctxC.strokeStyle=col;ctxC.lineWidth=2;
+    ctxC.beginPath();ctxC.moveTo(toX(x1),toY(y1));ctxC.lineTo(toX(x2),toY(y2));ctxC.stroke();
+    const ang=Math.atan2(toY(y2)-toY(y1),toX(x2)-toX(x1));const hs=8;
+    ctxC.fillStyle=col;ctxC.beginPath();
+    ctxC.moveTo(toX(x2),toY(y2));ctxC.lineTo(toX(x2)-hs*Math.cos(ang-0.4),toY(y2)-hs*Math.sin(ang-0.4));
+    ctxC.lineTo(toX(x2)-hs*Math.cos(ang+0.4),toY(y2)-hs*Math.sin(ang+0.4));ctxC.closePath();ctxC.fill();
+    ctxC.font=`bold 11px 'JetBrains Mono',monospace`;ctxC.textAlign='center';ctxC.textBaseline='middle';
+    ctxC.fillText(lbl,toX(x2)+10,toY(y2)-10);
+  }
+  ctxC.setLineDash([4,3]);ctxC.strokeStyle='#c8c5be';ctxC.lineWidth=1;
+  ctxC.beginPath();ctxC.moveTo(toX(e1[0]),toY(e1[1]));ctxC.lineTo(toX(te1[0]),toY(te1[1]));ctxC.stroke();
+  ctxC.beginPath();ctxC.moveTo(toX(e2[0]),toY(e2[1]));ctxC.lineTo(toX(te2[0]),toY(te2[1]));ctxC.stroke();
+  ctxC.setLineDash([]);
+  arrow(0,0,te1[0],te1[1],'#2a5c8f','Ae₁');
+  arrow(0,0,te2[0],te2[1],'#0f6e56','Ae₂');
+
+  // Eigenvectors
+  if(eigen){
+    const s=2.5;
+    ctxC.strokeStyle='#dc2626';ctxC.lineWidth=2.5;
+    ctxC.setLineDash([5,3]);
+    ctxC.beginPath();ctxC.moveTo(toX(-eigen.v1[0]*s),toY(-eigen.v1[1]*s));ctxC.lineTo(toX(eigen.v1[0]*s),toY(eigen.v1[1]*s));ctxC.stroke();
+    ctxC.beginPath();ctxC.moveTo(toX(-eigen.v2[0]*s),toY(-eigen.v2[1]*s));ctxC.lineTo(toX(eigen.v2[0]*s),toY(eigen.v2[1]*s));ctxC.stroke();
+    ctxC.setLineDash([]);
+    ctxC.fillStyle='#dc2626';ctxC.font=`10px 'JetBrains Mono',monospace`;
+    ctxC.textAlign='center';ctxC.fillText(`λ₁=${eigen.l1.toFixed(2)}`,toX(eigen.v1[0]*s)+15,toY(eigen.v1[1]*s));
+    ctxC.fillText(`λ₂=${eigen.l2.toFixed(2)}`,toX(eigen.v2[0]*s)+15,toY(eigen.v2[1]*s));
+  }
+}
+
+function setMatrix(k,btn){
+  mat=k;
+  document.querySelectorAll('.mat-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function draw(){
+  const M=MATRICES[mat];const A=M.A;
+  const eigen=eigenDecomp(A);
+  const Ws=cvsS.getBoundingClientRect().width;
+  const We=cvsE.getBoundingClientRect().width;
+
+  drawCanvas(ctxS,Ws,A,eigen,false);
+  drawCanvas(ctxE,We,A,eigen,true);
+
+  if(eigen){
+    document.getElementById('eigenBox').innerHTML=
+      `矩阵 ${M.label}\n特征值：λ₁=${eigen.l1.toFixed(4)}，λ₂=${eigen.l2.toFixed(4)}\n特征向量：v₁=(${eigen.v1.map(v=>v.toFixed(3))}), v₂=(${eigen.v2.map(v=>v.toFixed(3))})\nΛ = P⁻¹AP = [[${eigen.l1.toFixed(2)},0],[0,${eigen.l2.toFixed(2)}]]`;
+  } else {
+    document.getElementById('eigenBox').innerHTML=`矩阵 ${M.label}\n实特征值：不存在（复特征值或重特征值），实数域不可对角化`;
+  }
+  document.getElementById('fb').innerHTML=`<strong>对角化</strong>：${M.desc}<br>左图：A作用于单位圆（灰色虚线→蓝色实线）；右图：在特征基坐标系下，变换是沿特征向量方向的纯缩放。红色虚线为特征向量方向。`;
+}
+
+window.addEventListener('resize',()=>{setupCanvases();draw();});
+setupCanvases();draw();
+</script>
+</body>
+</html>

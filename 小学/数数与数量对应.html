@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数数与数量对应 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="数与运算">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="点击苹果逐个计数，数字与实物一一对应高亮，建立数量与符号的直觉联系">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#fff8f0;--surface:#fff;--ink:#2a1a00;--ink2:#7a5a30;--border:#f0d8b0;--teal:#0a7a50;--teal-light:#d0f0e0;--amber:#c06000;--amber-light:#fff0d0;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:540px;padding:20px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:20px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:540px;padding:14px 20px 28px;display:flex;flex-direction:column;gap:10px;}
+    .section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+    .count-display{font-size:72px;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--amber);text-align:center;line-height:1;padding:10px 0;}
+    .count-word{font-size:18px;text-align:center;color:var(--ink2);margin-bottom:6px;}
+    .dots-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:8px 0;}
+    .dot{width:28px;height:28px;border-radius:50%;background:var(--border);border:2px solid transparent;transition:all .2s;}
+    .dot.filled{background:var(--amber);border-color:var(--amber);}
+    .objects-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:4px;}
+    .obj-btn{font-size:32px;background:var(--surface);border:3px solid var(--border);border-radius:var(--radius-sm);padding:8px;cursor:pointer;transition:all .2s;text-align:center;user-select:none;}
+    .obj-btn.counted{background:var(--teal-light);border-color:var(--teal);}
+    .obj-btn.counted::after{content:'✓';position:absolute;top:2px;right:4px;font-size:11px;color:var(--teal);}
+    .obj-btn{position:relative;}
+    .ctrl-row{display:flex;gap:8px;justify-content:center;}
+    .btn{padding:10px 24px;border:none;border-radius:var(--radius-sm);font-size:15px;font-family:'Noto Sans SC',sans-serif;font-weight:700;cursor:pointer;}
+    .btn-reset{background:var(--surface);border:2px solid var(--border);color:var(--ink2);}
+    .btn-new{background:var(--amber);color:#fff;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 数与运算 · 认知动作：比较</div>
+  <h1>数数与数量对应</h1>
+  <p class="sub">点击每个物体计数，数字与实物一一对应</p>
+</header>
+<main>
+  <div class="section">
+    <div class="count-display" id="countDisplay">0</div>
+    <div class="count-word" id="countWord">（还没有开始数）</div>
+    <div class="dots-row" id="dotsRow"></div>
+  </div>
+  <div class="section">
+    <div style="font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:8px;">点击下面的物体，一个一个数清楚：</div>
+    <div class="objects-grid" id="objGrid"></div>
+  </div>
+  <div class="ctrl-row">
+    <button class="btn btn-reset" onclick="reset()">重新数</button>
+    <button class="btn btn-new" onclick="newSet()">换一批</button>
+  </div>
+  <div class="fb" id="fb">点击上面的物体开始计数，每点一个数字加1。</div>
+</main>
+<script>
+// PEDAGOGY V5 操作先于符号: 先点击物体，再看数字，建立一一对应
+// PEDAGOGY V6 动作—数学一致: 点击=计入，一个动作对应+1
+// PEDAGOGY V8 概念反馈: "你数了X个苹果，所以这里有X个"
+
+const SETS = [
+  {emoji:'🍎',name:'苹果'},
+  {emoji:'🐱',name:'小猫'},
+  {emoji:'⭐',name:'星星'},
+  {emoji:'🌸',name:'花朵'},
+  {emoji:'🐟',name:'小鱼'},
+  {emoji:'🍭',name:'糖果'},
+  {emoji:'🐶',name:'小狗'},
+  {emoji:'🎈',name:'气球'},
+];
+
+const WORDS = ['零','一','二','三','四','五','六','七','八','九','十'];
+
+let setIdx = 0;
+let total = 0;
+let counted = 0;
+let countedSet = new Set();
+
+function newSet() {
+  setIdx = (setIdx + 1) % SETS.length;
+  total = Math.floor(Math.random()*7)+3; // 3-9
+  reset();
+  render();
+}
+
+function reset() {
+  counted = 0;
+  countedSet = new Set();
+  render();
+}
+
+function render() {
+  const s = SETS[setIdx];
+  // Dots row
+  const dotsRow = document.getElementById('dotsRow');
+  dotsRow.innerHTML = '';
+  for(let i=0;i<total;i++){
+    const d = document.createElement('div');
+    d.className = 'dot'+(i<counted?' filled':'');
+    dotsRow.appendChild(d);
+  }
+  // Objects grid
+  const grid = document.getElementById('objGrid');
+  grid.innerHTML = '';
+  for(let i=0;i<total;i++){
+    const btn = document.createElement('button');
+    btn.className='obj-btn'+(countedSet.has(i)?' counted':'');
+    btn.textContent=s.emoji;
+    btn.onclick=()=>countObj(i);
+    grid.appendChild(btn);
+  }
+  // Count display
+  document.getElementById('countDisplay').textContent = counted;
+  document.getElementById('countWord').textContent = counted===0?'（点击物体开始数）':`第 ${WORDS[counted]||counted} 个`;
+  // Feedback
+  const fb = document.getElementById('fb');
+  if(counted===0) fb.innerHTML=`一共有 ${total} 个${s.name}，请从左到右逐个点击，点一个数一个。`;
+  else if(counted<total) fb.innerHTML=`已经数了 <strong>${counted}</strong> 个${s.name}，还剩 <strong>${total-counted}</strong> 个没数。`;
+  else fb.innerHTML=`<strong>数完了！</strong>一共有 <strong>${total}</strong> 个${s.name}。"${total}"这个数字就代表了这 ${total} 个物体——这就是数字与数量的对应。`;
+}
+
+function countObj(i) {
+  if(countedSet.has(i)) return; // already counted
+  countedSet.add(i);
+  counted++;
+  render();
+}
+
+// Init
+total = 5;
+render();
+</script>
+</body>
+</html>

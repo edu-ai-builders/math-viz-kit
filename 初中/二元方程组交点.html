@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>二元一次方程组交点 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="方程组">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="两直线实时联动，交点就是方程组的解，理解代数与几何的统一">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .layout{display:grid;grid-template-columns:240px 1fr;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:12px;}
+    .eq-block{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 12px;}
+    .eq-block.eq2{background:var(--amber-light);}
+    .eq-title{font-size:12px;font-weight:700;margin-bottom:6px;}
+    .eq-display{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;margin-bottom:8px;}
+    .sl-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+    .sl-name{font-size:12px;color:var(--ink2);min-width:16px;}
+    .sl-val{font-size:13px;font-family:'JetBrains Mono',monospace;min-width:36px;text-align:right;color:var(--blue);}
+    input[type=range]{flex:1;accent-color:var(--blue);cursor:pointer;}
+    .info-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;}
+    .info-title{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .info-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--teal);}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:560px){.layout{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 方程组 · 认知动作：比较</div>
+  <h1>二元一次方程组交点</h1>
+  <p class="sub">两条直线的交点 = 方程组的解——代数解与几何图形的统一</p>
+</header>
+<main>
+  <div class="layout">
+    <div class="controls">
+      <!-- 方程1 -->
+      <div class="eq-block">
+        <div class="eq-title" style="color:var(--blue)">直线①（蓝）</div>
+        <div class="eq-display" id="eq1disp" style="color:var(--blue)">y = 1x + 0</div>
+        <div class="sl-row">
+          <span class="sl-name">k₁</span>
+          <input type="range" id="k1" min="-4" max="4" step="0.5" value="1">
+          <span class="sl-val" id="k1v">1</span>
+        </div>
+        <div class="sl-row">
+          <span class="sl-name">b₁</span>
+          <input type="range" id="b1" min="-6" max="6" step="0.5" value="0">
+          <span class="sl-val" id="b1v">0</span>
+        </div>
+      </div>
+      <!-- 方程2 -->
+      <div class="eq-block eq2">
+        <div class="eq-title" style="color:var(--amber)">直线②（橙）</div>
+        <div class="eq-display" id="eq2disp" style="color:var(--amber)">y = -1x + 4</div>
+        <div class="sl-row">
+          <span class="sl-name">k₂</span>
+          <input type="range" id="k2" min="-4" max="4" step="0.5" value="-1">
+          <span class="sl-val" id="k2v">-1</span>
+        </div>
+        <div class="sl-row">
+          <span class="sl-name">b₂</span>
+          <input type="range" id="b2" min="-6" max="6" step="0.5" value="4">
+          <span class="sl-val" id="b2v">4</span>
+        </div>
+      </div>
+      <!-- Info cards -->
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="info-title">交点 x</div>
+          <div class="info-val" id="solX">—</div>
+        </div>
+        <div class="info-card">
+          <div class="info-title">交点 y</div>
+          <div class="info-val" id="solY">—</div>
+        </div>
+      </div>
+    </div>
+    <canvas id="cvs"></canvas>
+  </div>
+  <div class="fb" id="fb">调整两条直线的斜率和截距，观察交点的变化。交点坐标就是同时满足两个方程的解。</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 代数解与几何交点的统一只有动态联动才能体现
+// PEDAGOGY V2 表征桥接: 方程式 ↔ 图形 ↔ 解的数值，三种表征同步
+// PEDAGOGY V4 信号聚焦: 蓝=直线①, 橙=直线②, 绿=交点（唯一含义）
+// PEDAGOGY V6 动作-数学一致: 拖动k=斜率旋转, 拖动b=上下平移
+// PEDAGOGY V7 单一认知动作: 比较（两直线何时相交）
+// PEDAGOGY V8 概念反馈: 揭示"交点=同时满足两方程的唯一x,y值"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 420;
+const C = {
+  blue:'#2a5c8f', blueL:'#e8f0f8', teal:'#0f6e56', tealL:'#e1f5ee',
+  amber:'#854f0b', amberL:'#faeeda', amberD:'#c47a0e',
+  ink:'#1a1814', ink2:'#6b6860', ink3:'#a8a69f', border:'#e4e2da', surf:'#fff'
+};
+
+function setup(){
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr; ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function getParams(){
+  return {
+    k1: parseFloat(document.getElementById('k1').value),
+    b1: parseFloat(document.getElementById('b1').value),
+    k2: parseFloat(document.getElementById('k2').value),
+    b2: parseFloat(document.getElementById('b2').value)
+  };
+}
+
+function solve(k1,b1,k2,b2){
+  // k1*x + b1 = k2*x + b2  =>  x(k1-k2) = b2-b1
+  const denom = k1 - k2;
+  if(Math.abs(denom) < 1e-9) return null; // parallel
+  const x = (b2-b1)/denom;
+  const y = k1*x + b1;
+  return {x, y};
+}
+
+function fmtNum(v){ return v===0?'0':v.toFixed(2).replace(/\.?0+$/,''); }
+
+function draw(){
+  const W = cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const {k1,b1,k2,b2} = getParams();
+  const margin = {left:44, right:16, top:16, bottom:40};
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+  const xRange = 8, yRange = 8;
+  const ox = margin.left, oy = margin.top;
+  const xToP = x => ox + (x+xRange)/(2*xRange)*plotW;
+  const yToP = y => oy + (yRange-y)/(2*yRange)*plotH;
+
+  // Grid
+  ctx.strokeStyle = C.border; ctx.lineWidth = 0.5;
+  for(let i=-xRange;i<=xRange;i++){
+    ctx.beginPath(); ctx.moveTo(xToP(i),oy); ctx.lineTo(xToP(i),oy+plotH); ctx.stroke();
+  }
+  for(let i=-yRange;i<=yRange;i++){
+    ctx.beginPath(); ctx.moveTo(ox,yToP(i)); ctx.lineTo(ox+plotW,yToP(i)); ctx.stroke();
+  }
+
+  // Axes
+  ctx.strokeStyle = C.ink2; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(ox, yToP(0)); ctx.lineTo(ox+plotW, yToP(0)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(xToP(0), oy); ctx.lineTo(xToP(0), oy+plotH); ctx.stroke();
+
+  // Axis labels
+  ctx.fillStyle = C.ink2; ctx.font=`11px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let i=-xRange;i<=xRange;i+=2){
+    if(i!==0) ctx.fillText(String(i), xToP(i), yToP(0)+4);
+  }
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(let i=-yRange;i<=yRange;i+=2){
+    if(i!==0) ctx.fillText(String(i), ox-4, yToP(i));
+  }
+  ctx.fillStyle=C.ink2; ctx.font=`bold 12px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillText('x', ox+plotW+10, yToP(0)-6);
+  ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText('y', xToP(0)+4, oy-10);
+
+  // Draw line 1 (blue)
+  ctx.strokeStyle = C.blue; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(ox, yToP(k1*(-xRange)+b1));
+  ctx.lineTo(ox+plotW, yToP(k1*xRange+b1));
+  ctx.stroke();
+
+  // Draw line 2 (amber)
+  ctx.strokeStyle = C.amberD; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(ox, yToP(k2*(-xRange)+b2));
+  ctx.lineTo(ox+plotW, yToP(k2*xRange+b2));
+  ctx.stroke();
+
+  // Line labels
+  ctx.fillStyle = C.blue; ctx.font=`bold 13px 'JetBrains Mono',monospace`;
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  const yAtRight1 = k1*xRange+b1;
+  if(yAtRight1 >= -yRange && yAtRight1 <= yRange){
+    ctx.fillText('①', ox+plotW+4, yToP(yAtRight1)-8);
+  }
+  ctx.fillStyle = C.amberD;
+  const yAtRight2 = k2*xRange+b2;
+  if(yAtRight2 >= -yRange && yAtRight2 <= yRange){
+    ctx.fillText('②', ox+plotW+4, yToP(yAtRight2)+4);
+  }
+
+  // Intersection
+  const sol = solve(k1,b1,k2,b2);
+  const solXEl = document.getElementById('solX');
+  const solYEl = document.getElementById('solY');
+  const fb = document.getElementById('fb');
+
+  if(sol && Math.abs(sol.x)<=xRange*1.5 && Math.abs(sol.y)<=yRange*1.5){
+    const px = xToP(sol.x), py = yToP(sol.y);
+    // Projection lines
+    ctx.strokeStyle = C.teal+'88'; ctx.lineWidth=1.2; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, yToP(0)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(xToP(0), py); ctx.stroke();
+    ctx.setLineDash([]);
+    // Ticks on axes
+    ctx.fillStyle = C.teal;
+    ctx.beginPath(); ctx.arc(px, yToP(0), 5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(xToP(0), py, 5, 0, Math.PI*2); ctx.fill();
+    // Intersection dot
+    ctx.fillStyle = C.surf; ctx.strokeStyle = C.teal; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(px, py, 9, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.teal;
+    ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI*2); ctx.fill();
+    // Label
+    const labelX = px > xToP(0)+60 ? px-8 : px+8;
+    const labelAlign = px > xToP(0)+60 ? 'right' : 'left';
+    ctx.fillStyle = C.teal; ctx.font=`bold 13px 'JetBrains Mono',monospace`;
+    ctx.textAlign=labelAlign; ctx.textBaseline='bottom';
+    ctx.fillText(`(${fmtNum(sol.x)}, ${fmtNum(sol.y)})`, labelX, py-6);
+
+    solXEl.textContent = fmtNum(sol.x);
+    solYEl.textContent = fmtNum(sol.y);
+    // PEDAGOGY V8
+    fb.innerHTML = `交点 <strong style="color:var(--teal)">(${fmtNum(sol.x)}, ${fmtNum(sol.y)})</strong> 同时满足两个方程：<br>① ${fmtNum(sol.y)} = ${fmtNum(k1)}×${fmtNum(sol.x)} + ${fmtNum(b1)} = <strong>${fmtNum(k1*sol.x+b1).substring(0,6)}</strong> ✓<br>② ${fmtNum(sol.y)} = ${fmtNum(k2)}×${fmtNum(sol.x)} + ${fmtNum(b2)} = <strong>${fmtNum(k2*sol.x+b2).substring(0,6)}</strong> ✓<br>这就是方程组的解！`;
+  } else {
+    solXEl.textContent = '无';
+    solYEl.textContent = '无';
+    if(!sol){
+      fb.innerHTML = '两直线<strong>平行</strong>（斜率相同，截距不同），方程组<strong>无解</strong>。两线永远不相交！';
+    } else {
+      fb.innerHTML = '交点在显示范围之外。调整参数让交点进入图形区域。';
+    }
+  }
+
+  // Update displays
+  const fmt = v => v===0?'0':(v>0?'+'+fmtNum(v):fmtNum(v));
+  document.getElementById('eq1disp').textContent = `y = ${fmtNum(k1)}x ${fmt(b1)}`;
+  document.getElementById('eq2disp').textContent = `y = ${fmtNum(k2)}x ${fmt(b2)}`;
+}
+
+['k1','b1','k2','b2'].forEach(id=>{
+  const sl = document.getElementById(id);
+  const lbl = document.getElementById(id+'v');
+  sl.addEventListener('input', ()=>{ lbl.textContent = sl.value; draw(); });
+});
+
+window.addEventListener('resize',()=>{ setup(); draw(); });
+setup(); draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>一元二次不等式图像解题器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="不等式">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="抛物线开口+x轴交点动态联动，高亮区间即解集，三种判别式情况全覆盖">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .ctrl-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+    .ctrl-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--blue);margin-bottom:4px;}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    .op-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .op-btn{padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);transition:all .2s;font-weight:700;}
+    .op-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .answer-box{background:var(--surface);border:2px solid var(--blue);border-radius:var(--radius-sm);padding:12px 16px;font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--blue);text-align:center;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 不等式 · 认知动作：变换</div>
+  <h1>一元二次不等式图像解题器</h1>
+  <p class="sub">观察抛物线与 x 轴的关系，直接读出不等式的解集</p>
+</header>
+<main>
+  <div class="ctrl-grid">
+    <div class="ctrl-box">
+      <div class="ctrl-label">a（开口方向）</div>
+      <div class="ctrl-val" id="aVal">a = 1</div>
+      <input type="range" id="aSlider" min="-3" max="3" step="0.5" value="1" oninput="update()">
+    </div>
+    <div class="ctrl-box">
+      <div class="ctrl-label">b</div>
+      <div class="ctrl-val" id="bVal">b = -3</div>
+      <input type="range" id="bSlider" min="-6" max="6" step="0.5" value="-3" oninput="update()">
+    </div>
+    <div class="ctrl-box">
+      <div class="ctrl-label">c</div>
+      <div class="ctrl-val" id="cVal">c = 2</div>
+      <input type="range" id="cSlider" min="-6" max="6" step="0.5" value="2" oninput="update()">
+    </div>
+  </div>
+  <div class="op-row">
+    <button class="op-btn active" onclick="setOp('>0',this)">ax²+bx+c &gt; 0</button>
+    <button class="op-btn" onclick="setOp('≥0',this)">ax²+bx+c ≥ 0</button>
+    <button class="op-btn" onclick="setOp('<0',this)">ax²+bx+c &lt; 0</button>
+    <button class="op-btn" onclick="setOp('≤0',this)">ax²+bx+c ≤ 0</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="answer-box" id="answer">解集：</div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 抛物线+x轴交点关系只有动态才能体现三种判别式情况
+// PEDAGOGY V4 信号聚焦: 蓝色高亮区=解集，灰色=非解集，红点=根（重要信号）
+// PEDAGOGY V5 操作先于符号: 先看高亮区域，再读解集符号
+// PEDAGOGY V6 动作-数学一致: 滑杆上下=a增大开口变窄/翻转
+// PEDAGOGY V7 单一认知动作: 变换（改变参数 → 解集如何变化）
+// PEDAGOGY V8 概念反馈: 揭示判别式Δ>0/=0/<0三种情况与解集的关系
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 320;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+let op = '>0';
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setOp(o, btn) {
+  op = o;
+  document.querySelectorAll('.op-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  update();
+}
+
+function update() {
+  const a = parseFloat(document.getElementById('aSlider').value) || 0.5;
+  const b = parseFloat(document.getElementById('bSlider').value);
+  const c = parseFloat(document.getElementById('cSlider').value);
+  document.getElementById('aVal').textContent = `a = ${a}`;
+  document.getElementById('bVal').textContent = `b = ${b}`;
+  document.getElementById('cVal').textContent = `c = ${c}`;
+  // Prevent a=0
+  const aEff = Math.abs(a) < 0.1 ? (a >= 0 ? 0.5 : -0.5) : a;
+  draw(aEff, b, c);
+}
+
+function solveQuadratic(a, b, c) {
+  const delta = b * b - 4 * a * c;
+  if (delta < 0) return { delta, roots: [] };
+  if (Math.abs(delta) < 1e-9) return { delta: 0, roots: [-b / (2 * a)] };
+  const sq = Math.sqrt(delta);
+  const r1 = (-b - sq) / (2 * a);
+  const r2 = (-b + sq) / (2 * a);
+  return { delta, roots: [Math.min(r1, r2), Math.max(r1, r2)] };
+}
+
+function getSolution(a, b, c, op) {
+  const { delta, roots } = solveQuadratic(a, b, c);
+  const incl = op.includes('=');
+  const gt = op.startsWith('>');
+
+  if (delta < 0) {
+    // No real roots
+    const fSign = a > 0 ? 1 : -1;
+    if ((gt && fSign > 0) || (!gt && fSign < 0)) return { type: 'all', text: '(-∞, +∞)（全体实数）' };
+    return { type: 'empty', text: '∅（空集）' };
+  }
+  if (Math.abs(delta) < 1e-9) {
+    const x0 = roots[0];
+    if (gt) return { type: 'point_excl', text: `x ≠ ${x0.toFixed(2)}（即 (-∞,${x0.toFixed(2)}) ∪ (${x0.toFixed(2)},+∞)）` };
+    if (incl && !gt) return { type: 'point', text: `x = ${x0.toFixed(2)}` };
+    if (!incl && !gt) return { type: 'empty', text: '∅（空集）' };
+    return { type: 'all', text: '(-∞, +∞)（全体实数）' };
+  }
+  const [x1, x2] = roots;
+  if (a > 0) {
+    if (gt) return { type: 'outer', text: `x < ${x1.toFixed(2)} 或 x > ${x2.toFixed(2)}` + (incl ? `（含端点）` : '') };
+    return { type: 'inner', text: `${incl?'[':'('}${x1.toFixed(2)}, ${x2.toFixed(2)}${incl?']':')'}` };
+  } else {
+    if (!gt) return { type: 'outer', text: `x < ${x1.toFixed(2)} 或 x > ${x2.toFixed(2)}` + (incl ? `（含端点）` : '') };
+    return { type: 'inner', text: `${incl?'[':'('}${x1.toFixed(2)}, ${x2.toFixed(2)}${incl?']':')'}` };
+  }
+}
+
+function draw(a, b, c) {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+
+  const pad = { l: 50, r: 20, t: 30, b: 50 };
+  const cw = W - pad.l - pad.r;
+  const ch = H - pad.t - pad.b;
+  const xMin = -5, xMax = 5;
+  const { delta, roots } = solveQuadratic(a, b, c);
+
+  // Compute y range
+  const samples = [];
+  for (let i = 0; i <= 100; i++) {
+    const x = xMin + i / 100 * (xMax - xMin);
+    samples.push(a * x * x + b * x + c);
+  }
+  const rawMax = Math.max(...samples.map(Math.abs));
+  const yRange = Math.min(rawMax * 1.2, 20);
+  const yMid = 0;
+
+  function toX(x) { return pad.l + (x - xMin) / (xMax - xMin) * cw; }
+  function toY(y) { return pad.t + ch / 2 - (y / yRange) * (ch / 2); }
+  const x0line = toY(0);
+
+  const sol = getSolution(a, b, c, op);
+  const gt = op.startsWith('>');
+
+  // Highlight solution region
+  ctx.save();
+  ctx.rect(pad.l, pad.t, cw, ch);
+  ctx.clip();
+
+  // Fill based on solution type
+  if (sol.type === 'all') {
+    ctx.fillStyle = C.blueL;
+    ctx.fillRect(pad.l, pad.t, cw, ch);
+  } else if (sol.type !== 'empty') {
+    // Draw column fills based on x
+    for (let px = 0; px < cw; px++) {
+      const x = xMin + px / cw * (xMax - xMin);
+      const y = a * x * x + b * x + c;
+      let inSol = false;
+      if (sol.type === 'inner') {
+        if (roots.length >= 2) {
+          const [x1, x2] = roots;
+          inSol = op.includes('=') ? (x >= x1 && x <= x2) : (x > x1 && x < x2);
+        }
+      } else if (sol.type === 'outer') {
+        if (roots.length >= 2) {
+          const [x1, x2] = roots;
+          inSol = op.includes('=') ? (x <= x1 || x >= x2) : (x < x1 || x > x2);
+        } else if (roots.length === 1) {
+          inSol = x !== roots[0];
+        }
+      } else if (sol.type === 'point_excl') {
+        inSol = roots.length > 0 && Math.abs(x - roots[0]) > 0.01;
+      }
+      if (inSol) {
+        ctx.fillStyle = C.blueL;
+        ctx.fillRect(pad.l + px, pad.t, 1, ch);
+      }
+    }
+  }
+  ctx.restore();
+
+  // Grid
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  for (let x = Math.ceil(xMin); x <= xMax; x++) {
+    const xx = toX(x);
+    ctx.beginPath(); ctx.moveTo(xx, pad.t); ctx.lineTo(xx, pad.t+ch); ctx.stroke();
+    ctx.fillStyle = C.ink3; ctx.font = `11px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(x, xx, pad.t + ch + 4);
+  }
+  ctx.setLineDash([]);
+
+  // x-axis
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(pad.l, x0line); ctx.lineTo(pad.l+cw, x0line); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t+ch); ctx.stroke();
+  // x-axis arrow
+  ctx.fillStyle = C.ink;
+  ctx.beginPath(); ctx.moveTo(pad.l+cw, x0line); ctx.lineTo(pad.l+cw-8, x0line-4); ctx.lineTo(pad.l+cw-8, x0line+4); ctx.fill();
+
+  // Parabola
+  ctx.strokeStyle = C.blue; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  let first = true;
+  for (let px = 0; px <= cw; px++) {
+    const x = xMin + px / cw * (xMax - xMin);
+    const y = a * x * x + b * x + c;
+    const yy = toY(y);
+    if (yy < pad.t - 20 || yy > pad.t + ch + 20) { first = true; continue; }
+    if (first) { ctx.moveTo(pad.l + px, yy); first = false; }
+    else ctx.lineTo(pad.l + px, yy);
+  }
+  ctx.stroke();
+
+  // Roots
+  roots.forEach(x => {
+    const xx = toX(x), yy = x0line;
+    ctx.fillStyle = C.amber;
+    ctx.beginPath(); ctx.arc(xx, yy, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = C.amber; ctx.font = `bold 11px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(`x=${x.toFixed(2)}`, xx, yy - 8);
+  });
+
+  // Labels
+  ctx.fillStyle = C.ink; ctx.font = `bold 13px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  const aSign = a >= 0 ? '' : '';
+  ctx.fillText(`f(x) = ${a}x² ${b>=0?'+':''}${b}x ${c>=0?'+':''}${c}`, pad.l + 4, 6);
+  ctx.fillStyle = C.ink2; ctx.font = `12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'right';
+  const deltaText = delta < 0 ? 'Δ < 0（无实根）' : delta === 0 ? 'Δ = 0（重根）' : `Δ = ${delta.toFixed(2)} > 0（两根）`;
+  ctx.fillText(deltaText, W - pad.r, 6);
+
+  // Update answer
+  document.getElementById('answer').textContent = `解集：${sol.text}`;
+
+  // Feedback
+  let fb = '';
+  const opStr = op.replace('>0','> 0').replace('≥0','≥ 0').replace('<0','< 0').replace('≤0','≤ 0');
+  if (delta < 0 && a > 0) {
+    fb = `Δ < 0 且 a > 0：抛物线<strong>整体在 x 轴上方</strong>，f(x) > 0 对所有 x 成立，f(x) < 0 无解。`;
+  } else if (delta < 0 && a < 0) {
+    fb = `Δ < 0 且 a < 0：抛物线<strong>整体在 x 轴下方</strong>，f(x) < 0 对所有 x 成立，f(x) > 0 无解。`;
+  } else if (Math.abs(delta) < 1e-9) {
+    fb = `Δ = 0：抛物线与 x 轴<strong>相切</strong>（只有一个根），f(x) ≥ 0 或 ≤ 0 时端点要区别对待。`;
+  } else if (a > 0) {
+    fb = `Δ > 0 且 a > 0（开口向上）：<strong>两根之间 f(x) < 0</strong>，两根之外 f(x) > 0。<br>蓝色高亮区域即当前不等式 f(x) ${opStr} 的解集。`;
+  } else {
+    fb = `Δ > 0 且 a < 0（开口向下）：<strong>两根之间 f(x) > 0</strong>，两根之外 f(x) < 0。<br>规律与 a > 0 相反！注意开口方向决定解集形状。`;
+  }
+  document.getElementById('fb').innerHTML = `<strong>数形结合解题法</strong>：${fb}`;
+}
+
+window.addEventListener('resize', () => { setup(); update(); });
+setup(); update();
+</script>
+</body>
+</html>

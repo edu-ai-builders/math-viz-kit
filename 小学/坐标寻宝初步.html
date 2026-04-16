@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>坐标寻宝 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="坐标系">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="投影">
+  <meta name="desc" content="在坐标系中点击找宝藏，建立(x,y)坐标与位置的直觉联系">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:480px;padding:20px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:3px 10px;display:inline-block;margin-bottom:6px;}
+    h1{font-size:20px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:3px;}
+    main{width:100%;max-width:480px;padding:12px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .score-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:12px;color:var(--ink2);}
+    .stat-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:crosshair;}
+    .hint-card{background:var(--amber-light);border-left:4px solid var(--amber);border-radius:var(--radius-sm);padding:10px 14px;font-size:14px;}
+    .btn-row{display:flex;gap:8px;}
+    .btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .btn.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .btn:hover:not(:disabled){background:var(--blue-light);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:10px 14px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 坐标系 · 认知动作：投影</div>
+  <h1>坐标寻宝初步</h1>
+  <p class="sub">找到宝藏！点击格子输入坐标，建立位置与数字的联系</p>
+</header>
+<main>
+  <div class="score-row">
+    <div class="stat"><div class="stat-lbl">关卡</div><div class="stat-val" id="levelVal" style="color:var(--blue)">1</div></div>
+    <div class="stat"><div class="stat-lbl">剩余机会</div><div class="stat-val" id="chancesVal" style="color:var(--amber)">3</div></div>
+    <div class="stat"><div class="stat-lbl">总分</div><div class="stat-val" id="scoreVal" style="color:var(--teal)">0</div></div>
+  </div>
+  <div class="hint-card" id="hintCard">🗺️ 宝藏在 <strong id="hintCoord">?</strong>，点击找到它！</div>
+  <canvas id="cvs"></canvas>
+  <div class="btn-row">
+    <button class="btn primary" onclick="newGame()">新游戏</button>
+    <button class="btn" onclick="toggleHelp()">显示/隐藏投影线</button>
+  </div>
+  <div class="fb" id="fb">坐标 (x, y) 表示横向x格、纵向y格的位置。先数横（x轴），再数纵（y轴）！</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 点击位置→坐标读取是静态图无法传达的动作
+// PEDAGOGY V3 分步揭示: 先给坐标提示，再让用户找点击位置
+// PEDAGOGY V5 操作先于符号: 先点击再显示坐标值
+// PEDAGOGY V6 动作-数学一致: 向右=x增大，向上=y增大
+// PEDAGOGY V7 单一认知动作: 投影（从点到轴）
+// PEDAGOGY V8 概念反馈: 揭示 x=横向格数, y=纵向格数
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const GRID = 8; // 8×8 grid (0-7 range)
+const H = 380;
+
+const C = {
+  blue:'#2a5c8f', blueL:'#e8f0f8', teal:'#0f6e56', tealL:'#e1f5ee',
+  amber:'#854f0b', amberL:'#faeeda', red:'#b84040',
+  ink:'#1a1814', ink2:'#6b6860', ink3:'#a8a69f', border:'#e4e2da', surf:'#fff'
+};
+
+let target = {x:0, y:0};
+let level = 1, chances = 3, score = 0;
+let clicks = []; // {x,y,correct}
+let showProjection = true;
+let hoverPt = null;
+let margin = {left:40, right:20, top:20, bottom:40};
+
+function setup(){
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr; ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function gridRange(){ return {lo:0, hi:Math.min(2+level, GRID)}; }
+
+function newGame(){
+  level=1; chances=3; score=0; clicks=[];
+  const r = gridRange();
+  target = {x: Math.floor(Math.random()*(r.hi+1)), y: Math.floor(Math.random()*(r.hi+1))};
+  updateUI();
+  draw();
+  document.getElementById('fb').textContent = '坐标 (x, y) 表示横向x格、纵向y格的位置。先数横（x轴），再数纵（y轴）！';
+}
+
+function newRound(){
+  clicks = [];
+  const r = gridRange();
+  target = {x: Math.floor(Math.random()*(r.hi+1)), y: Math.floor(Math.random()*(r.hi+1))};
+  updateUI();
+  draw();
+}
+
+function updateUI(){
+  document.getElementById('levelVal').textContent = level;
+  document.getElementById('chancesVal').textContent = chances;
+  document.getElementById('scoreVal').textContent = score;
+  document.getElementById('hintCoord').textContent = `(${target.x}, ${target.y})`;
+}
+
+function toggleHelp(){
+  showProjection = !showProjection;
+  draw();
+}
+
+function ptToCanvas(gx, gy, W){
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+  const cellW = plotW / gridRange().hi;
+  const cellH = plotH / gridRange().hi;
+  return {
+    x: margin.left + gx * cellW,
+    y: margin.top + plotH - gy * cellH
+  };
+}
+
+function canvasToPt(cx2, cy2, W){
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+  const cellW = plotW / gridRange().hi;
+  const cellH = plotH / gridRange().hi;
+  const gx = Math.round((cx2 - margin.left) / cellW);
+  const gy = Math.round((H - margin.top - margin.bottom - (cy2 - margin.top)) / cellH);
+  return {x:gx, y:gy};
+}
+
+function draw(){
+  const W = cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const r = gridRange();
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+  const cellW = plotW / r.hi;
+  const cellH = plotH / r.hi;
+
+  // Background grid cells (alternating very subtle)
+  for(let gx=0;gx<r.hi;gx++){
+    for(let gy=0;gy<r.hi;gy++){
+      const px = margin.left + gx*cellW;
+      const py = margin.top + (r.hi-1-gy)*cellH;
+      ctx.fillStyle = (gx+gy)%2===0 ? '#f0ede5' : C.surf;
+      ctx.fillRect(px, py, cellW, cellH);
+    }
+  }
+
+  // Grid lines
+  ctx.strokeStyle = C.border; ctx.lineWidth = 0.8;
+  for(let i=0;i<=r.hi;i++){
+    // vertical
+    ctx.beginPath(); ctx.moveTo(margin.left+i*cellW, margin.top); ctx.lineTo(margin.left+i*cellW, margin.top+plotH); ctx.stroke();
+    // horizontal
+    ctx.beginPath(); ctx.moveTo(margin.left, margin.top+i*cellH); ctx.lineTo(margin.left+plotW, margin.top+i*cellH); ctx.stroke();
+  }
+
+  // Axes
+  ctx.strokeStyle = C.ink2; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(margin.left, margin.top+plotH); ctx.lineTo(margin.left+plotW+10, margin.top+plotH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(margin.left, margin.top+plotH); ctx.lineTo(margin.left, margin.top-10); ctx.stroke();
+
+  // Axis arrows
+  ctx.fillStyle = C.ink2;
+  ctx.beginPath(); ctx.moveTo(margin.left+plotW+10, margin.top+plotH); ctx.lineTo(margin.left+plotW+4, margin.top+plotH-5); ctx.lineTo(margin.left+plotW+4, margin.top+plotH+5); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(margin.left, margin.top-10); ctx.lineTo(margin.left-5, margin.top-4); ctx.lineTo(margin.left+5, margin.top-4); ctx.fill();
+
+  // Axis labels
+  ctx.fillStyle = C.ink2; ctx.font = `bold 14px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('x', margin.left+plotW+20, margin.top+plotH);
+  ctx.fillText('y', margin.left, margin.top-20);
+
+  // Tick labels
+  ctx.fillStyle = C.ink2; ctx.font = `13px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let i=0;i<=r.hi;i++){
+    const px = margin.left + i*cellW;
+    ctx.fillText(String(i), px, margin.top+plotH+6);
+  }
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(let i=0;i<=r.hi;i++){
+    const py = margin.top + (r.hi-i)*cellH;
+    ctx.fillText(String(i), margin.left-6, py);
+  }
+
+  // Hover projection
+  if(hoverPt && showProjection){
+    const hp = ptToCanvas(hoverPt.x, hoverPt.y, W);
+    ctx.strokeStyle = C.blue+'66'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(hp.x, hp.y); ctx.lineTo(hp.x, margin.top+plotH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hp.x, hp.y); ctx.lineTo(margin.left, hp.y); ctx.stroke();
+    ctx.setLineDash([]);
+    // Dot on axes
+    ctx.fillStyle = C.blue+'aa';
+    ctx.beginPath(); ctx.arc(hp.x, margin.top+plotH, 5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(margin.left, hp.y, 5, 0, Math.PI*2); ctx.fill();
+  }
+
+  // Past clicks
+  for(const cl of clicks){
+    const p = ptToCanvas(cl.x, cl.y, W);
+    ctx.fillStyle = cl.correct ? C.teal : C.red+'aa';
+    ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font=`bold 12px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(cl.correct?'✓':'✗', p.x, p.y);
+  }
+
+  // Hover dot
+  if(hoverPt){
+    const hp = ptToCanvas(hoverPt.x, hoverPt.y, W);
+    ctx.strokeStyle = C.blue; ctx.lineWidth=2; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(hp.x, hp.y, 12, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = C.blue+'44';
+    ctx.beginPath(); ctx.arc(hp.x, hp.y, 12, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = C.blue; ctx.font=`bold 12px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(`(${hoverPt.x},${hoverPt.y})`, hp.x, hp.y);
+  }
+}
+
+cvs.addEventListener('mousemove', e=>{
+  const rect = cvs.getBoundingClientRect();
+  const sx = (e.clientX-rect.left) * (cvs.width/rect.width) / (window.devicePixelRatio||1);
+  const sy = (e.clientY-rect.top) * (cvs.height/rect.height) / (window.devicePixelRatio||1);
+  const r = gridRange();
+  const pt = canvasToPt(sx, sy, cvs.getBoundingClientRect().width);
+  if(pt.x>=0&&pt.x<=r.hi&&pt.y>=0&&pt.y<=r.hi){
+    hoverPt = pt;
+  } else {
+    hoverPt = null;
+  }
+  draw();
+});
+
+cvs.addEventListener('mouseleave', ()=>{ hoverPt=null; draw(); });
+
+cvs.addEventListener('click', e=>{
+  const rect = cvs.getBoundingClientRect();
+  const sx = (e.clientX-rect.left);
+  const sy = (e.clientY-rect.top);
+  const W = rect.width;
+  const pt = canvasToPt(sx, sy, W);
+  const r = gridRange();
+  if(pt.x<0||pt.x>r.hi||pt.y<0||pt.y>r.hi) return;
+
+  const correct = (pt.x===target.x && pt.y===target.y);
+  clicks.push({x:pt.x, y:pt.y, correct});
+
+  if(correct){
+    score += chances*10;
+    // PEDAGOGY V8
+    document.getElementById('fb').innerHTML = `🎉 找到了！宝藏在 <strong>(${target.x}, ${target.y})</strong>，x = 横向 ${target.x} 格，y = 纵向 ${target.y} 格。<br>坐标就是<strong>先数横（x），再数纵（y）</strong>的门牌号！得分 +${chances*10}`;
+    updateUI();
+    draw();
+    level++;
+    chances = 3;
+    if(level>8){
+      document.getElementById('fb').innerHTML += '<br><strong>🏆 恭喜通关！你已掌握坐标系！</strong>';
+    } else {
+      setTimeout(()=>newRound(), 1500);
+    }
+  } else {
+    chances--;
+    if(chances<=0){
+      // Reveal treasure
+      const tp = ptToCanvas(target.x, target.y, cvs.getBoundingClientRect().width);
+      document.getElementById('fb').innerHTML = `宝藏在 <strong>(${target.x}, ${target.y})</strong>，机会用完了。x = ${target.x} 格（横），y = ${target.y} 格（纵）。再试一次！`;
+      updateUI();
+      draw();
+      // Draw treasure
+      const W = cvs.getBoundingClientRect().width;
+      const p = ptToCanvas(target.x, target.y, W);
+      ctx.fillStyle = C.amber;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 14, 0, Math.PI*2); ctx.fill();
+      ctx.font = '18px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('💎', p.x, p.y);
+      chances = 3;
+      setTimeout(()=>newRound(), 2000);
+    } else {
+      const diffX = pt.x - target.x;
+      const diffY = pt.y - target.y;
+      const hints = [];
+      if(diffX > 0) hints.push('再往左（x减小）');
+      else if(diffX < 0) hints.push('再往右（x增大）');
+      if(diffY > 0) hints.push('再往下（y减小）');
+      else if(diffY < 0) hints.push('再往上（y增大）');
+      document.getElementById('fb').innerHTML = `你点了 (${pt.x}, ${pt.y})，不对！${hints.join('，')}。还有 <strong>${chances}</strong> 次机会。`;
+      updateUI();
+    }
+    draw();
+  }
+});
+
+window.addEventListener('resize',()=>{ setup(); draw(); });
+setup(); newGame();
+</script>
+</body>
+</html>

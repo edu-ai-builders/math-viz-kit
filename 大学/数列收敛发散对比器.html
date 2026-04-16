@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数列收敛发散对比器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="数列极限">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="多种数列动态生成点列，误差带ε收缩，直观感受收敛和发散的区别">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .seq-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .seq-btn{padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);font-weight:700;transition:all .2s;text-align:center;}
+    .seq-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .ctrl-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--blue);margin-bottom:4px;}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 数列极限 · 认知动作：比较</div>
+  <h1>数列收敛发散对比器</h1>
+  <p class="sub">调整 ε 误差带，观察哪些数列最终进入并留在带内——收敛的定义</p>
+</header>
+<main>
+  <div class="seq-row">
+    <button class="seq-btn active" onclick="setSeq(0,this)">1/n<br><small>收敛→0</small></button>
+    <button class="seq-btn" onclick="setSeq(1,this)">(-1)ⁿ/n<br><small>收敛→0</small></button>
+    <button class="seq-btn" onclick="setSeq(2,this)">(-1)ⁿ<br><small>发散</small></button>
+    <button class="seq-btn" onclick="setSeq(3,this)">(n+1)/n<br><small>收敛→1</small></button>
+    <button class="seq-btn" onclick="setSeq(4,this)">√n-√(n-1)<br><small>收敛→0</small></button>
+    <button class="seq-btn" onclick="setSeq(5,this)">n·sin(n)<br><small>发散</small></button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="ctrl-box">
+    <div class="ctrl-label">ε 误差带宽度（收敛定义中"任意ε"）</div>
+    <div class="ctrl-val" id="epsVal">ε = 0.200</div>
+    <input type="range" id="epsSlider" min="0.02" max="0.8" step="0.01" value="0.2" oninput="update()">
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: ε带收缩与点列关系只有动态才能感受"无论多小的ε，最终都进入带内"
+// PEDAGOGY V3 分步揭示: 先看点列，再显示极限线，再调ε带
+// PEDAGOGY V4 信号聚焦: 蓝点=在ε带内，红点=在ε带外，橙线=极限值
+// PEDAGOGY V7 单一认知动作: 比较（收敛 vs 发散的点列行为）
+// PEDAGOGY V8 概念反馈: "收敛≡对任意ε>0，存在N，使n>N时|aₙ-L|<ε"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 300;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da'
+};
+
+const SEQS = [
+  { label:'aₙ = 1/n', a:n=>1/n, L:0, converges:true, formula:'lim 1/n = 0（经典收敛数列）' },
+  { label:'aₙ = (-1)ⁿ/n', a:n=>Math.pow(-1,n)/n, L:0, converges:true, formula:'lim (-1)ⁿ/n = 0（交错但幅度趋0）' },
+  { label:'aₙ = (-1)ⁿ', a:n=>Math.pow(-1,n), L:null, converges:false, formula:'(-1)ⁿ 在±1间永远跳动，不收敛' },
+  { label:'aₙ = (n+1)/n', a:n=>(n+1)/n, L:1, converges:true, formula:'lim (n+1)/n = lim (1+1/n) = 1' },
+  { label:'aₙ = √n-√(n-1)', a:n=>Math.sqrt(n)-Math.sqrt(n-1), L:0, converges:true, formula:'lim(√n-√(n-1)) = lim 1/(√n+√(n-1)) = 0' },
+  { label:'aₙ = n·sin(n)', a:n=>n*Math.sin(n), L:null, converges:false, formula:'n·sin(n) 无界振荡，不收敛' },
+];
+
+let seqIdx = 0;
+const N = 60; // number of terms
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr;
+  ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function setSeq(i, btn) {
+  seqIdx = i;
+  document.querySelectorAll('.seq-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  update();
+}
+
+function update() {
+  const eps = parseFloat(document.getElementById('epsSlider').value);
+  document.getElementById('epsVal').textContent = `ε = ${eps.toFixed(3)}`;
+  draw(eps);
+  updateFeedback(eps);
+}
+
+function draw(eps) {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0,0,W,H);
+  const seq = SEQS[seqIdx];
+
+  const pad = {l:60, r:15, t:20, b:35};
+  const cw = W-pad.l-pad.r;
+  const ch = H-pad.t-pad.b;
+
+  // Compute terms and y range
+  const terms = [];
+  for(let n=1;n<=N;n++) terms.push({n, a:seq.a(n)});
+  const yVals = terms.map(t=>t.a);
+  const yMax = Math.max(...yVals.map(Math.abs))*1.3 + (seq.converges?eps*2:0);
+  const yMin = -yMax;
+
+  function toX(n){return pad.l+(n-1)/(N-1)*cw;}
+  function toY(y){return pad.t+ch/2-y/(yMax)*ch/2;}
+
+  // ε band
+  if(seq.converges && seq.L !== null){
+    const L=seq.L, y1=toY(L+eps), y2=toY(L-eps);
+    ctx.fillStyle=C.tealL+'80';
+    ctx.fillRect(pad.l, Math.min(y1,y2), cw, Math.abs(y2-y1));
+    // Limit line
+    ctx.strokeStyle=C.teal; ctx.lineWidth=2; ctx.setLineDash([6,3]);
+    ctx.beginPath(); ctx.moveTo(pad.l,toY(L)); ctx.lineTo(W-pad.r,toY(L)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.teal; ctx.font=`bold 11px 'JetBrains Mono',monospace`;
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(`L=${L}`, pad.l-3, toY(L));
+    // ε labels
+    ctx.fillStyle=C.teal+'aa'; ctx.font=`10px 'JetBrains Mono',monospace`;
+    ctx.textAlign='right';
+    ctx.fillText(`L+ε`, pad.l-3, toY(L+eps));
+    ctx.fillText(`L-ε`, pad.l-3, toY(L-eps));
+  }
+
+  // Grid line at 0
+  ctx.strokeStyle=C.border; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(pad.l,toY(0)); ctx.lineTo(W-pad.r,toY(0)); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Points
+  terms.forEach(({n,a}) => {
+    const inBand = seq.converges && seq.L!==null && Math.abs(a-seq.L) < eps;
+    ctx.fillStyle = inBand ? C.blue : (seq.converges?C.amber+'cc':'#dc2626cc');
+    ctx.beginPath(); ctx.arc(toX(n), toY(a), 4, 0, Math.PI*2); ctx.fill();
+  });
+
+  // Connect points with light line
+  ctx.strokeStyle=C.ink3; ctx.lineWidth=1;
+  ctx.beginPath();
+  terms.forEach(({n,a},i)=>{
+    if(i===0) ctx.moveTo(toX(n),toY(a)); else ctx.lineTo(toX(n),toY(a));
+  });
+  ctx.stroke();
+
+  // Axes
+  ctx.strokeStyle=C.ink; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,pad.t+ch); ctx.lineTo(W-pad.r,pad.t+ch); ctx.stroke();
+
+  // N threshold: first n where |aₙ-L| < eps for all subsequent n
+  if(seq.converges && seq.L!==null){
+    let N_eps=N;
+    for(let n=N;n>=1;n--){
+      if(Math.abs(seq.a(n)-seq.L)>=eps){N_eps=n+1;break;}
+      if(n===1) N_eps=1;
+    }
+    if(N_eps<=N){
+      const xx=toX(N_eps);
+      ctx.strokeStyle='#dc2626'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+      ctx.beginPath(); ctx.moveTo(xx,pad.t); ctx.lineTo(xx,pad.t+ch); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle='#dc2626'; ctx.font=`bold 11px 'JetBrains Mono',monospace`;
+      ctx.textAlign='center'; ctx.textBaseline='top';
+      ctx.fillText(`N=${N_eps}`, xx, pad.t+2);
+    }
+  }
+
+  // x-axis labels
+  [1,10,20,30,40,50,N].forEach(n=>{
+    ctx.fillStyle=C.ink3; ctx.font=`10px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(n, toX(n), pad.t+ch+4);
+  });
+
+  // y-axis labels
+  [yMin/2,0,yMax/2].forEach(y=>{
+    ctx.fillStyle=C.ink3; ctx.font=`10px 'JetBrains Mono',monospace`;
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(y.toFixed(1), pad.l-3, toY(y));
+  });
+
+  ctx.fillStyle=C.blue; ctx.font=`bold 12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText(seq.label, pad.l+4, 4);
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillStyle=C.ink2; ctx.font=`11px 'Noto Sans SC',sans-serif`;
+  ctx.fillText('n（项数）', W/2, pad.t+ch+20);
+}
+
+function updateFeedback(eps) {
+  const seq = SEQS[seqIdx];
+  let msg;
+  if(seq.converges){
+    // Find N for this eps
+    let N_eps=N+1;
+    for(let n=N;n>=1;n--){
+      if(Math.abs(seq.a(n)-seq.L)>=eps){N_eps=n+1;break;}
+      if(n===1) N_eps=1;
+    }
+    msg = `<strong>收敛数列</strong>：极限 L = ${seq.L}。<br>` +
+      `当 ε = ${eps.toFixed(3)} 时，存在 N = ${N_eps}，使得所有 n > N 的项满足 |aₙ - L| < ε（蓝点进入绿色带内）。<br>` +
+      `缩小 ε → N 变大（需要更多项才能"进带"），但始终存在这样的 N。`;
+  } else {
+    msg = `<strong>发散数列</strong>：${seq.formula}。<br>` +
+      `无论极限假设为何值 L，都存在不满足 |aₙ - L| < ε 的项（红点总会离开任何带）。<br>` +
+      `发散的数列<strong>没有极限</strong>——不存在任何一个值使得数列"最终进入并留在其周围"。`;
+  }
+  document.getElementById('fb').innerHTML =
+    `${msg}<br>${seq.formula}<br>` +
+    `<strong>ε-N 极限定义</strong>：lim aₙ = L ⟺ ∀ε>0, ∃N∈ℕ, 使得 n>N ⟹ |aₙ-L| < ε`;
+}
+
+window.addEventListener('resize',()=>{setup();update();});
+setup(); update();
+</script>
+</body>
+</html>

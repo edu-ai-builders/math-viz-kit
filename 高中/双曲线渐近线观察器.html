@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>双曲线渐近线观察器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="圆锥曲线">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="双曲线x²/a²-y²/b²=1与渐近线y=±(b/a)x，调整a/b观察曲线趋近渐近线的过程">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .mode-row{display:flex;gap:6px;}
+    .mode-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 圆锥曲线 · 认知动作：变换</div>
+  <h1>双曲线渐近线观察器</h1>
+  <p class="sub">x²/a² − y²/b² = 1 的双曲线无限趋近渐近线 y=±(b/a)x，但永不到达</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setDir('x',this)">x轴方向 x²/a²−y²/b²=1</button>
+    <button class="mode-btn" onclick="setDir('y',this)">y轴方向 y²/a²−x²/b²=1</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">a 值</div><div class="stat-val" id="sA" style="color:var(--blue)">2</div></div>
+    <div class="stat"><div class="stat-lbl">b 值</div><div class="stat-val" id="sB" style="color:var(--teal)">1.5</div></div>
+    <div class="stat"><div class="stat-lbl">渐近线斜率</div><div class="stat-val" id="sK" style="color:var(--amber)">±0.75</div></div>
+    <div class="stat"><div class="stat-lbl">焦距 c</div><div class="stat-val" id="sC" style="color:var(--ink)">2.5</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">a（实轴半长）</div>
+      <div class="sl-val" id="aLabel">2.0</div>
+      <input type="range" id="aSl" min="0.5" max="4" step="0.5" value="2">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">b（虚轴半长）</div>
+      <div class="sl-val" id="bLabel" style="color:var(--teal)">1.5</div>
+      <input type="range" id="bSl" min="0.5" max="4" step="0.5" value="1.5">
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 渐近线"趋近但不到达"只有动态才能感受
+// PEDAGOGY V3 分步揭示: 先看渐近线，再看曲线，最后看距离趋于0
+// PEDAGOGY V4 信号聚焦: 蓝=双曲线，橙=渐近线，绿=焦点
+// PEDAGOGY V7 单一认知动作: 变换（改变a/b，渐近线斜率变化）
+// PEDAGOGY V8 概念反馈: 揭示"渐近线=双曲线在无穷远处的极限行为"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=400;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+let dir='x';
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setDir(d,btn){
+  dir=d;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const a=parseFloat(document.getElementById('aSl').value);
+  const b=parseFloat(document.getElementById('bSl').value);
+  const c=Math.sqrt(a*a+b*b);
+  const RANGE=5;
+  const margin={left:44,right:24,top:16,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const xToP=x=>margin.left+(x+RANGE)/(2*RANGE)*plotW;
+  const yToP=y=>margin.top+(RANGE-y)/(2*RANGE)*plotH;
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let i=-RANGE;i<=RANGE;i++){
+    ctx.beginPath();ctx.moveTo(xToP(i),margin.top);ctx.lineTo(xToP(i),margin.top+plotH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(i));ctx.lineTo(margin.left+plotW,yToP(i));ctx.stroke();
+  }
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(0));ctx.lineTo(margin.left+plotW,yToP(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(0),margin.top);ctx.lineTo(xToP(0),margin.top+plotH);ctx.stroke();
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+  for(let i=-RANGE;i<=RANGE;i++) if(i!==0) ctx.fillText(String(i),xToP(i),yToP(0)+3);
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let i=-RANGE;i<=RANGE;i++) if(i!==0) ctx.fillText(String(i),margin.left-3,yToP(i));
+
+  // Asymptotes
+  const k=dir==='x'?b/a:a/b;
+  ctx.strokeStyle=C.amberD;ctx.lineWidth=2;ctx.setLineDash([6,4]);
+  ctx.beginPath();ctx.moveTo(xToP(-RANGE),yToP(-k*RANGE));ctx.lineTo(xToP(RANGE),yToP(k*RANGE));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(-RANGE),yToP(k*RANGE));ctx.lineTo(xToP(RANGE),yToP(-k*RANGE));ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.amberD;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='right';ctx.textBaseline='bottom';
+  ctx.fillText(`y=±${k.toFixed(2)}x`,margin.left+plotW,yToP(k*RANGE)+2);
+
+  // Auxiliary rectangle
+  if(dir==='x'){
+    ctx.strokeStyle=C.ink3;ctx.lineWidth=1;ctx.setLineDash([2,3]);
+    ctx.strokeRect(xToP(-a),yToP(b),xToP(a)-xToP(-a),yToP(-b)-yToP(b));
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.ink3;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(`a=${a}`,xToP(a),yToP(0)+3);
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(`b=${b}`,margin.left-3,yToP(b));
+  } else {
+    ctx.strokeStyle=C.ink3;ctx.lineWidth=1;ctx.setLineDash([2,3]);
+    ctx.strokeRect(xToP(-b),yToP(a),xToP(b)-xToP(-b),yToP(-a)-yToP(a));
+    ctx.setLineDash([]);
+  }
+
+  // Draw hyperbola
+  ctx.strokeStyle=C.blue;ctx.lineWidth=2.5;ctx.setLineDash([]);
+  if(dir==='x'){
+    // x²/a²-y²/b²=1 → y²=b²(x²/a²-1) for |x|>=a
+    [[1,-1],[1,1]].forEach(([xSign,ySign])=>{
+      ctx.beginPath();let first=true;
+      for(let t=a;t<=RANGE*1.2;t+=0.04){
+        const x=xSign*t;
+        const y2=b*b*(t*t/a/a-1);
+        if(y2<0){first=true;continue;}
+        const y=ySign*Math.sqrt(y2);
+        if(Math.abs(y)>RANGE*1.2){first=true;continue;}
+        first?(ctx.moveTo(xToP(x),yToP(y)),first=false):ctx.lineTo(xToP(x),yToP(y));
+      }
+      ctx.stroke();
+    });
+    // Vertices
+    ctx.fillStyle=C.blue;ctx.beginPath();ctx.arc(xToP(a),yToP(0),6,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(xToP(-a),yToP(0),6,0,Math.PI*2);ctx.fill();
+    // Foci
+    ctx.fillStyle=C.teal;ctx.beginPath();ctx.arc(xToP(c),yToP(0),6,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(xToP(-c),yToP(0),6,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=C.teal;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText(`F(${c.toFixed(1)},0)`,xToP(c),yToP(0)-8);
+    ctx.fillText(`F(-${c.toFixed(1)},0)`,xToP(-c),yToP(0)-8);
+  } else {
+    [[1,1],[1,-1]].forEach(([xSign,ySign])=>{
+      ctx.beginPath();let first=true;
+      for(let t=a;t<=RANGE*1.2;t+=0.04){
+        const y=ySign*t;
+        const x2=b*b*(t*t/a/a-1);
+        if(x2<0){first=true;continue;}
+        const x=xSign*Math.sqrt(x2);
+        if(Math.abs(x)>RANGE*1.2){first=true;continue;}
+        first?(ctx.moveTo(xToP(x),yToP(y)),first=false):ctx.lineTo(xToP(x),yToP(y));
+      }
+      ctx.stroke();
+      ctx.beginPath();first=true;
+      for(let t=a;t<=RANGE*1.2;t+=0.04){
+        const y=ySign*t;
+        const x2=b*b*(t*t/a/a-1);
+        if(x2<0){first=true;continue;}
+        const x=-xSign*Math.sqrt(x2);
+        if(Math.abs(x)>RANGE*1.2){first=true;continue;}
+        first?(ctx.moveTo(xToP(x),yToP(y)),first=false):ctx.lineTo(xToP(x),yToP(y));
+      }
+      ctx.stroke();
+    });
+  }
+
+  // Equation label
+  const eq=dir==='x'?`x²/${a}²  −  y²/${b}²  =  1`:`y²/${a}²  −  x²/${b}²  =  1`;
+  ctx.fillStyle=C.blue;ctx.font=`bold 13px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(eq,margin.left+4,margin.top+4);
+
+  // Stats
+  document.getElementById('sA').textContent=a.toFixed(1);
+  document.getElementById('sB').textContent=b.toFixed(1);
+  document.getElementById('sK').textContent=`±${k.toFixed(3)}`;
+  document.getElementById('sC').textContent=c.toFixed(3);
+  document.getElementById('aLabel').textContent=a.toFixed(1);
+  document.getElementById('bLabel').textContent=b.toFixed(1);
+
+  // Distance from curve to asymptote (at x=10a)
+  const xFar=10*a;
+  const yOnCurve=dir==='x'?b*Math.sqrt(xFar*xFar/a/a-1):undefined;
+  const yOnAsym=dir==='x'?k*xFar:undefined;
+  const gapFar=dir==='x'?Math.abs(yOnCurve-yOnAsym):0;
+
+  // PEDAGOGY V8
+  document.getElementById('fb').innerHTML=
+    `双曲线方程：${eq.replace(/\s+/g,' ')}，渐近线 y = ±${k.toFixed(3)}x。<br>` +
+    `<strong>渐近线性质：</strong>随着 x→±∞，双曲线与渐近线的距离趋近于 0，但从不相等。<br>` +
+    `(在 x=${xFar.toFixed(0)} 处，曲线与渐近线相距约 ${gapFar.toFixed(3)}，已非常接近)<br>` +
+    `<strong>几何意义：</strong>a 是顶点到中心的距离（实轴），b 决定渐近线斜率，c=√(a²+b²)=${c.toFixed(3)} 是焦距。`;
+}
+
+['aSl','bSl'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

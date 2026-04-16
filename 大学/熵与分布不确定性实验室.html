@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>熵与分布不确定性实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="概率论">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="通过拖动概率分布条形，实时计算信息熵，感受分布集中与均匀时熵值的变化">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .preset-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .preset-btn{padding:6px 14px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);}
+    .preset-btn:hover{background:var(--blue-light);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:pointer;}
+    .entropy-display{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+    .ent-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;text-align:center;}
+    .ent-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--blue);}
+    .ent-lbl{font-size:11px;color:var(--ink2);margin-top:2px;}
+    .entropy-bar-wrap{background:var(--bg);border-radius:var(--radius-sm);overflow:hidden;height:16px;margin-top:8px;}
+    .entropy-bar{height:100%;background:linear-gradient(90deg,#2a5c8f,#0f6e56);border-radius:var(--radius-sm);transition:width .3s;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 概率论 · 认知动作：比较</div>
+  <h1>熵与分布不确定性实验室</h1>
+  <p class="sub">拖动概率分布的高度，实时感受信息熵的变化</p>
+</header>
+<main>
+  <div class="preset-row">
+    <span style="font-size:12px;color:var(--ink2)">预设：</span>
+    <button class="preset-btn" onclick="loadPreset('uniform')">均匀分布（最大熵）</button>
+    <button class="preset-btn" onclick="loadPreset('certain')">确定性（最小熵）</button>
+    <button class="preset-btn" onclick="loadPreset('skewed')">偏态分布</button>
+    <button class="preset-btn" onclick="loadPreset('bimodal')">双峰分布</button>
+    <button class="preset-btn" onclick="loadPreset('gauss')">近正态</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="entropy-display">
+    <div class="ent-item">
+      <div class="ent-val" id="curEntropy">—</div>
+      <div class="ent-lbl">当前熵 H(X)</div>
+      <div class="ent-lbl" style="font-size:10px;font-family:'JetBrains Mono',monospace" id="entUnit">bits</div>
+    </div>
+    <div class="ent-item">
+      <div class="ent-val" id="maxEntropy">—</div>
+      <div class="ent-lbl">最大熵（均匀分布）</div>
+      <div class="ent-lbl" style="font-size:10px;font-family:'JetBrains Mono',monospace" id="maxEntUnit">bits</div>
+    </div>
+    <div class="ent-item">
+      <div class="ent-val" id="relEntropy">—</div>
+      <div class="ent-lbl">相对熵（占最大%）</div>
+      <div class="entropy-bar-wrap"><div class="entropy-bar" id="entropyBar" style="width:0%"></div></div>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V5 操作先于符号: 先拖动分布感受熵变化，再理解公式
+// PEDAGOGY V6 动作—数学一致: 拖高某类别=增加该类别概率
+// PEDAGOGY V8 概念反馈: 解释均匀分布最大熵的直觉
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=260;
+const N=8; // number of categories
+let probs=new Array(N).fill(1/N);
+let dragging=-1;
+
+const LABELS=['A','B','C','D','E','F','G','H'];
+const COLORS=['#2a5c8f','#0f6e56','#854f0b','#b84040','#7b3f9e','#c06000','#1a5cb5','#d97706'];
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function loadPreset(k){
+  const ps={
+    uniform:new Array(N).fill(1/N),
+    certain:[1,0,0,0,0,0,0,0],
+    skewed:[0.4,0.25,0.15,0.08,0.05,0.04,0.02,0.01],
+    bimodal:[0.15,0.25,0.1,0.02,0.02,0.1,0.25,0.11],
+    gauss:[0.02,0.08,0.16,0.24,0.24,0.16,0.08,0.02],
+  };
+  probs=[...ps[k]];
+  // Normalize
+  const sum=probs.reduce((a,b)=>a+b,0);
+  probs=probs.map(p=>p/sum);
+  draw();updateEntropy();
+}
+
+function entropy(ps){
+  return -ps.reduce((s,p)=>{if(p<1e-10) return s;return s+p*Math.log2(p);},0);
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const pad={l:15,r:15,t:20,b:40};
+  const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+  const bw=cw/N*0.75,gap=cw/N*0.25;
+
+  // Uniform line
+  ctx.strokeStyle='#c8c5be';ctx.lineWidth=1;ctx.setLineDash([4,3]);
+  const uniY=pad.t+ch*(1-1/N);
+  ctx.beginPath();ctx.moveTo(pad.l,uniY);ctx.lineTo(W-pad.r,uniY);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#a8a69f';ctx.font=`9px 'JetBrains Mono',monospace`;
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  ctx.fillText('1/N='+(1/N).toFixed(3),pad.l+45,uniY-1);
+
+  probs.forEach((p,i)=>{
+    const x=pad.l+i*cw/N+gap/2;
+    const bh=p*ch;
+    const y=pad.t+ch-bh;
+
+    // Bar
+    ctx.fillStyle=COLORS[i];
+    ctx.fillRect(x,y,bw,bh);
+    ctx.strokeStyle=COLORS[i];ctx.lineWidth=1;
+    ctx.strokeRect(x,y,bw,bh);
+
+    // Drag handle
+    ctx.fillStyle='#fff';ctx.strokeStyle=COLORS[i];ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(x+bw/2,y,7,0,Math.PI*2);ctx.fill();ctx.stroke();
+
+    // Label
+    ctx.fillStyle='#6b6860';ctx.font=`11px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(LABELS[i],x+bw/2,pad.t+ch+4);
+
+    // Probability value
+    if(p>0.03){
+      ctx.fillStyle='#fff';ctx.font=`bold 10px 'JetBrains Mono',monospace`;
+      ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText((p*100).toFixed(1)+'%',x+bw/2,y+bh-2);
+    } else {
+      ctx.fillStyle=COLORS[i];ctx.font=`10px 'JetBrains Mono',monospace`;
+      ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText((p*100).toFixed(0)+'%',x+bw/2,y-2);
+    }
+  });
+
+  // Y axis
+  ctx.strokeStyle='#6b6860';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pad.l,pad.t);ctx.lineTo(pad.l,pad.t+ch);ctx.stroke();
+  [0,0.25,0.5,0.75,1].forEach(v=>{
+    ctx.fillStyle='#a8a69f';ctx.font=`9px 'JetBrains Mono',monospace`;
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(v.toFixed(2),pad.l-3,pad.t+ch*(1-v));
+  });
+
+  updateEntropy();
+}
+
+function updateEntropy(){
+  const H_val=entropy(probs);
+  const maxH=Math.log2(N);
+  const rel=H_val/maxH*100;
+
+  document.getElementById('curEntropy').textContent=H_val.toFixed(4);
+  document.getElementById('maxEntropy').textContent=maxH.toFixed(4);
+  document.getElementById('relEntropy').textContent=rel.toFixed(1)+'%';
+  document.getElementById('entropyBar').style.width=rel+'%';
+
+  // Color entropy value
+  const hEl=document.getElementById('curEntropy');
+  hEl.style.color=rel>80?'#0f6e56':rel>40?'#854f0b':'#dc2626';
+
+  // Find dominant category
+  const maxP=Math.max(...probs);
+  const maxIdx=probs.indexOf(maxP);
+  const desc=rel>95?'分布非常均匀，不确定性最大（最大熵）':
+              rel>60?'分布较均匀，不确定性较大':
+              rel>30?'分布有偏，存在一定集中趋势':
+              '分布高度集中，不确定性很小';
+
+  document.getElementById('fb').innerHTML=
+    `<strong>信息熵 H(X) = -Σ p(x)·log₂p(x)</strong>：衡量随机变量的不确定性。<br>
+    ${desc}（当前H=${H_val.toFixed(3)} bits，最大熵=${maxH.toFixed(3)} bits）。<br>
+    <strong>关键性质</strong>：(1) 均匀分布时熵最大（log₂N=${maxH.toFixed(3)}）；(2) 确定性事件（p=1）时熵=0；(3) 熵不受重排序影响。<br>
+    向上拖动某类别高度，该类别概率增大，其他类别等比缩小，观察熵如何变化。`;
+}
+
+function getBarAtX(mx){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  const pad={l:15,r:15,t:20,b:40};
+  const cw=W-pad.l-pad.r;
+  const idx=Math.floor((mx-pad.l)/(cw/N));
+  return (idx>=0&&idx<N)?idx:-1;
+}
+
+function updateProbFromY(idx,my){
+  const r=cvs.getBoundingClientRect();
+  const pad={l:15,r:15,t:20,b:40};
+  const ch=H-pad.t-pad.b;
+  const p=Math.max(0.001,Math.min(0.999,(pad.t+ch-my)/ch));
+  const oldP=probs[idx];
+  const diff=p-oldP;
+  const others=N-1;
+  const sum_others=probs.reduce((s,v,i)=>i===idx?s:s+v,0);
+  if(sum_others<1e-6) return;
+  probs=probs.map((v,i)=>{
+    if(i===idx) return p;
+    return Math.max(1e-6,v-diff*v/sum_others);
+  });
+  // Renormalize
+  const total=probs.reduce((a,b)=>a+b,0);
+  probs=probs.map(v=>v/total);
+}
+
+cvs.addEventListener('pointerdown',e=>{
+  const r=cvs.getBoundingClientRect();
+  const mx=e.clientX-r.left,my=e.clientY-r.top;
+  dragging=getBarAtX(mx);
+  if(dragging>=0){cvs.setPointerCapture(e.pointerId);updateProbFromY(dragging,my);draw();}
+});
+cvs.addEventListener('pointermove',e=>{
+  if(dragging<0) return;
+  const r=cvs.getBoundingClientRect();
+  updateProbFromY(dragging,e.clientY-r.top);
+  draw();
+});
+cvs.addEventListener('pointerup',()=>{dragging=-1;});
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

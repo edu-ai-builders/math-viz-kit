@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>基本不等式面积模型 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="不等式">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="矩形面积模型直观展示AM-GM不等式：(a+b)/2 ≥ √(ab)，等号当且仅当a=b成立">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:640px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:640px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .slider-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+    .slider-row{margin-bottom:8px;}
+    .slider-label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px;}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .ineq-box{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;text-align:center;padding:12px;border-radius:var(--radius-sm);}
+    .ineq-gt{background:var(--blue-light);color:var(--blue);}
+    .ineq-eq{background:var(--teal-light);color:var(--teal);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 不等式 · 认知动作：比较</div>
+  <h1>基本不等式面积模型</h1>
+  <p class="sub">(a+b)/2 ≥ √(ab)，等号当 a=b 时成立</p>
+</header>
+<main>
+  <div class="slider-section">
+    <div class="slider-row">
+      <div class="slider-label"><span>a = <strong id="aVal">3.0</strong></span><span style="color:var(--blue)">算术平均 (a+b)/2 = <strong id="amVal">-</strong></span></div>
+      <input type="range" id="slA" min="0.2" max="8" step="0.1" value="3" oninput="update()">
+    </div>
+    <div class="slider-row">
+      <div class="slider-label"><span>b = <strong id="bVal">3.0</strong></span><span style="color:var(--teal)">几何平均 √(ab) = <strong id="gmVal">-</strong></span></div>
+      <input type="range" id="slB" min="0.2" max="8" step="0.1" value="3" oninput="update()">
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="ineq-box" id="ineqBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: AM-GM不等式的几何证明只有面积对比才能"看懂"
+// PEDAGOGY V4 信号聚焦: 蓝色矩形=ab（几何平均²），红色缺口=差值（AM²-GM²）
+// PEDAGOGY V7 单一认知动作: 比较（同一和a+b下，正方形面积最大）
+// PEDAGOGY V8 概念反馈: "当a=b时，矩形变成正方形，面积达到最大"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=280;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function update(){
+  const a=parseFloat(document.getElementById('slA').value);
+  const b=parseFloat(document.getElementById('slB').value);
+  document.getElementById('aVal').textContent=a.toFixed(1);
+  document.getElementById('bVal').textContent=b.toFixed(1);
+  const am=(a+b)/2, gm=Math.sqrt(a*b);
+  document.getElementById('amVal').textContent=am.toFixed(3);
+  document.getElementById('gmVal').textContent=gm.toFixed(3);
+  draw(a,b,am,gm);
+  updateInfo(a,b,am,gm);
+}
+
+function draw(a,b,am,gm){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const maxLen=8;
+  const scale=Math.min((W-80)/maxLen,(H-60)/maxLen)*0.9;
+  const ox=40,oy=H-30;
+
+  // Draw rectangle with sides a and b
+  const pw=a*scale, ph=b*scale;
+  const rx=ox+(maxLen-a)/2*scale, ry=oy-ph;
+
+  // Rectangle ab
+  ctx.fillStyle='#e8f0f8';
+  ctx.fillRect(rx,ry,pw,ph);
+  ctx.strokeStyle='#2a5c8f'; ctx.lineWidth=2;
+  ctx.strokeRect(rx,ry,pw,ph);
+
+  // Labels a and b on sides
+  ctx.fillStyle='#2a5c8f'; ctx.font=`bold 13px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText(`a=${a.toFixed(1)}`, rx+pw/2, oy+4);
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  ctx.fillText(`b=${b.toFixed(1)}`, rx-4, ry+ph/2);
+
+  // Area label
+  ctx.fillStyle='#1a5cb5'; ctx.font=`bold 14px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  if(pw>40&&ph>30) ctx.fillText(`ab=${(a*b).toFixed(2)}`, rx+pw/2, ry+ph/2);
+
+  // Square with side am (same perimeter/2, or same sum)
+  const sqS=am*scale;
+  const sx=ox+(maxLen*scale+50), sy_top=oy-sqS;
+  ctx.fillStyle='#d0f0e0';
+  ctx.fillRect(sx,sy_top,sqS,sqS);
+  ctx.strokeStyle='#0f6e56'; ctx.lineWidth=2;
+  ctx.strokeRect(sx,sy_top,sqS,sqS);
+  ctx.fillStyle='#0f6e56'; ctx.font=`bold 13px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText(`(a+b)/2=${am.toFixed(2)}`, sx+sqS/2, oy+4);
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  ctx.fillText(`(a+b)/2`, sx-4, sy_top+sqS/2);
+  ctx.fillStyle='#0f6e56'; ctx.font=`bold 12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  if(sqS>40) ctx.fillText(`AM²=${(am*am).toFixed(2)}`, sx+sqS/2, sy_top+sqS/2);
+
+  // Difference highlight
+  const diff=am*am-a*b;
+  if(diff>0.01){
+    ctx.fillStyle='#dc262640';
+    ctx.fillRect(sx,sy_top,sqS,sqS-(b*scale));
+    ctx.fillStyle='#dc2626'; ctx.font=`11px 'JetBrains Mono',monospace`;
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(`差 = ${diff.toFixed(3)}`, sx+sqS+4, sy_top+(sqS-(b*scale))/2);
+  }
+
+  // Arrow between the two shapes
+  ctx.strokeStyle='#854f0b'; ctx.lineWidth=2;
+  const midX=(rx+pw+sx)/2;
+  ctx.beginPath(); ctx.moveTo(rx+pw+8,oy-ph/2); ctx.lineTo(sx-8,oy-sqS/2); ctx.stroke();
+  ctx.fillStyle='#854f0b'; ctx.font=`bold 12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText(diff<0.01?'面积相等!':'AM²>ab', midX, oy-Math.max(ph,sqS)/2-4);
+
+  // Axes
+  ctx.strokeStyle='#6b6860'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(W-10,oy); ctx.stroke();
+}
+
+function updateInfo(a,b,am,gm){
+  const diff=am-gm;
+  const isEq=diff<0.01;
+  const box=document.getElementById('ineqBox');
+  box.className='ineq-box '+(isEq?'ineq-eq':'ineq-gt');
+  box.innerHTML=`(a+b)/2 ${isEq?'=':'>'} √(ab)　　${am.toFixed(4)} ${isEq?'=':'>'} ${gm.toFixed(4)}`;
+  document.getElementById('fb').innerHTML=
+    `<strong>基本不等式（AM-GM不等式）</strong>：对任意正数 a, b，有 <strong>(a+b)/2 ≥ √(ab)</strong>，等号当且仅当 a = b 时成立。<br>` +
+    `几何证明：左图是 a×b 的矩形，面积=ab；右图是边长为(a+b)/2的正方形，面积=((a+b)/2)²。<br>` +
+    (isEq?'<strong>此时 a = b，两图形面积相等（矩形变成正方形）。</strong>':'当 a≠b，正方形面积 > 矩形面积，即 ((a+b)/2)² > ab，开平方得 (a+b)/2 > √(ab)。')+
+    `<br>应用：已知 a+b 求 ab 的最大值，或已知 ab 求 a+b 的最小值。`;
+}
+
+window.addEventListener('resize',()=>{setup();update();});
+setup(); update();
+</script>
+</body>
+</html>

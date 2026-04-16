@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>平移与旋转变换 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="图形变换">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="拖动控制平移量和旋转角度，动画展示图形变换，理解变换的本质">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:12px;color:var(--ink2);}
+    .sl-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .mode-row{display:flex;gap:6px;}
+    .mode-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .btn{padding:9px 20px;background:var(--blue);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-family:inherit;cursor:pointer;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.controls{grid-template-columns:1fr 1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 图形变换 · 认知动作：变换</div>
+  <h1>平移与旋转变换</h1>
+  <p class="sub">调整平移量（dx, dy）和旋转角度，看图形如何运动——形状不变，位置方向改变</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('translate',this)">平移</button>
+    <button class="mode-btn" onclick="setMode('rotate',this)">旋转</button>
+    <button class="mode-btn" onclick="setMode('both',this)">平移+旋转</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">平移 dx（横向）</div>
+      <div class="sl-val" id="dxLabel">2</div>
+      <input type="range" id="dxSl" min="-5" max="5" step="0.5" value="2">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">平移 dy（纵向）</div>
+      <div class="sl-val" id="dyLabel">1</div>
+      <input type="range" id="dySl" min="-5" max="5" step="0.5" value="1">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">旋转角度 θ</div>
+      <div class="sl-val" id="rotLabel" style="color:var(--teal)">45°</div>
+      <input type="range" id="rotSl" min="0" max="360" value="45">
+    </div>
+  </div>
+  <button class="btn" onclick="playAnim()">▶ 播放动画</button>
+  <div class="fb" id="fb">调整滑杆查看变换结果，或点击"播放动画"观察连续变换过程。</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 图形变换的连续性只有动画才能展示
+// PEDAGOGY V5 操作先于符号: 先拖动看变换，再理解坐标公式
+// PEDAGOGY V6 动作-数学一致: 拖dx=图形横向移动，拖θ=图形旋转
+// PEDAGOGY V7 单一认知动作: 变换（刚体运动）
+// PEDAGOGY V8 概念反馈: 揭示"变换保持形状大小不变"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=360;
+const SCALE=40;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+// Arrow shape to show rotation direction clearly
+const SHAPE=[
+  {x:0,y:1.2},{x:0.8,y:0.4},{x:0.4,y:0.4},{x:0.4,y:-0.6},{x:-0.4,y:-0.6},{x:-0.4,y:0.4},{x:-0.8,y:0.4}
+];
+
+let mode='translate';
+let animProgress=0,animFrame=null;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setMode(m,btn){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw(1);
+}
+
+function transformPoint(p,dx,dy,rotRad,cx,cy){
+  // First rotate around (cx,cy), then translate
+  const cos=Math.cos(rotRad),sin=Math.sin(rotRad);
+  const rx=(p.x-cx)*cos-(p.y-cy)*sin+cx;
+  const ry=(p.x-cx)*sin+(p.y-cy)*cos+cy;
+  return {x:rx+dx,y:ry+dy};
+}
+
+function drawShape(pts,t,fillColor,strokeColor,alpha){
+  const W=cvs.getBoundingClientRect().width;
+  const cx=W/2,cy=H/2;
+  const canvasPts=pts.map(p=>({x:cx+p.x*SCALE,y:cy-p.y*SCALE}));
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.beginPath();
+  canvasPts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+  ctx.closePath();
+  ctx.fillStyle=fillColor;ctx.fill();
+  ctx.strokeStyle=strokeColor;ctx.lineWidth=2.5;ctx.stroke();
+  ctx.restore();
+}
+
+// Draw arrow between two shapes
+function drawTrail(from,to,color){
+  const W=cvs.getBoundingClientRect().width;
+  const cx=W/2,cy=H/2;
+  // Centroid of each
+  const c1={x:from.reduce((s,p)=>s+p.x,0)/from.length,y:from.reduce((s,p)=>s+p.y,0)/from.length};
+  const c2={x:to.reduce((s,p)=>s+p.x,0)/to.length,y:to.reduce((s,p)=>s+p.y,0)/to.length};
+  const p1={x:cx+c1.x*SCALE,y:cy-c1.y*SCALE};
+  const p2={x:cx+c2.x*SCALE,y:cy-c2.y*SCALE};
+  ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.setLineDash([5,3]);
+  ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke();
+  ctx.setLineDash([]);
+  const angle=Math.atan2(p2.y-p1.y,p2.x-p1.x);
+  ctx.fillStyle=color;
+  ctx.beginPath();ctx.moveTo(p2.x,p2.y);ctx.lineTo(p2.x-12*Math.cos(angle-0.4),p2.y-12*Math.sin(angle-0.4));ctx.lineTo(p2.x-12*Math.cos(angle+0.4),p2.y-12*Math.sin(angle+0.4));ctx.fill();
+}
+
+function draw(t){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const dx=parseFloat(document.getElementById('dxSl').value);
+  const dy=parseFloat(document.getElementById('dySl').value);
+  const rotDeg=parseInt(document.getElementById('rotSl').value);
+  const rotRad=rotDeg*Math.PI/180;
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  const cx=W/2,cy=H/2;
+  for(let x=0;x<W;x+=SCALE){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=SCALE){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();
+
+  // Origin center of shape
+  const sc={x:0,y:0};
+
+  // Compute transformed shape based on mode and t (0→1 = animation progress)
+  let tdx=0,tdy=0,trot=0;
+  if(mode==='translate'||mode==='both') { tdx=dx*t; tdy=dy*t; }
+  if(mode==='rotate'||mode==='both') trot=rotRad*t;
+
+  const transformed=SHAPE.map(p=>transformPoint(p,tdx,tdy,trot,sc.x,sc.y));
+
+  // Draw rotation center
+  if(mode==='rotate'||mode==='both'){
+    ctx.fillStyle=C.amber+'88';
+    ctx.beginPath();ctx.arc(cx+sc.x*SCALE,cy-sc.y*SCALE,8,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle=C.amber;ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(cx+sc.x*SCALE,cy-sc.y*SCALE,8,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle=C.amber;ctx.font=`12px 'Noto Sans SC',sans-serif`;ctx.textAlign='left';ctx.textBaseline='bottom';
+    ctx.fillText('旋转中心',cx+sc.x*SCALE+10,cy-sc.y*SCALE-4);
+  }
+
+  // Original (ghost)
+  drawShape(SHAPE,0,C.blueL+'88',C.blue+'66',0.5);
+  // Transformed
+  drawShape(transformed,t,C.tealL,C.teal,1.0);
+
+  // Trail arrow
+  if(t>0.05) drawTrail(SHAPE,transformed,C.amber);
+
+  // Labels
+  ctx.fillStyle=C.blue+'88';ctx.font=`bold 12px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='top';
+  const c1x=cx+SHAPE.reduce((s,p)=>s+p.x,0)/SHAPE.length*SCALE;
+  const c1y=cy-SHAPE.reduce((s,p)=>s+p.y,0)/SHAPE.length*SCALE;
+  ctx.fillText('原图形',c1x,c1y+20);
+  ctx.fillStyle=C.teal;
+  const c2x=cx+transformed.reduce((s,p)=>s+p.x,0)/transformed.length*SCALE;
+  const c2y=cy-transformed.reduce((s,p)=>s+p.y,0)/transformed.length*SCALE;
+  ctx.fillText('变换后',c2x,c2y+20);
+
+  // Update display
+  document.getElementById('dxLabel').textContent=dx.toFixed(1);
+  document.getElementById('dyLabel').textContent=dy.toFixed(1);
+  document.getElementById('rotLabel').textContent=rotDeg+'°';
+
+  // PEDAGOGY V8
+  const fb=document.getElementById('fb');
+  if(mode==='translate'){
+    fb.innerHTML=`<strong>平移</strong>：图形上每个点向右移 <strong>${dx}</strong>，向上移 <strong>${dy}</strong>。坐标变换：(x,y) → (x+${dx}, y+${dy})。<br>平移不改变图形的形状、大小、方向，只改变位置。`;
+  } else if(mode==='rotate'){
+    fb.innerHTML=`<strong>旋转</strong>：图形绕旋转中心逆时针转 <strong>${rotDeg}°</strong>。坐标变换：(x,y) → (x·cosθ−y·sinθ, x·sinθ+y·cosθ)。<br>旋转不改变形状和大小，改变方向。`;
+  } else {
+    fb.innerHTML=`<strong>平移+旋转的组合</strong>：先旋转 ${rotDeg}°，再平移 (${dx}, ${dy})。两种变换都是<strong>刚体运动</strong>（保持形状和大小不变）。`;
+  }
+}
+
+function playAnim(){
+  if(animFrame){cancelAnimationFrame(animFrame);animFrame=null;animProgress=0;}
+  const startTime=performance.now();
+  const duration=1200;
+  function animate(now){
+    animProgress=Math.min((now-startTime)/duration,1);
+    const ease=animProgress<0.5?2*animProgress*animProgress:1-Math.pow(-2*animProgress+2,2)/2;
+    draw(ease);
+    if(animProgress<1) animFrame=requestAnimationFrame(animate);
+    else {animFrame=null;draw(1);}
+  }
+  animFrame=requestAnimationFrame(animate);
+}
+
+['dxSl','dySl','rotSl'].forEach(id=>document.getElementById(id).addEventListener('input',()=>draw(1)));
+window.addEventListener('resize',()=>{setup();draw(1);});
+setup();draw(1);
+</script>
+</body>
+</html>

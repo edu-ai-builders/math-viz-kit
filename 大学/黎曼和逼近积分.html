@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>黎曼和逼近积分实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="积分">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="逼近">
+  <meta name="desc" content="用左/右矩形逼近曲线下面积，理解定积分作为黎曼和极限的本质">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .top-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+    .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;text-align:center;}
+    .stat-label{font-size:12px;color:var(--ink2);}
+    .stat-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;height:340px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:6px;}
+    .sl-label{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .method-tabs{display:flex;gap:6px;}
+    .meth-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);color:var(--ink2);transition:all .2s;}
+    .meth-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fn-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .fn-btn{padding:6px 12px;border:2px solid var(--border);border-radius:20px;font-size:13px;font-family:'JetBrains Mono',monospace;background:var(--surface);cursor:pointer;transition:all .2s;}
+    .fn-btn.active,.fn-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.top-row{grid-template-columns:1fr 1fr;}.controls{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 积分 · 认知动作：逼近</div>
+  <h1>黎曼和逼近积分实验室</h1>
+  <p class="sub">用矩形的面积之和逼近曲线下的面积——这就是定积分的本质</p>
+</header>
+<main>
+  <div class="top-row">
+    <div class="stat-card">
+      <div class="stat-label">矩形数量 n</div>
+      <div class="stat-val" id="nVal" style="color:var(--blue)">10</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">黎曼和（近似）</div>
+      <div class="stat-val" id="riemannVal" style="color:var(--amber)">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">真实积分值</div>
+      <div class="stat-val" id="trueVal" style="color:var(--teal)">—</div>
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-label">分割数量 n</div>
+      <div class="sl-val" id="nLabel">10</div>
+      <input type="range" id="nSl" min="1" max="200" value="10">
+    </div>
+    <div class="sl-row">
+      <div class="sl-label">积分方法</div>
+      <div class="method-tabs">
+        <button class="meth-btn active" onclick="setMethod('left',this)">左矩形</button>
+        <button class="meth-btn" onclick="setMethod('right',this)">右矩形</button>
+        <button class="meth-btn" onclick="setMethod('mid',this)">中点</button>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div style="font-size:13px;color:var(--ink2);margin-bottom:6px;">被积函数 f(x)，积分区间 [0, 2]：</div>
+    <div class="fn-row">
+      <button class="fn-btn active" onclick="setFn(0,this)">x²</button>
+      <button class="fn-btn" onclick="setFn(1,this)">sin(x)</button>
+      <button class="fn-btn" onclick="setFn(2,this)">eˣ</button>
+      <button class="fn-btn" onclick="setFn(3,this)">x³−x</button>
+      <button class="fn-btn" onclick="setFn(4,this)">√(4−x²)</button>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：逼近
+// V1 动态跃迁：n增大时矩形越来越细，面积和越来越接近真实值，过程可见
+// V3 分步揭示：从n=1开始，用户增大n观察逼近过程
+// V5 操作先于符号：先调滑杆看视觉逼近，再展示积分值对比
+// V6 动作-数学一致：向右拖动=n增大=矩形更细=误差更小
+// V7 单一认知动作：逼近
+// V8 概念反馈：揭示黎曼和=矩形面积之和，定积分=无穷细分后的极限
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',amberL:'#faeeda',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+const a=0, b=2; // Integration bounds
+const FNS=[
+  {fn:x=>x*x,label:'f(x)=x²',integral:()=>8/3},
+  {fn:x=>Math.sin(x),label:'f(x)=sin(x)',integral:()=>1-Math.cos(2)},
+  {fn:x=>Math.exp(x),label:'f(x)=eˣ',integral:()=>Math.E*Math.E-1},
+  {fn:x=>x*x*x-x,label:'f(x)=x³−x',integral:()=>2},
+  {fn:x=>Math.sqrt(Math.max(0,4-x*x)),label:'f(x)=√(4−x²)',integral:()=>Math.PI},
+];
+
+let fnIdx=0,n=10,method='left';
+
+function f(x){return FNS[fnIdx].fn(x);}
+function trueIntegral(){return FNS[fnIdx].integral();}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=340*dpr; ctx.scale(dpr,dpr); cvs.style.height='340px';
+}
+
+function riemannSum(){
+  const dx=(b-a)/n;
+  let sum=0;
+  for(let i=0;i<n;i++){
+    const xi=method==='left'?a+i*dx:method==='right'?a+(i+1)*dx:a+(i+0.5)*dx;
+    sum+=f(xi)*dx;
+  }
+  return sum;
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=340;
+  ctx.clearRect(0,0,W,H);
+
+  const margin={left:50,right:20,top:20,bottom:40};
+  const plotW=W-margin.left-margin.right, plotH=H-margin.top-margin.bottom;
+  const ox=margin.left, oy=margin.top;
+
+  // Find y range
+  let yMin=0, yMax=0;
+  for(let xi=a;xi<=b;xi+=0.01){const y=f(xi);if(!isNaN(y)){yMin=Math.min(yMin,y);yMax=Math.max(yMax,y);}}
+  yMax=yMax*1.2; if(yMax===yMin)yMax=yMin+1;
+  const xToP=x=>(x-a)/(b-a)*plotW+ox;
+  const yToP=y=>oy+plotH-(y-yMin)/(yMax-yMin)*plotH;
+  const dx=(b-a)/n;
+
+  // Grid
+  ctx.strokeStyle=C.border; ctx.lineWidth=0.5;
+  for(let xi=a;xi<=b;xi+=(b-a)/4){ctx.beginPath();ctx.moveTo(xToP(xi),oy);ctx.lineTo(xToP(xi),oy+plotH);ctx.stroke();}
+  const ysteps=5;
+  for(let i=0;i<=ysteps;i++){
+    const y=yMin+(yMax-yMin)*i/ysteps;
+    ctx.beginPath();ctx.moveTo(ox,yToP(y));ctx.lineTo(ox+plotW,yToP(y));ctx.stroke();
+    ctx.fillStyle=C.ink3;ctx.font=`10px 'JetBrains Mono',monospace`;ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(y.toFixed(1),ox-3,yToP(y));
+  }
+
+  // Draw rectangles
+  for(let i=0;i<n;i++){
+    const xl=a+i*dx, xr=a+(i+1)*dx;
+    const xi=method==='left'?xl:method==='right'?xr:(xl+xr)/2;
+    const yi=f(xi);
+    if(isNaN(yi))continue;
+    const alpha=n>50?0.4:0.6;
+    ctx.fillStyle=yi>=0?`rgba(42,92,143,${alpha})`:`rgba(184,64,64,${alpha})`;
+    ctx.strokeStyle=yi>=0?C.blue+'66':'rgba(184,64,64,0.4)'; ctx.lineWidth=n>20?0.5:1;
+    const rectY=Math.min(yToP(yi),yToP(0));
+    const rectH=Math.abs(yToP(yi)-yToP(0));
+    ctx.fillRect(xToP(xl),rectY,xToP(xr)-xToP(xl),rectH);
+    if(n<=20) ctx.strokeRect(xToP(xl),rectY,xToP(xr)-xToP(xl),rectH);
+  }
+
+  // Sample points
+  if(method!=='right'&&n<=30){
+    for(let i=0;i<n;i++){
+      const xi=method==='left'?a+i*dx:a+(i+0.5)*dx;
+      ctx.fillStyle=C.amber; ctx.beginPath(); ctx.arc(xToP(xi),yToP(f(xi)),3,0,Math.PI*2); ctx.fill();
+    }
+  }
+
+  // True curve
+  ctx.strokeStyle=C.ink; ctx.lineWidth=2.5;
+  ctx.beginPath();
+  for(let x=a;x<=b;x+=0.01){
+    const y=f(x); if(isNaN(y))continue;
+    const px=xToP(x),py=yToP(y);
+    x===a?ctx.moveTo(px,py):ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+
+  // x-axis
+  ctx.strokeStyle=C.ink2; ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(ox,yToP(0));ctx.lineTo(ox+plotW,yToP(0));ctx.stroke();
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+  [a,(a+b)/2,b].forEach(x=>ctx.fillText(x,xToP(x),yToP(0)+4));
+
+  // Labels
+  ctx.fillStyle=C.ink;ctx.font=`bold 13px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(FNS[fnIdx].label,ox+4,oy+4);
+
+  // Error display
+  const rs=riemannSum(), ti=trueIntegral(), err=Math.abs(rs-ti);
+  ctx.fillStyle=C.amber;ctx.font=`12px 'JetBrains Mono',monospace`;ctx.textAlign='right';ctx.textBaseline='top';
+  ctx.fillText(`误差: ${err.toFixed(6)}`,ox+plotW,oy+4);
+}
+
+function update(){
+  const rs=riemannSum(), ti=trueIntegral();
+  document.getElementById('nVal').textContent=n;
+  document.getElementById('nLabel').textContent=n;
+  document.getElementById('riemannVal').textContent=rs.toFixed(4);
+  document.getElementById('trueVal').textContent=ti.toFixed(4);
+
+  // PEDAGOGY V8
+  const err=Math.abs(rs-ti);
+  const errPct=(err/Math.abs(ti)*100).toFixed(2);
+  const fb=document.getElementById('fb');
+  fb.innerHTML=`将 [${a}, ${b}] 分成 <strong>${n}</strong> 段，每段宽 Δx = ${((b-a)/n).toFixed(4)}。<br>黎曼和 = Σ f(xᵢ)·Δx = <strong>${rs.toFixed(6)}</strong>，真实积分 = <strong>${ti.toFixed(6)}</strong>，误差 = ${err.toFixed(6)}（${errPct}%）。<br>当 n → ∞（Δx → 0），黎曼和趋近真实积分值。这就是<strong>定积分 ∫f(x)dx 的本质</strong>！`;
+  draw();
+}
+
+function setMethod(m,btn){
+  method=m;
+  document.querySelectorAll('.meth-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  update();
+}
+
+function setFn(idx,btn){
+  fnIdx=idx;
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  update();
+}
+
+document.getElementById('nSl').addEventListener('input',e=>{n=parseInt(e.target.value);update();});
+window.addEventListener('resize',()=>{setup();draw();update();});
+setup(); update();
+</script>
+</body>
+</html>

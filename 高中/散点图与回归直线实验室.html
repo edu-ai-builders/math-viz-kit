@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>散点图与回归直线实验室 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="统计">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="逼近">
+  <meta name="desc" content="点击添加数据点，最小二乘回归直线实时更新，可视化残差平方和最小化原理">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:crosshair;}
+    .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+    .btn{padding:9px 14px;border:2px solid var(--blue);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--blue);color:#fff;font-weight:600;}
+    .btn-outline{background:var(--surface);color:var(--blue);}
+    .check-row{display:flex;gap:14px;align-items:center;font-size:13px;}
+    .check-row label{display:flex;align-items:center;gap:4px;cursor:pointer;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 统计 · 认知动作：逼近</div>
+  <h1>散点图与回归直线实验室</h1>
+  <p class="sub">点击添加数据点——最小二乘法使残差平方和最小，找到最佳拟合直线</p>
+</header>
+<main>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">数据点数</div><div class="stat-val" id="nPts" style="color:var(--blue)">0</div></div>
+    <div class="stat"><div class="stat-lbl">回归斜率 k</div><div class="stat-val" id="regK" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">回归截距 b</div><div class="stat-val" id="regB" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">相关系数 r</div><div class="stat-val" id="corrR" style="color:var(--ink)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="btn-row">
+    <button class="btn" onclick="addPreset('linear')">线性数据</button>
+    <button class="btn" onclick="addPreset('scatter')">低相关数据</button>
+    <button class="btn" onclick="addPreset('neg')">负相关数据</button>
+    <button class="btn btn-outline" onclick="clearPts()">清除</button>
+  </div>
+  <div class="check-row">
+    <label><input type="checkbox" id="showResid" checked> 显示残差线</label>
+    <label><input type="checkbox" id="showSquare"> 显示残差平方</label>
+    <label><input type="checkbox" id="showMean"> 显示均值线</label>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 最小二乘的"残差平方和最小"只有可视化才能理解
+// PEDAGOGY V3 分步揭示: 先看回归线，勾选残差，再理解最小二乘原理
+// PEDAGOGY V5 操作先于符号: 先点击添加点，再看公式
+// PEDAGOGY V7 单一认知动作: 逼近（找一条直线最接近所有点）
+// PEDAGOGY V8 概念反馈: 揭示"最小二乘=使所有残差的平方和最小"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=360;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  red:'#c0392b',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+let dataPoints=[];
+const RANGE=10;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function clearPts(){dataPoints=[];draw();}
+
+function addPreset(type){
+  clearPts();
+  if(type==='linear'){
+    for(let i=0;i<12;i++){
+      const x=(Math.random()-0.5)*16;
+      const y=0.8*x+1+((Math.random()-0.5)*3);
+      dataPoints.push({x,y});
+    }
+  } else if(type==='scatter'){
+    for(let i=0;i<12;i++){
+      dataPoints.push({x:(Math.random()-0.5)*16,y:(Math.random()-0.5)*12});
+    }
+  } else {
+    for(let i=0;i<12;i++){
+      const x=(Math.random()-0.5)*16;
+      const y=-0.9*x-0.5+((Math.random()-0.5)*2);
+      dataPoints.push({x,y});
+    }
+  }
+  draw();
+}
+
+function regression(pts){
+  if(pts.length<2) return null;
+  const n=pts.length;
+  const xm=pts.reduce((s,p)=>s+p.x,0)/n;
+  const ym=pts.reduce((s,p)=>s+p.y,0)/n;
+  const sxy=pts.reduce((s,p)=>s+(p.x-xm)*(p.y-ym),0);
+  const sxx=pts.reduce((s,p)=>s+(p.x-xm)**2,0);
+  const syy=pts.reduce((s,p)=>s+(p.y-ym)**2,0);
+  if(Math.abs(sxx)<1e-10) return null;
+  const k=sxy/sxx;
+  const b=ym-k*xm;
+  const r=sxx*syy>0?sxy/Math.sqrt(sxx*syy):0;
+  const sse=pts.reduce((s,p)=>s+(p.y-(k*p.x+b))**2,0);
+  return {k,b,r,xm,ym,sse};
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const margin={left:44,right:20,top:16,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const xToP=x=>margin.left+(x+RANGE)/(2*RANGE)*plotW;
+  const yToP=y=>margin.top+(RANGE-y)/(2*RANGE)*plotH;
+  const showResid=document.getElementById('showResid').checked;
+  const showSq=document.getElementById('showSquare').checked;
+  const showMean=document.getElementById('showMean').checked;
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let i=-RANGE;i<=RANGE;i+=2){
+    ctx.beginPath();ctx.moveTo(xToP(i),margin.top);ctx.lineTo(xToP(i),margin.top+plotH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(i));ctx.lineTo(margin.left+plotW,yToP(i));ctx.stroke();
+  }
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(0));ctx.lineTo(margin.left+plotW,yToP(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(0),margin.top);ctx.lineTo(xToP(0),margin.top+plotH);ctx.stroke();
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+  for(let i=-RANGE;i<=RANGE;i+=2) ctx.fillText(String(i),xToP(i),yToP(0)+3);
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let i=-RANGE;i<=RANGE;i+=2) ctx.fillText(String(i),margin.left-3,yToP(i));
+
+  if(dataPoints.length>=2){
+    const reg=regression(dataPoints);
+    if(reg){
+      const {k,b,r,xm,ym,sse}=reg;
+
+      // Mean lines
+      if(showMean){
+        ctx.strokeStyle=C.ink3;ctx.lineWidth=1;ctx.setLineDash([5,4]);
+        ctx.beginPath();ctx.moveTo(margin.left,yToP(ym));ctx.lineTo(margin.left+plotW,yToP(ym));ctx.stroke();
+        ctx.beginPath();ctx.moveTo(xToP(xm),margin.top);ctx.lineTo(xToP(xm),margin.top+plotH);ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle=C.ink3;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+        ctx.fillText(`x̄=${xm.toFixed(2)}`,xToP(xm)+2,margin.top+2);
+        ctx.textAlign='right';ctx.textBaseline='middle';
+        ctx.fillText(`ȳ=${ym.toFixed(2)}`,margin.left-3,yToP(ym));
+      }
+
+      // Residuals
+      if(showResid||showSq){
+        dataPoints.forEach(p=>{
+          const pred=k*p.x+b;
+          const resid=p.y-pred;
+          if(showResid){
+            ctx.strokeStyle=C.red+'88';ctx.lineWidth=1.5;ctx.setLineDash([]);
+            ctx.beginPath();ctx.moveTo(xToP(p.x),yToP(p.y));ctx.lineTo(xToP(p.x),yToP(pred));ctx.stroke();
+          }
+          if(showSq){
+            const sz=Math.abs(yToP(pred)-yToP(pred+Math.abs(resid)));
+            const sy=yToP(Math.max(p.y,pred));
+            ctx.fillStyle=C.red+'22';
+            ctx.fillRect(xToP(p.x)-sz,sy,sz,sz);
+            ctx.strokeStyle=C.red+'66';ctx.lineWidth=1;
+            ctx.strokeRect(xToP(p.x)-sz,sy,sz,sz);
+          }
+        });
+      }
+
+      // Regression line
+      ctx.strokeStyle=C.teal;ctx.lineWidth=2.5;ctx.setLineDash([]);
+      ctx.beginPath();ctx.moveTo(xToP(-RANGE),yToP(k*(-RANGE)+b));ctx.lineTo(xToP(RANGE),yToP(k*RANGE+b));ctx.stroke();
+      ctx.fillStyle=C.teal;ctx.font=`bold 13px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+      ctx.fillText(`ŷ=${k.toFixed(3)}x${b>=0?'+'+b.toFixed(3):b.toFixed(3)}`,margin.left+4,margin.top+4);
+
+      // Update stats
+      document.getElementById('nPts').textContent=String(dataPoints.length);
+      document.getElementById('regK').textContent=k.toFixed(3);
+      document.getElementById('regB').textContent=b.toFixed(3);
+      document.getElementById('corrR').textContent=r.toFixed(3);
+
+      // PEDAGOGY V8
+      const strength=Math.abs(r)>0.9?'很强':Math.abs(r)>0.7?'较强':Math.abs(r)>0.4?'中等':'较弱';
+      document.getElementById('fb').innerHTML=
+        `回归方程 ŷ = ${k.toFixed(3)}x ${b>=0?'+ '+b.toFixed(3):b.toFixed(3)}（n=${dataPoints.length}）。<br>` +
+        `相关系数 r = <strong>${r.toFixed(4)}</strong>，${r>0?'正':'负'}相关，强度${strength}。r²=${(r*r).toFixed(4)}（决定系数，表示 y 变异由 x 解释的比例）。<br>` +
+        `<strong>最小二乘法</strong>：选择 k 和 b 使残差平方和 SSE=${sse.toFixed(3)} 最小。${showSq?'红色方块面积之和即为 SSE。':''}<br>` +
+        `<strong>公式</strong>：k = Σ(xᵢ-x̄)(yᵢ-ȳ) / Σ(xᵢ-x̄)²，b = ȳ - kx̄。`;
+    }
+  } else {
+    document.getElementById('fb').innerHTML='点击画布添加数据点（至少2个）。可以先加载预设数据，或自己点击创建散点图。';
+  }
+
+  // Draw data points
+  dataPoints.forEach(p=>{
+    ctx.fillStyle=C.blue;ctx.beginPath();ctx.arc(xToP(p.x),yToP(p.y),5,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(xToP(p.x),yToP(p.y),5,0,Math.PI*2);ctx.stroke();
+  });
+
+  if(dataPoints.length===0){
+    ctx.fillStyle=C.ink3;ctx.font=`16px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('点击此处添加数据点',W/2,H/2);
+  } else if(dataPoints.length===1){
+    document.getElementById('nPts').textContent='1';
+    document.getElementById('regK').textContent='—';
+    document.getElementById('regB').textContent='—';
+    document.getElementById('corrR').textContent='—';
+  }
+}
+
+cvs.addEventListener('pointerdown',e=>{
+  const rect=cvs.getBoundingClientRect();
+  const W=rect.width;
+  const margin={left:44,right:20,top:16,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const px=e.clientX-rect.left;
+  const py=e.clientY-rect.top;
+  const x=(px-margin.left)/plotW*(2*RANGE)-RANGE;
+  const y=RANGE-(py-margin.top)/plotH*(2*RANGE);
+  if(Math.abs(x)<=RANGE&&Math.abs(y)<=RANGE){
+    dataPoints.push({x:Math.round(x*10)/10,y:Math.round(y*10)/10});
+    draw();
+  }
+});
+['showResid','showSquare','showMean'].forEach(id=>document.getElementById(id).addEventListener('change',draw));
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

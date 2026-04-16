@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>轴对称折叠 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="轴对称">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="拖动对称轴和图形顶点，实时显示关于任意直线的对称图形，理解轴对称的本质">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:default;}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .shape-row{display:flex;gap:6px;}
+    .sh-btn{flex:1;padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .sh-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 轴对称 · 认知动作：变换</div>
+  <h1>轴对称折叠</h1>
+  <p class="sub">拖动对称轴角度，图形实时"折叠"到对称位置——对称的本质是翻转</p>
+</header>
+<main>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">对称轴角度</div><div class="stat-val" id="axisVal" style="color:var(--blue)">0°</div></div>
+    <div class="stat"><div class="stat-lbl">对应点到轴距离</div><div class="stat-val" id="distVal" style="color:var(--teal)">相等</div></div>
+    <div class="stat"><div class="stat-lbl">连线与轴</div><div class="stat-val" id="perpVal" style="color:var(--amber)">垂直</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">对称轴角度</div>
+      <div class="sl-val" id="axisLabel">0°</div>
+      <input type="range" id="axisSl" min="0" max="180" value="0">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">对称轴位置</div>
+      <div class="sl-val" id="axPosLabel" style="color:var(--teal)">中心</div>
+      <input type="range" id="axPosSl" min="-3" max="3" step="0.5" value="0">
+    </div>
+  </div>
+  <div class="shape-row">
+    <button class="sh-btn active" onclick="setShape(0,this)">三角形</button>
+    <button class="sh-btn" onclick="setShape(1,this)">字母 F</button>
+    <button class="sh-btn" onclick="setShape(2,this)">五角星</button>
+  </div>
+  <div class="fb" id="fb">拖动对称轴角度滑杆，观察图形的对称像。对应点到对称轴的距离相等，连线与对称轴垂直。</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 轴对称变换只有动态旋转轴才能体验
+// PEDAGOGY V6 动作-数学一致: 拖动角度=对称轴旋转=对称像跟随变化
+// PEDAGOGY V7 单一认知动作: 变换（关于直线的反射）
+// PEDAGOGY V8 概念反馈: 揭示"对称点到轴等距且连线垂直于轴"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=380;
+const SCALE=40;
+
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+// Shapes defined in grid units
+const SHAPES=[
+  [{x:0,y:3},{x:2,y:0},{x:-1,y:0}], // triangle
+  [{x:-2,y:3},{x:0,y:3},{x:0,y:1.5},{x:1,y:1.5},{x:1,y:1},{x:0,y:1},{x:0,y:0},{x:-2,y:0}], // F
+  // Five-point star
+  Array.from({length:5},(_,i)=>{
+    const a=i*4*Math.PI/5-Math.PI/2;
+    return {x:2*Math.cos(a),y:2*Math.sin(a)};
+  }).flatMap((outer,i)=>{
+    const b=(i*4+2)*Math.PI/5-Math.PI/2;
+    return [outer,{x:0.8*Math.cos(b),y:0.8*Math.sin(b)}];
+  })
+];
+
+let shapeIdx=0;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setShape(idx,btn){
+  shapeIdx=idx;
+  document.querySelectorAll('.sh-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function reflectPoint(px,py,axAngle,axOffset){
+  // Axis through (axOffset, 0) direction (cos θ, sin θ)
+  const ca=Math.cos(axAngle),sa=Math.sin(axAngle);
+  // Translate so axis passes through origin
+  const tx=px-axOffset*ca,ty=py-axOffset*sa; // wrong, let me fix
+  // Axis passes through point (axOffset*cos(axAngle+90), axOffset*sin(axAngle+90))?
+  // Let's define axis as: through point (0, axOffset) in grid, direction (cos θ, sin θ)
+  const ox=0, oy=axOffset; // point on axis
+  const dx=px-ox, dy=py-oy;
+  const dot=dx*ca+dy*sa;
+  const rx=ox+2*dot*ca-dx, ry=oy+2*dot*sa-dy;
+  return {x:rx,y:ry};
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const axDeg=parseInt(document.getElementById('axisSl').value);
+  const axOffset=parseFloat(document.getElementById('axPosSl').value);
+  const axRad=axDeg*Math.PI/180;
+
+  const cx=W/2, cy=H/2;
+  const toP=(gx,gy)=>({x:cx+gx*SCALE, y:cy-gy*SCALE});
+  const fromP=(px,py)=>({x:(px-cx)/SCALE, y:-(py-cy)/SCALE});
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let x=0;x<W;x+=SCALE){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=SCALE){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();
+
+  // Symmetry axis
+  const axCos=Math.cos(axRad),axSin=Math.sin(axRad);
+  const extend=400;
+  // Axis passes through (cx, cy-axOffset*SCALE) in canvas coords...
+  // Let's define axis as through canvas point (cx, cy-axOffset*SCALE) with direction (axCos,-axSin) since y is flipped
+  const axPx=cx, axPy=cy-axOffset*SCALE;
+  ctx.strokeStyle=C.blue;ctx.lineWidth=2.5;ctx.setLineDash([8,4]);
+  ctx.beginPath();
+  ctx.moveTo(axPx-extend*axCos,axPy+extend*axSin);
+  ctx.lineTo(axPx+extend*axCos,axPy-extend*axSin);
+  ctx.stroke();ctx.setLineDash([]);
+  // Axis label
+  ctx.fillStyle=C.blue;ctx.font=`bold 13px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText('对称轴',axPx+extend*0.7*axCos+20,axPy-extend*0.7*axSin);
+
+  // Shape
+  const shape=SHAPES[shapeIdx];
+  // Reflect
+  const reflected=shape.map(p=>{
+    // Reflect in grid space about axis through (0, axOffset) direction (axCos, axSin)
+    const ox=0,oy=axOffset;
+    const dx=p.x-ox,dy=p.y-oy;
+    const dot=dx*axCos+dy*axSin;
+    return {x:ox+2*dot*axCos-dx, y:oy+2*dot*axSin-dy};
+  });
+
+  // Draw original shape (blue)
+  function drawPolygon(pts,fillColor,strokeColor){
+    const canvasPts=pts.map(p=>toP(p.x,p.y));
+    ctx.beginPath();
+    canvasPts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+    ctx.closePath();
+    ctx.fillStyle=fillColor;ctx.fill();
+    ctx.strokeStyle=strokeColor;ctx.lineWidth=2.5;ctx.stroke();
+  }
+  drawPolygon(shape,C.blueL,C.blue);
+  drawPolygon(reflected,C.tealL,C.teal);
+
+  // Draw correspondence lines for first few vertices
+  const maxCorr=Math.min(3,shape.length);
+  for(let i=0;i<maxCorr;i++){
+    const p=toP(shape[i].x,shape[i].y);
+    const q=toP(reflected[i].x,reflected[i].y);
+    ctx.strokeStyle=C.amber+'88';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();
+    ctx.setLineDash([]);
+    // Midpoint (should be on axis)
+    const mid={x:(p.x+q.x)/2,y:(p.y+q.y)/2};
+    ctx.fillStyle=C.amber;ctx.beginPath();ctx.arc(mid.x,mid.y,4,0,Math.PI*2);ctx.fill();
+  }
+
+  // Vertex dots
+  shape.forEach(p=>{ const c=toP(p.x,p.y); ctx.fillStyle=C.blue;ctx.beginPath();ctx.arc(c.x,c.y,5,0,Math.PI*2);ctx.fill(); });
+  reflected.forEach(p=>{ const c=toP(p.x,p.y); ctx.fillStyle=C.teal;ctx.beginPath();ctx.arc(c.x,c.y,5,0,Math.PI*2);ctx.fill(); });
+
+  // Update
+  document.getElementById('axisVal').textContent=axDeg+'°';
+  document.getElementById('axisLabel').textContent=axDeg+'°';
+  const axPosV=parseFloat(document.getElementById('axPosSl').value);
+  document.getElementById('axPosLabel').textContent=axPosV===0?'中心':axPosV>0?'+'+axPosV:axPosV;
+
+  // PEDAGOGY V8
+  document.getElementById('fb').innerHTML=
+    `<strong>轴对称</strong>：蓝色图形关于对称轴（蓝色虚线）翻转得到绿色图形。<br>` +
+    `橙色点是对应点连线的中点，都在对称轴上。<strong>对应点连线垂直于对称轴，且到轴距离相等。</strong><br>` +
+    `旋转对称轴，感受不同方向的对称！`;
+}
+
+document.getElementById('axisSl').addEventListener('input',draw);
+document.getElementById('axPosSl').addEventListener('input',draw);
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

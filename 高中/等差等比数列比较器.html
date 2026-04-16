@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>等差等比数列比较器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="数列">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="并排对比等差与等比数列的点列、条形和公式，理解线性增长与指数增长的本质差异">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:900px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:900px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;}
+    .panel-title{font-size:14px;font-weight:700;margin-bottom:8px;}
+    canvas{width:100%;display:block;border-radius:var(--radius-sm);}
+    .sl-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);min-width:60px;}
+    .sl-val{font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;min-width:42px;text-align:right;}
+    input[type=range]{flex:1;accent-color:var(--blue);cursor:pointer;}
+    .formula-box{background:var(--bg);border-radius:var(--radius-sm);padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:14px;margin-top:6px;}
+    .seq-display{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin-top:4px;}
+    .diff-block{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;line-height:1.7;border-left:4px solid var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:600px){.two-col{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 数列 · 认知动作：比较</div>
+  <h1>等差等比数列比较器</h1>
+  <p class="sub">左侧等差（加法增长）vs 右侧等比（乘法增长）——同屏对比，感受指数爆炸</p>
+</header>
+<main>
+  <div class="two-col">
+    <!-- 等差数列 -->
+    <div class="panel">
+      <div class="panel-title" style="color:var(--blue)">等差数列（Arithmetic）</div>
+      <div class="sl-row">
+        <span class="sl-lbl">首项 a₁</span>
+        <input type="range" id="a1" min="1" max="20" value="2">
+        <span class="sl-val" id="a1v" style="color:var(--blue)">2</span>
+      </div>
+      <div class="sl-row">
+        <span class="sl-lbl">公差 d</span>
+        <input type="range" id="d" min="1" max="20" value="3">
+        <span class="sl-val" id="dv" style="color:var(--blue)">3</span>
+      </div>
+      <canvas id="cvs1" style="height:200px"></canvas>
+      <div class="formula-box" id="arFm" style="color:var(--blue)">aₙ = a₁ + (n−1)d</div>
+      <div class="seq-display" id="arSeq"></div>
+    </div>
+    <!-- 等比数列 -->
+    <div class="panel">
+      <div class="panel-title" style="color:var(--amber)">等比数列（Geometric）</div>
+      <div class="sl-row">
+        <span class="sl-lbl">首项 b₁</span>
+        <input type="range" id="b1" min="1" max="20" value="2">
+        <span class="sl-val" id="b1v" style="color:var(--amber)">2</span>
+      </div>
+      <div class="sl-row">
+        <span class="sl-lbl">公比 q</span>
+        <input type="range" id="q" min="1" max="5" step="0.5" value="2">
+        <span class="sl-val" id="qv" style="color:var(--amber)">2</span>
+      </div>
+      <canvas id="cvs2" style="height:200px"></canvas>
+      <div class="formula-box" id="grFm" style="color:var(--amber)">bₙ = b₁ · qⁿ⁻¹</div>
+      <div class="seq-display" id="grSeq"></div>
+    </div>
+  </div>
+  <!-- Difference comparison -->
+  <div class="diff-block" id="diffBlock"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 等差等比增速差异只有并排动态才能感受
+// PEDAGOGY V2 表征桥接: 条形图 ↔ 数列项 ↔ 公式 ↔ 增长量
+// PEDAGOGY V4 信号聚焦: 蓝=等差, 橙=等比
+// PEDAGOGY V6 动作-数学一致: 拖动d=增大增量=条形等间距增高
+// PEDAGOGY V7 单一认知动作: 比较（线性增长 vs 指数增长）
+// PEDAGOGY V8 概念反馈: 揭示"等差=每次加相同量，等比=每次乘相同倍"
+
+const H = 200;
+const N = 12; // number of terms
+
+function setup(cvs){
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr;
+  cvs.getContext('2d').scale(dpr,dpr);
+  cvs.style.height = H+'px';
+}
+
+const C = {
+  blue:'#2a5c8f', blueL:'#e8f0f8', teal:'#0f6e56', tealL:'#e1f5ee',
+  amber:'#854f0b', amberL:'#faeeda', amberD:'#c47a0e',
+  ink:'#1a1814', ink2:'#6b6860', ink3:'#a8a69f', border:'#e4e2da'
+};
+
+function drawBars(cvs, terms, color){
+  const ctx = cvs.getContext('2d');
+  const W = cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const margin = {left:10, right:10, top:20, bottom:30};
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+  const maxVal = Math.max(...terms);
+  const barW = plotW/N - 4;
+
+  for(let i=0;i<N;i++){
+    const x = margin.left + i*(plotW/N);
+    const barH = (terms[i]/maxVal) * plotH;
+    const y = margin.top + plotH - barH;
+    // Bar
+    ctx.fillStyle = color + (i===N-1?'ff':'bb');
+    ctx.beginPath(); ctx.roundRect(x+2, y, barW, barH, 3); ctx.fill();
+    // Value label (if fits)
+    if(barH > 18){
+      ctx.fillStyle = '#fff'; ctx.font=`bold 11px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+      ctx.fillText(terms[i]>999?'..':String(terms[i]), x+barW/2+2, y+3);
+    } else {
+      ctx.fillStyle = color; ctx.font=`11px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText(terms[i]>999?'..':String(terms[i]), x+barW/2+2, y-2);
+    }
+    // n label
+    ctx.fillStyle = C.ink2; ctx.font=`10px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(String(i+1), x+barW/2+2, H-margin.bottom+2);
+  }
+
+  // Dots on top (connect with line)
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash([3,2]);
+  ctx.beginPath();
+  for(let i=0;i<N;i++){
+    const x = margin.left + i*(plotW/N) + barW/2 + 2;
+    const barH = (terms[i]/maxVal) * plotH;
+    const y = margin.top + plotH - barH;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+}
+
+function getTerms(){
+  const a1 = parseInt(document.getElementById('a1').value);
+  const d = parseInt(document.getElementById('d').value);
+  const b1 = parseInt(document.getElementById('b1').value);
+  const q = parseFloat(document.getElementById('q').value);
+  const ar = [], gr = [];
+  for(let n=1;n<=N;n++){
+    ar.push(a1 + (n-1)*d);
+    gr.push(Math.round(b1 * Math.pow(q, n-1)));
+  }
+  return {ar, gr, a1, d, b1, q};
+}
+
+function draw(){
+  const {ar, gr, a1, d, b1, q} = getTerms();
+  const cvs1 = document.getElementById('cvs1');
+  const cvs2 = document.getElementById('cvs2');
+
+  drawBars(cvs1, ar, C.blue);
+  drawBars(cvs2, gr, C.amberD);
+
+  // Update formula
+  document.getElementById('arFm').textContent = `aₙ = ${a1} + (n−1)×${d} = ${d}n + ${a1-d}`;
+  document.getElementById('grFm').textContent = `bₙ = ${b1} × ${q}ⁿ⁻¹`;
+
+  // Sequences
+  document.getElementById('arSeq').textContent = '前12项: ' + ar.join(', ');
+  document.getElementById('grSeq').textContent = '前12项: ' + gr.map(v=>v>99999?'很大':v).join(', ');
+
+  // Difference at n=12
+  const an = ar[N-1], bn = gr[N-1];
+  document.getElementById('diffBlock').innerHTML =
+    `第 ${N} 项：等差 a₁₂ = <strong style="color:var(--blue)">${an}</strong>，等比 b₁₂ = <strong style="color:var(--amber)">${bn>99999?'超大!':bn}</strong>` +
+    (bn > an ? `<br>等比数列第12项比等差大 <strong>${(bn>99999?'>99999':bn-an)} 倍</strong>！这就是指数增长的威力。` : '');
+
+  // PEDAGOGY V8
+  document.getElementById('fb').innerHTML =
+    `等差数列：每次<strong>加</strong> d = ${d}，增量恒定，图形呈<strong>直线增长</strong>。<br>` +
+    `等比数列：每次<strong>乘</strong> q = ${q}，增量越来越大，图形呈<strong>指数增长</strong>。<br>` +
+    `两者最大区别：等差看<strong>差</strong>是否相同；等比看<strong>比</strong>是否相同。`;
+
+  // Update labels
+  document.getElementById('a1v').textContent = document.getElementById('a1').value;
+  document.getElementById('dv').textContent = document.getElementById('d').value;
+  document.getElementById('b1v').textContent = document.getElementById('b1').value;
+  document.getElementById('qv').textContent = document.getElementById('q').value;
+}
+
+['a1','d','b1','q'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+
+function setupAll(){
+  setup(document.getElementById('cvs1'));
+  setup(document.getElementById('cvs2'));
+  draw();
+}
+
+window.addEventListener('resize', setupAll);
+setupAll();
+</script>
+</body>
+</html>

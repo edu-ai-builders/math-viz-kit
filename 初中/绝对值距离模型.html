@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>绝对值距离模型 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="数轴与绝对值">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="绝对值=点到原点的距离，动态拖拽数轴上的点理解|x|的几何意义">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:ew-resize;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    .mode-row{display:flex;gap:6px;}
+    .mode-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 数轴与绝对值 · 认知动作：变换</div>
+  <h1>绝对值距离模型</h1>
+  <p class="sub">拖动数轴上的点——|x| 就是点到原点的距离，不管方向</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('one',this)">|x| 单点</button>
+    <button class="mode-btn" onclick="setMode('two',this)">|x-a| 两点距离</button>
+    <button class="mode-btn" onclick="setMode('sum',this)">|x-a|+|x-b| 到两点距离和</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl" id="xLbl">x</div><div class="stat-val" id="xVal" style="color:var(--blue)">0</div></div>
+    <div class="stat"><div class="stat-lbl" id="exprLbl">|x|</div><div class="stat-val" id="exprVal" style="color:var(--teal)">0</div></div>
+    <div class="stat"><div class="stat-lbl" id="noteLbl">含义</div><div class="stat-val" id="noteVal" style="font-size:13px;color:var(--amber)">到原点距离</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 绝对值的"距离"含义只有拖拽才能真正体验
+// PEDAGOGY V3 分步揭示: 先单点绝对值，再扩展到两点距离
+// PEDAGOGY V6 动作-数学一致: 向左拖点仍显示正距离
+// PEDAGOGY V7 单一认知动作: 变换（x变负，|x|仍为正——去掉符号）
+// PEDAGOGY V8 概念反馈: 揭示"|x|=到0的距离，与方向无关"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=220;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+let mode='one';
+let xVal=3,aVal=-4,bVal=5;
+let dragging=null;
+const RANGE=10;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setMode(m,btn){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function xToP(x,W){
+  const margin=48;
+  return margin+(x+RANGE)/(2*RANGE)*(W-2*margin);
+}
+function pToX(px,W){
+  const margin=48;
+  return (px-margin)/(W-2*margin)*2*RANGE-RANGE;
+}
+
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const margin=48;
+  const axY=H/2;
+
+  // Axis
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin,axY);ctx.lineTo(W-margin,axY);ctx.stroke();
+  // Ticks
+  for(let i=-RANGE;i<=RANGE;i++){
+    const x=xToP(i,W);
+    ctx.beginPath();ctx.moveTo(x,axY-5);ctx.lineTo(x,axY+5);ctx.stroke();
+    if(i%2===0){
+      ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+      ctx.fillText(String(i),x,axY+8);
+    }
+  }
+  // Arrow
+  ctx.fillStyle=C.ink2;
+  ctx.beginPath();ctx.moveTo(W-margin,axY);ctx.lineTo(W-margin-8,axY-4);ctx.lineTo(W-margin-8,axY+4);ctx.fill();
+
+  if(mode==='one'){
+    // Distance bar from 0 to x
+    const px=xToP(xVal,W);
+    const p0=xToP(0,W);
+    ctx.fillStyle=C.blue+'44';
+    ctx.fillRect(Math.min(px,p0),axY-18,Math.abs(px-p0),16);
+    ctx.strokeStyle=C.blue;ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(p0,axY-10);ctx.lineTo(px,axY-10);ctx.stroke();
+    // Label on bar
+    ctx.fillStyle=C.blue;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText(`|${xVal.toFixed(1)}|=${Math.abs(xVal).toFixed(1)}`,(px+p0)/2,axY-18);
+    // Point
+    ctx.fillStyle=C.blue;ctx.beginPath();ctx.arc(px,axY,8,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font=`bold 11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('x',px,axY);
+    // Origin
+    ctx.fillStyle=C.teal;ctx.beginPath();ctx.arc(p0,axY,5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=C.teal;ctx.font=`bold 11px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText('原点',p0,axY+12);
+
+    document.getElementById('xLbl').textContent='x';
+    document.getElementById('xVal').textContent=xVal.toFixed(1);
+    document.getElementById('exprLbl').textContent='|x|';
+    document.getElementById('exprVal').textContent=Math.abs(xVal).toFixed(1);
+    document.getElementById('noteLbl').textContent='含义';
+    document.getElementById('noteVal').textContent='到原点距离';
+    document.getElementById('fb').innerHTML=
+      `x = <strong>${xVal.toFixed(1)}</strong>（${xVal>=0?'正方向，原点右侧':'负方向，原点左侧'}）。<br>` +
+      `|x| = <strong>${Math.abs(xVal).toFixed(1)}</strong>，这是点 x 到原点 0 的<strong>距离</strong>。<br>` +
+      `<strong>绝对值去掉了方向信息，只保留距离大小。</strong> 无论 x 正负，|x| ≥ 0。`;
+  }
+  else if(mode==='two'){
+    const px=xToP(xVal,W),pa=xToP(aVal,W);
+    // Distance bar
+    ctx.fillStyle=C.amber+'44';
+    ctx.fillRect(Math.min(px,pa),axY-18,Math.abs(px-pa),16);
+    ctx.strokeStyle=C.amberD;ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(pa,axY-10);ctx.lineTo(px,axY-10);ctx.stroke();
+    const dist=Math.abs(xVal-aVal);
+    ctx.fillStyle=C.amberD;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText(`|x-a|=${dist.toFixed(1)}`,(px+pa)/2,axY-18);
+    // Points
+    ctx.fillStyle=C.blue;ctx.beginPath();ctx.arc(px,axY,8,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font=`bold 11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('x',px,axY);
+    ctx.fillStyle=C.amberD;ctx.beginPath();ctx.arc(pa,axY,8,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.fillText('a',pa,axY);
+    // Labels below
+    ctx.fillStyle=C.blue;ctx.font=`12px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(xVal.toFixed(1),px,axY+12);
+    ctx.fillStyle=C.amberD;ctx.fillText(aVal.toFixed(1),pa,axY+12);
+
+    document.getElementById('xLbl').textContent='x';
+    document.getElementById('xVal').textContent=xVal.toFixed(1);
+    document.getElementById('exprLbl').textContent='|x−a|';
+    document.getElementById('exprVal').textContent=dist.toFixed(1);
+    document.getElementById('noteVal').textContent='x到a的距离';
+    document.getElementById('fb').innerHTML=
+      `x = <strong>${xVal.toFixed(1)}</strong>，a = <strong>${aVal.toFixed(1)}</strong>。<br>` +
+      `|x − a| = |${xVal.toFixed(1)} − ${aVal.toFixed(1)}| = <strong>${dist.toFixed(1)}</strong>。<br>` +
+      `<strong>|x − a| 表示数轴上 x 和 a 两点之间的距离。</strong> 它等于两数之差的绝对值，与谁减谁无关。`;
+  }
+  else{
+    const px=xToP(xVal,W),pa=xToP(aVal,W),pb=xToP(bVal,W);
+    const da=Math.abs(xVal-aVal),db=Math.abs(xVal-bVal),sum=da+db;
+    const minSum=Math.abs(bVal-aVal);
+    // Bars
+    ctx.fillStyle=C.blue+'33';
+    ctx.fillRect(Math.min(px,pa),axY-30,Math.abs(px-pa),14);
+    ctx.strokeStyle=C.blue;ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(pa,axY-23);ctx.lineTo(px,axY-23);ctx.stroke();
+    ctx.fillStyle=C.amberD+'33';
+    ctx.fillRect(Math.min(px,pb),axY-14,Math.abs(px-pb),14);
+    ctx.strokeStyle=C.amberD;
+    ctx.beginPath();ctx.moveTo(pb,axY-7);ctx.lineTo(px,axY-7);ctx.stroke();
+    // Labels
+    ctx.fillStyle=C.blue;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText(da.toFixed(1),(px+pa)/2,axY-30);
+    ctx.fillStyle=C.amberD;ctx.fillText(db.toFixed(1),(px+pb)/2,axY-14);
+    // Points
+    ctx.fillStyle=C.blue;ctx.beginPath();ctx.arc(px,axY,8,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font=`bold 10px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('x',px,axY);
+    ctx.fillStyle=C.blue;ctx.beginPath();ctx.arc(pa,axY,7,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.fillText('a',pa,axY);
+    ctx.fillStyle=C.amberD;ctx.beginPath();ctx.arc(pb,axY,7,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.fillText('b',pb,axY);
+    // Values
+    ctx.fillStyle=C.blue;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(xVal.toFixed(1),px,axY+12);
+    ctx.fillStyle=C.blue;ctx.fillText(aVal.toFixed(1),pa,axY+12);
+    ctx.fillStyle=C.amberD;ctx.fillText(bVal.toFixed(1),pb,axY+12);
+
+    document.getElementById('xLbl').textContent='x';
+    document.getElementById('xVal').textContent=xVal.toFixed(1);
+    document.getElementById('exprLbl').textContent='|x-a|+|x-b|';
+    document.getElementById('exprVal').textContent=sum.toFixed(1);
+    document.getElementById('noteVal').textContent=`最小值${minSum.toFixed(1)}`;
+    const isMin=Math.abs(sum-minSum)<0.3;
+    document.getElementById('fb').innerHTML=
+      `|x−a| + |x−b| = ${da.toFixed(1)} + ${db.toFixed(1)} = <strong>${sum.toFixed(1)}</strong>。<br>` +
+      `当 x 在 a 和 b <strong>之间</strong>时，两距离之和取得最小值 = |a−b| = <strong>${minSum.toFixed(1)}</strong>。<br>` +
+      (isMin?`<strong>此时 x 在 a 和 b 之间，距离和已最小！✓</strong>`:`把 x 拖到 a(${aVal.toFixed(1)}) 和 b(${bVal.toFixed(1)}) 之间，看看最小值。`);
+  }
+}
+
+function getCoords(e){
+  const rect=cvs.getBoundingClientRect();
+  const cx=e.touches?e.touches[0].clientX:e.clientX;
+  return cx-rect.left;
+}
+
+cvs.addEventListener('pointerdown',e=>{
+  const W=cvs.getBoundingClientRect().width;
+  const px=getCoords(e);
+  const xv=pToX(px,W);
+  const pts=[{id:'x',v:xVal},{id:'a',v:aVal},{id:'b',v:bVal}];
+  let best=null,bestD=20;
+  pts.forEach(p=>{
+    const d=Math.abs(xToP(p.v,W)-px);
+    if(d<bestD){bestD=d;best=p.id;}
+  });
+  dragging=best;
+  cvs.setPointerCapture(e.pointerId);
+});
+cvs.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const W=cvs.getBoundingClientRect().width;
+  const v=clamp(Math.round(pToX(getCoords(e),W)*2)/2,-RANGE,RANGE);
+  if(dragging==='x') xVal=v;
+  else if(dragging==='a') aVal=v;
+  else if(dragging==='b') bVal=v;
+  draw();
+});
+cvs.addEventListener('pointerup',()=>{dragging=null;});
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

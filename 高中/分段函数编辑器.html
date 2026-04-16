@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>分段函数编辑器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="函数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="可视化编辑分段函数的每段表达式和区间，实时绘图，理解端点开闭和连续性">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .segments-area{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+    .seg-title{font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:8px;}
+    .seg-row{display:grid;grid-template-columns:1fr 60px 60px 32px 32px;gap:6px;align-items:center;margin-bottom:6px;}
+    .seg-row label{font-size:12px;color:var(--ink2);}
+    .seg-input{padding:6px 8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-family:'JetBrains Mono',monospace;font-size:13px;width:100%;}
+    .seg-input:focus{border-color:var(--blue);outline:none;}
+    .seg-sel{padding:5px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--surface);}
+    .del-btn{padding:4px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);color:#b84040;font-size:14px;}
+    .add-btn{padding:7px 16px;border:none;border-radius:var(--radius-sm);background:var(--blue);color:#fff;font-size:13px;cursor:pointer;font-family:'Noto Sans SC',sans-serif;}
+    .preset-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+    .preset-btn{padding:5px 12px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);color:var(--ink2);}
+    .preset-btn:hover{background:var(--blue-light);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 函数 · 认知动作：变换</div>
+  <h1>分段函数编辑器</h1>
+  <p class="sub">编辑每段的表达式和区间，实时绘制图像，观察端点开闭和连续性</p>
+</header>
+<main>
+  <div class="segments-area">
+    <div class="seg-title">函数各段定义：</div>
+    <div style="display:grid;grid-template-columns:1fr 60px 60px 32px 32px;gap:6px;margin-bottom:4px;">
+      <span style="font-size:11px;color:var(--ink2);">表达式（用 x）</span>
+      <span style="font-size:11px;color:var(--ink2);text-align:center;">x≥左端</span>
+      <span style="font-size:11px;color:var(--ink2);text-align:center;">x<右端</span>
+      <span></span><span></span>
+    </div>
+    <div id="segsDiv"></div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="add-btn" onclick="addSeg()">+ 添加段</button>
+    </div>
+    <div class="preset-row">
+      <span style="font-size:12px;color:var(--ink2);">预设：</span>
+      <button class="preset-btn" onclick="loadPreset('abs')">绝对值 |x|</button>
+      <button class="preset-btn" onclick="loadPreset('step')">阶梯函数</button>
+      <button class="preset-btn" onclick="loadPreset('sign')">符号函数</button>
+      <button class="preset-btn" onclick="loadPreset('piecewise')">经典分段</button>
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V3 分步揭示: 每段独立编辑，逐段添加到图像
+// PEDAGOGY V4 信号聚焦: 每段不同颜色，端点用实心/空心圆区分开闭
+// PEDAGOGY V8 概念反馈: 检测连续性，告知"在x=a处连续/不连续"
+
+const COLORS=['#2a5c8f','#0f6e56','#854f0b','#b84040','#7b3f9e'];
+const PRESETS={
+  abs:{segs:[{expr:'-x',lo:'-Infinity',hi:'0',loInc:true,hiInc:false},{expr:'x',lo:'0',hi:'Infinity',loInc:true,hiInc:false}]},
+  step:{segs:[{expr:'0',lo:'-Infinity',hi:'1',loInc:true,hiInc:false},{expr:'1',lo:'1',hi:'2',loInc:true,hiInc:false},{expr:'2',lo:'2',hi:'Infinity',loInc:true,hiInc:false}]},
+  sign:{segs:[{expr:'-1',lo:'-Infinity',hi:'0',loInc:true,hiInc:false},{expr:'0',lo:'0',hi:'0',loInc:true,hiInc:true},{expr:'1',lo:'0',hi:'Infinity',loInc:false,hiInc:false}]},
+  piecewise:{segs:[{expr:'x*x-1',lo:'-3',hi:'0',loInc:true,hiInc:false},{expr:'2*x+1',lo:'0',hi:'3',loInc:true,hiInc:false}]}
+};
+
+let segs=[
+  {expr:'x*x',lo:'-3',hi:'0',loInc:true,hiInc:false},
+  {expr:'2-x',lo:'0',hi:'3',loInc:true,hiInc:false}
+];
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=300;
+
+function loadPreset(k){
+  segs=PRESETS[k].segs.map(s=>({...s}));
+  renderSegs(); draw(); updateFb();
+}
+
+function addSeg(){
+  segs.push({expr:'x',lo:'-3',hi:'3',loInc:true,hiInc:false});
+  renderSegs(); draw();
+}
+
+function delSeg(i){
+  segs.splice(i,1);
+  renderSegs(); draw();
+}
+
+function renderSegs(){
+  const div=document.getElementById('segsDiv');
+  div.innerHTML=segs.map((s,i)=>`
+    <div class="seg-row">
+      <input class="seg-input" value="${s.expr}" oninput="segs[${i}].expr=this.value;draw()" style="border-color:${COLORS[i%COLORS.length]}">
+      <input class="seg-input" style="text-align:center" value="${s.lo}" oninput="segs[${i}].lo=this.value;draw()">
+      <input class="seg-input" style="text-align:center" value="${s.hi}" oninput="segs[${i}].hi=this.value;draw()">
+      <select class="seg-sel" onchange="segs[${i}].loInc=this.value==='closed';draw()">
+        <option value="closed" ${s.loInc?'selected':''}>≥</option>
+        <option value="open" ${!s.loInc?'selected':''}>></option>
+      </select>
+      <button class="del-btn" onclick="delSeg(${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+function evalExpr(expr,x){
+  try{ return Function('x',`'use strict';return (${expr})`)(x); }
+  catch(e){ return null; }
+}
+
+function parseBound(s){ if(s==='Infinity'||s==='+Infinity') return Infinity; if(s==='-Infinity') return -Infinity; return parseFloat(s); }
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const xRange=[-5,5], yRange=[-5,5];
+  const pad={l:40,r:10,t:20,b:30};
+  const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+
+  function toX(x){return pad.l+(x-xRange[0])/(xRange[1]-xRange[0])*cw;}
+  function toY(y){return pad.t+ch-(y-yRange[0])/(yRange[1]-yRange[0])*ch;}
+
+  // Grid
+  ctx.strokeStyle='#e4e2da';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+  for(let x=xRange[0];x<=xRange[1];x++){ctx.beginPath();ctx.moveTo(toX(x),pad.t);ctx.lineTo(toX(x),pad.t+ch);ctx.stroke();}
+  for(let y=yRange[0];y<=yRange[1];y++){ctx.beginPath();ctx.moveTo(pad.l,toY(y));ctx.lineTo(W-pad.r,toY(y));ctx.stroke();}
+  ctx.setLineDash([]);
+
+  // Axes
+  ctx.strokeStyle='#6b6860';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(pad.l,toY(0));ctx.lineTo(W-pad.r,toY(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(toX(0),pad.t);ctx.lineTo(toX(0),pad.t+ch);ctx.stroke();
+  ctx.fillStyle='#a8a69f';ctx.font=`9px 'JetBrains Mono',monospace`;
+  for(let i=xRange[0];i<=xRange[1];i++){ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(i,toX(i),toY(0)+3);}
+  for(let i=yRange[0];i<=yRange[1];i++){if(!i)continue;ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(i,toX(0)-3,toY(i));}
+
+  // Draw each segment
+  segs.forEach((seg,i)=>{
+    const col=COLORS[i%COLORS.length];
+    const lo=parseBound(seg.lo), hi=parseBound(seg.hi);
+    const S=200;
+    ctx.strokeStyle=col;ctx.lineWidth=2.5;
+    ctx.beginPath();
+    let penDown=false;
+    for(let j=0;j<=S;j++){
+      const x=xRange[0]+j/S*(xRange[1]-xRange[0]);
+      // Check if in segment domain
+      const inDomain=(seg.loInc?x>=lo:x>lo) && (seg.hiInc?x<=hi:x<hi);
+      if(!inDomain){penDown=false;continue;}
+      const y=evalExpr(seg.expr,x);
+      if(y===null||!isFinite(y)||y<yRange[0]-1||y>yRange[1]+1){penDown=false;continue;}
+      if(!penDown){ctx.moveTo(toX(x),toY(y));penDown=true;}
+      else ctx.lineTo(toX(x),toY(y));
+    }
+    ctx.stroke();
+
+    // Endpoint markers
+    [lo,hi].forEach((bound,bi)=>{
+      if(!isFinite(bound)) return;
+      const inc=bi===0?seg.loInc:seg.hiInc;
+      const y=evalExpr(seg.expr,bound);
+      if(y===null||!isFinite(y)) return;
+      ctx.fillStyle=inc?col:'#fff';
+      ctx.strokeStyle=col;ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(toX(bound),toY(y),5,0,Math.PI*2);
+      if(inc) ctx.fill(); else {ctx.fillStyle='#fff';ctx.fill();}
+      ctx.stroke();
+    });
+  });
+
+  updateFb();
+}
+
+function updateFb(){
+  // Check continuity at breakpoints
+  const breakpts=new Set();
+  segs.forEach(s=>{
+    const lo=parseBound(s.lo), hi=parseBound(s.hi);
+    if(isFinite(lo)) breakpts.add(lo);
+    if(isFinite(hi)) breakpts.add(hi);
+  });
+  const issues=[];
+  breakpts.forEach(bp=>{
+    const vals=[];
+    segs.forEach(seg=>{
+      const lo=parseBound(seg.lo), hi=parseBound(seg.hi);
+      if((seg.loInc&&lo===bp)||(seg.hiInc&&hi===bp)||(Math.abs(lo-bp)<0.001&&seg.loInc)||(Math.abs(hi-bp)<0.001&&seg.hiInc)){
+        const y=evalExpr(seg.expr,bp);
+        if(y!==null&&isFinite(y)) vals.push(y);
+      }
+    });
+    if(vals.length>=2&&Math.abs(vals[0]-vals[1])>0.01) issues.push(`x=${bp}处不连续（左值${vals[0].toFixed(2)}≠右值${vals[1].toFixed(2)}）`);
+  });
+  document.getElementById('fb').innerHTML=
+    `<strong>分段函数</strong>：每段在自己的区间内用一个表达式定义，端点用实心圆(●)表示包含，空心圆(○)表示不含。<br>`+
+    (issues.length>0?`<strong>连续性：</strong>${issues.join('；')}。存在跳跃间断点。`:'<strong>连续性：</strong>在所有分界点处看起来连续（左极限=右极限）。');
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();
+renderSegs();
+draw();
+</script>
+</body>
+</html>

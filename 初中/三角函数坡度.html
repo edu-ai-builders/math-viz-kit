@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三角函数坡度实验室 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="三角函数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="拖动坡度角，实时显示sin/cos/tan的值和直角三角形，建立三角函数的直觉">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;}
+    .sl-row{display:flex;align-items:center;gap:10px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);min-width:80px;}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);min-width:60px;text-align:right;}
+    input[type=range]{flex:1;accent-color:var(--blue);cursor:pointer;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 三角函数 · 认知动作：比较</div>
+  <h1>三角函数坡度实验室</h1>
+  <p class="sub">拖动坡度角，直角三角形实时变化，理解 sin/cos/tan 的几何含义</p>
+</header>
+<main>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">角度 θ</div><div class="stat-val" id="thetaVal" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">sin θ = 对/斜</div><div class="stat-val" id="sinVal" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">cos θ = 邻/斜</div><div class="stat-val" id="cosVal" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">tan θ = 对/邻</div><div class="stat-val" id="tanVal" style="color:var(--blue)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <span class="sl-lbl">坡度角 θ</span>
+      <input type="range" id="thetaSl" min="5" max="85" value="30">
+      <span class="sl-val" id="thetaLabel">30°</span>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 三角函数随角度变化的规律只有动态才能感受
+// PEDAGOGY V2 表征桥接: 几何图形 ↔ 比值 ↔ 数值
+// PEDAGOGY V4 信号聚焦: 绿=对边, 橙=邻边, 蓝=斜边
+// PEDAGOGY V6 动作-数学一致: 拖动角度滑杆=三角形形状改变
+// PEDAGOGY V7 单一认知动作: 比较（三个比值如何随角度变化）
+// PEDAGOGY V8 概念反馈: 揭示每个函数对应的边的比值
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=340;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const theta=parseInt(document.getElementById('thetaSl').value);
+  const thetaRad=theta*Math.PI/180;
+  const sinT=Math.sin(thetaRad),cosT=Math.cos(thetaRad),tanT=Math.tan(thetaRad);
+
+  // Fixed hypotenuse length
+  const hyp=180;
+  const adj=hyp*cosT;
+  const opp=hyp*sinT;
+
+  // Origin of triangle (bottom-left corner = angle θ)
+  const ox=W/2-adj/2, oy=H*0.72;
+  const bx=ox+adj, by=oy; // bottom-right (right angle)
+  const cx2=ox, cy2=oy-opp; // top-left
+
+  // Draw right angle marker at (bx,by)
+  const sq=14;
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(bx-sq,by);ctx.lineTo(bx-sq,by-sq);ctx.lineTo(bx,by-sq);ctx.stroke();
+
+  // Fill triangle
+  ctx.fillStyle=C.blueL;
+  ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(bx,by);ctx.lineTo(cx2,cy2);ctx.closePath();ctx.fill();
+
+  // Draw sides with colors
+  // Hypotenuse (blue)
+  ctx.strokeStyle=C.blue;ctx.lineWidth=3.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(cx2,cy2);ctx.stroke();
+  // Adjacent (amber)
+  ctx.strokeStyle=C.amber;ctx.lineWidth=3.5;
+  ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(bx,by);ctx.stroke();
+  // Opposite (teal)
+  ctx.strokeStyle=C.teal;ctx.lineWidth=3.5;
+  ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(cx2,cy2);ctx.stroke();
+
+  // Side labels
+  const midHypX=(ox+cx2)/2-18,midHypY=(oy+cy2)/2;
+  ctx.fillStyle=C.blue;ctx.font=`bold 14px 'Noto Sans SC',sans-serif`;ctx.textAlign='right';ctx.textBaseline='middle';
+  ctx.fillText(`斜边c=${hyp}`,midHypX,midHypY);
+
+  ctx.fillStyle=C.amber;ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText(`邻边b=${adj.toFixed(1)}`,ox+adj/2,oy+6);
+
+  ctx.fillStyle=C.teal;ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText(`对边a=${opp.toFixed(1)}`,bx+6,(oy+cy2)/2);
+
+  // Angle arc
+  const arcR=40;
+  ctx.fillStyle=C.blue+'33';
+  ctx.beginPath();ctx.moveTo(ox,oy);ctx.arc(ox,oy,arcR,-thetaRad,0,false);ctx.closePath();ctx.fill();
+  ctx.strokeStyle=C.blue;ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(ox,oy,arcR,-thetaRad,0,false);ctx.stroke();
+  ctx.fillStyle=C.blue;ctx.font=`bold 15px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText(`θ=${theta}°`,ox+arcR+6,oy-8);
+
+  // Vertex dots
+  [{p:{x:ox,y:oy},l:'A'},{p:{x:bx,y:by},l:'B'},{p:{x:cx2,y:cy2},l:'C'}].forEach(({p,l})=>{
+    ctx.fillStyle=C.ink;ctx.beginPath();ctx.arc(p.x,p.y,5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=C.ink2;ctx.font=`bold 12px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText(l,p.x,p.y-6);
+  });
+
+  // Bar chart visualization of sin/cos/tan
+  const barX=W-180,barY=40,barW=24,barH=200,barGap=36;
+  const vals=[
+    {v:sinT,label:'sin',color:C.teal,formula:`a/c=${sinT.toFixed(3)}`},
+    {v:cosT,label:'cos',color:C.amber,formula:`b/c=${cosT.toFixed(3)}`},
+    {v:Math.min(tanT,3)/3,label:'tan',color:C.blue,formula:`a/b=${tanT>10?'>10':tanT.toFixed(3)}`}
+  ];
+  ctx.fillStyle=C.bg||C.border+'33';
+  ctx.beginPath();ctx.roundRect(barX-10,barY-20,190,barH+60,8);ctx.fill();
+  vals.forEach((v,i)=>{
+    const bx2=barX+i*barGap;
+    const bh=Math.min(v.v,1)*barH;
+    // Background bar
+    ctx.fillStyle=C.border;ctx.beginPath();ctx.roundRect(bx2,barY,barW,barH,4);ctx.fill();
+    // Value bar
+    ctx.fillStyle=v.color;ctx.beginPath();ctx.roundRect(bx2,barY+barH-bh,barW,bh,4);ctx.fill();
+    // Label
+    ctx.fillStyle=v.color;ctx.font=`bold 13px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(v.label,bx2+barW/2,barY+barH+4);
+    ctx.font=`11px 'JetBrains Mono',monospace`;
+    ctx.fillText(v.formula,bx2+barW/2,barY+barH+20);
+  });
+  // "1" reference line
+  ctx.strokeStyle=C.ink3;ctx.lineWidth=1;ctx.setLineDash([3,2]);
+  ctx.beginPath();ctx.moveTo(barX-5,barY);ctx.lineTo(barX+vals.length*barGap+10,barY);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.ink3;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='right';ctx.textBaseline='middle';
+  ctx.fillText('1',barX-7,barY);
+
+  // Update stats
+  document.getElementById('thetaVal').textContent=theta+'°';
+  document.getElementById('sinVal').textContent=sinT.toFixed(3);
+  document.getElementById('cosVal').textContent=cosT.toFixed(3);
+  document.getElementById('tanVal').textContent=tanT>99?'>99':tanT.toFixed(3);
+  document.getElementById('thetaLabel').textContent=theta+'°';
+
+  // PEDAGOGY V8
+  document.getElementById('fb').innerHTML=
+    `θ = <strong>${theta}°</strong>：<br>` +
+    `<strong style="color:var(--teal)">sin θ = 对边/斜边 = ${opp.toFixed(1)}/${hyp} = ${sinT.toFixed(4)}</strong>（爬升高度占斜面的比例）<br>` +
+    `<strong style="color:var(--amber)">cos θ = 邻边/斜边 = ${adj.toFixed(1)}/${hyp} = ${cosT.toFixed(4)}</strong>（水平延伸占斜面的比例）<br>` +
+    `<strong style="color:var(--blue)">tan θ = 对边/邻边 = ${opp.toFixed(1)}/${adj.toFixed(1)} = ${tanT.toFixed(4)}</strong>（坡度，即纵横比）`;
+}
+
+document.getElementById('thetaSl').addEventListener('input',draw);
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

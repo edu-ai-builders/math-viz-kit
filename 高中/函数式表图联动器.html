@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>函数式—表—图联动器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="函数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="公式/值表/图像三联动，调节参数时三种表示同步更新，点击值表行高亮对应图像点">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:900px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:900px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .layout{display:grid;grid-template-columns:220px 1fr;gap:10px;}
+    .section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+    .section-title{font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:10px;}
+    .fn-btns{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;}
+    .fn-btn{padding:7px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:700;transition:all .15s;text-align:center;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .eq-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--blue);text-align:center;min-height:38px;line-height:1.4;margin-bottom:10px;}
+    .slider-group{margin-bottom:8px;}
+    .slider-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;}
+    .slider-name{color:var(--ink2);}
+    .slider-val{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--blue);}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    .right-panel{display:flex;flex-direction:column;gap:10px;}
+    .canvas-wrap{position:relative;}
+    canvas{width:100%;display:block;border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--border);}
+    .table-wrap{overflow-x:auto;}
+    table{width:100%;border-collapse:collapse;font-size:13px;}
+    th{background:var(--bg);padding:5px 8px;text-align:center;font-weight:700;color:var(--ink2);border-bottom:2px solid var(--border);font-family:'JetBrains Mono',monospace;}
+    td{padding:5px 8px;text-align:center;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace;cursor:pointer;transition:background .15s;}
+    tr:hover td{background:var(--amber-light);}
+    tr.selected td{background:var(--teal-light);font-weight:700;color:var(--teal);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+    @media(max-width:640px){.layout{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 函数 · 认知动作：变换</div>
+  <h1>函数式—表—图联动器</h1>
+  <p class="sub">调节参数，公式 / 值表 / 图像三种表示同步更新；点击表格行，图像上高亮对应点</p>
+</header>
+<main>
+  <div class="layout">
+    <!-- 左：公式选择+参数 -->
+    <div class="section">
+      <div class="section-title">第一步：选函数类型</div>
+      <div class="fn-btns">
+        <button class="fn-btn active" onclick="setFn(0,this)">一次<br>y=kx+b</button>
+        <button class="fn-btn" onclick="setFn(1,this)">二次<br>y=ax²+b</button>
+        <button class="fn-btn" onclick="setFn(2,this)">指数<br>y=aˣ</button>
+        <button class="fn-btn" onclick="setFn(3,this)">对数<br>y=log_a x</button>
+        <button class="fn-btn" onclick="setFn(4,this)">正弦<br>y=sin(ωx)</button>
+        <button class="fn-btn" onclick="setFn(5,this)">幂函数<br>y=xⁿ</button>
+      </div>
+      <div class="section-title">第二步：调节参数</div>
+      <div class="eq-box" id="eqBox">y = 1.0x + 0.0</div>
+      <div id="slidersArea"></div>
+    </div>
+    <!-- 右：图+表 -->
+    <div class="right-panel">
+      <canvas id="cvs" height="300"></canvas>
+      <div class="section" style="padding:10px;">
+        <div class="section-title">值表（点击行可在图像上高亮对应点）</div>
+        <div class="table-wrap"><table id="tbl"><thead><tr><th>x</th><th>f(x)</th></tr></thead><tbody id="tbody"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V2 表征桥接: 公式/值表/图像三联动，同一函数的三种语言同步显示
+// PEDAGOGY V3 分步揭示: 先选函数类型，再调参数，再观察图形
+// PEDAGOGY V5 操作先于符号: 拖动参数直到图形满意，再看公式
+// PEDAGOGY V7 单一认知动作: 变换（参数变化→三表示同步变换）
+// PEDAGOGY V8 概念反馈: "斜率k控制倾斜方向，截距b控制纵轴位置"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 300;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberL:'#faeeda',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',
+  grid:'#e4e2da',zero:'#a8a69f'
+};
+
+const FNS = [
+  {
+    name:'一次函数', label:'y = kx + b',
+    params:[{id:'k',label:'k（斜率）',min:-3,max:3,step:0.1,def:1},{id:'b',label:'b（截距）',min:-5,max:5,step:0.5,def:0}],
+    f:(x,p)=>p.k*x+p.b,
+    domain:[-6,6],
+    eqFn:(p)=>`y = ${p.k.toFixed(1)}x + ${p.b.toFixed(1)}`,
+    feedback:(p)=>`<strong>一次函数 y=kx+b</strong>：斜率 k=${p.k.toFixed(1)} 控制直线倾斜方向（k>0上升，k<0下降）；截距 b=${p.b.toFixed(1)} 是直线与纵轴的交点。<br>当 k 不变改变 b，直线<strong>平行移动</strong>；当 b 不变改变 k，直线<strong>绕截距点旋转</strong>。`
+  },
+  {
+    name:'二次函数', label:'y = ax² + c',
+    params:[{id:'a',label:'a（开口）',min:-2,max:2,step:0.1,def:1},{id:'c',label:'c（纵移）',min:-4,max:4,step:0.5,def:0}],
+    f:(x,p)=>p.a*x*x+p.c,
+    domain:[-5,5],
+    eqFn:(p)=>`y = ${p.a.toFixed(1)}x² + ${p.c.toFixed(1)}`,
+    feedback:(p)=>`<strong>二次函数 y=ax²+c</strong>：a=${p.a.toFixed(1)} 控制开口方向和宽窄（|a|越大越窄），c=${p.c.toFixed(1)} 是顶点的纵坐标。<br>顶点 (0, ${p.c.toFixed(1)})，对称轴 x=0，${p.a>0?'开口向上，有最小值':'p.a<0?开口向下，有最大值':'a=0，退化为直线'}。`
+  },
+  {
+    name:'指数函数', label:'y = aˣ',
+    params:[{id:'a',label:'a（底数）',min:0.2,max:3,step:0.1,def:2}],
+    f:(x,p)=>Math.pow(Math.max(p.a,0.01),x),
+    domain:[-3,4],
+    eqFn:(p)=>`y = ${p.a.toFixed(1)}ˣ`,
+    feedback:(p)=>`<strong>指数函数 y=aˣ</strong>：底数 a=${p.a.toFixed(1)}，${p.a>1?'a>1：函数单调递增，x越大y增长越快（指数爆炸）':'0<a<1：函数单调递减（指数衰减）'}。<br>所有指数函数都过点 (0, 1)，值域为 y>0。`
+  },
+  {
+    name:'对数函数', label:'y = log_a(x)',
+    params:[{id:'a',label:'a（底数）',min:1.1,max:5,step:0.1,def:2}],
+    f:(x,p)=>x>0?Math.log(x)/Math.log(Math.max(p.a,1.001)):null,
+    domain:[0.1,7],
+    eqFn:(p)=>`y = log_${p.a.toFixed(1)}(x)`,
+    feedback:(p)=>`<strong>对数函数 y=log_a(x)</strong>：底数 a=${p.a.toFixed(1)}，定义域 x>0，所有对数函数过点 (1, 0)。<br>指数函数与对数函数互为反函数，图像关于 y=x 对称。a 越大，曲线"压得越平"。`
+  },
+  {
+    name:'正弦函数', label:'y = sin(ωx)',
+    params:[{id:'w',label:'ω（角频率）',min:0.5,max:4,step:0.25,def:1}],
+    f:(x,p)=>Math.sin(p.w*x),
+    domain:[-7,7],
+    eqFn:(p)=>`y = sin(${p.w.toFixed(2)}x)`,
+    feedback:(p)=>`<strong>正弦函数 y=sin(ωx)</strong>：ω=${p.w.toFixed(2)}，周期 T=2π/ω≈${(2*Math.PI/p.w).toFixed(2)}。<br>ω 越大，周期越短，波形越密；振幅固定为 1，值域 [-1, 1]。`
+  },
+  {
+    name:'幂函数', label:'y = xⁿ',
+    params:[{id:'n',label:'n（指数）',min:-2,max:4,step:1,def:2}],
+    f:(x,p)=>p.n!==0?Math.pow(Math.abs(x)+1e-9,p.n)*(p.n%2===0?1:Math.sign(x)):1,
+    domain:[-4,4],
+    eqFn:(p)=>`y = x${p.n===1?'':p.n===2?'²':p.n===3?'³':'ⁿ(n='+p.n+')'}`,
+    feedback:(p)=>`<strong>幂函数 y=xⁿ</strong>：n=${p.n}，${p.n>0?`n>0：原点过，x轴两侧对称性取决于n的奇偶`:n<0?'n<0：反比例型，x=0处无定义':'n=0：常数函数 y=1'}。<br>所有幂函数都过点 (1,1)（x>0时）。`
+  },
+];
+
+let fnIdx = 0;
+let params = {};
+let selRow = null; // selected x value
+let selX = null;
+
+function setFn(i, btn) {
+  fnIdx = i;
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  selRow = null; selX = null;
+  buildSliders();
+  update();
+}
+
+function buildSliders() {
+  const fn = FNS[fnIdx];
+  const area = document.getElementById('slidersArea');
+  // Init params
+  params = {};
+  fn.params.forEach(p => { params[p.id] = p.def; });
+  area.innerHTML = fn.params.map(p=>`
+    <div class="slider-group">
+      <div class="slider-label">
+        <span class="slider-name">${p.label}</span>
+        <span class="slider-val" id="val_${p.id}">${p.def.toFixed(p.step<1?1:0)}</span>
+      </div>
+      <input type="range" id="sl_${p.id}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.def}" oninput="onSlider('${p.id}',this.value)">
+    </div>
+  `).join('');
+}
+
+function onSlider(id, v) {
+  params[id] = parseFloat(v);
+  const fn = FNS[fnIdx];
+  const p = fn.params.find(x=>x.id===id);
+  document.getElementById('val_'+id).textContent = parseFloat(v).toFixed(p.step<1?1:0);
+  update();
+}
+
+function getTableXs() {
+  const fn = FNS[fnIdx];
+  const [a, b] = fn.domain;
+  const xs = [];
+  for(let x=Math.ceil(a); x<=Math.floor(b); x++) xs.push(x);
+  return xs;
+}
+
+function update() {
+  const fn = FNS[fnIdx];
+  document.getElementById('eqBox').textContent = fn.eqFn(params);
+  buildTable();
+  draw();
+  updateFeedback();
+}
+
+function buildTable() {
+  const fn = FNS[fnIdx];
+  const xs = getTableXs();
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = xs.map(x=>{
+    const y = fn.f(x, params);
+    const yStr = y === null ? '无意义' : isFinite(y) ? y.toFixed(2) : '∞';
+    const isSel = selX === x;
+    return `<tr class="${isSel?'selected':''}" onclick="selectRow(${x})"><td>${x}</td><td>${yStr}</td></tr>`;
+  }).join('');
+}
+
+function selectRow(x) {
+  selX = (selX === x) ? null : x;
+  buildTable();
+  draw();
+  if(selX !== null) {
+    const fn = FNS[fnIdx];
+    const y = fn.f(selX, params);
+    if(y !== null && isFinite(y)) {
+      document.getElementById('fb').innerHTML += `<br><strong>选中点：</strong>x = ${selX}，f(${selX}) = ${y.toFixed(3)}`;
+    }
+  }
+}
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr;
+  ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+  const fn = FNS[fnIdx];
+  const [domA, domB] = fn.domain;
+
+  const pad = {l:48,r:16,t:16,b:32};
+  const cw = W-pad.l-pad.r;
+  const ch = H-pad.t-pad.b;
+
+  // Compute y range from samples
+  const samples = 200;
+  const step = (domB-domA)/samples;
+  let yMin=Infinity, yMax=-Infinity;
+  for(let i=0;i<=samples;i++){
+    const x = domA+i*step;
+    const y = fn.f(x, params);
+    if(y!==null && isFinite(y)){yMin=Math.min(yMin,y);yMax=Math.max(yMax,y);}
+  }
+  if(!isFinite(yMin)||!isFinite(yMax)) {yMin=-2;yMax=2;}
+  const yRange = yMax-yMin || 2;
+  yMin -= yRange*0.1; yMax += yRange*0.1;
+
+  function toX(x){return pad.l+(x-domA)/(domB-domA)*cw;}
+  function toY(y){return pad.t+ch-(y-yMin)/(yMax-yMin)*ch;}
+
+  // Grid
+  ctx.strokeStyle=C.grid; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+  for(let x=Math.ceil(domA);x<=Math.floor(domB);x++){
+    ctx.beginPath(); ctx.moveTo(toX(x),pad.t); ctx.lineTo(toX(x),pad.t+ch); ctx.stroke();
+  }
+  const yStep = Math.pow(10, Math.floor(Math.log10(yRange/4)));
+  for(let y=Math.ceil(yMin/yStep)*yStep; y<=yMax; y+=yStep){
+    ctx.beginPath(); ctx.moveTo(pad.l,toY(y)); ctx.lineTo(pad.l+cw,toY(y)); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Axes
+  if(yMin<=0 && yMax>=0){
+    ctx.strokeStyle=C.zero; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(pad.l,toY(0)); ctx.lineTo(pad.l+cw,toY(0)); ctx.stroke();
+  }
+  if(domA<=0 && domB>=0){
+    ctx.strokeStyle=C.zero; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(toX(0),pad.t); ctx.lineTo(toX(0),pad.t+ch); ctx.stroke();
+  }
+
+  // Axes labels
+  ctx.fillStyle=C.ink3; ctx.font=`10px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let x=Math.ceil(domA);x<=Math.floor(domB);x+=Math.max(1,Math.floor((domB-domA)/10))){
+    ctx.fillText(x, toX(x), pad.t+ch+4);
+  }
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(let y=Math.ceil(yMin/yStep)*yStep; y<=yMax; y+=yStep*2){
+    ctx.fillText(y.toFixed(Math.abs(yStep)<1?1:0), pad.l-3, toY(y));
+  }
+
+  // Function curve
+  ctx.strokeStyle=C.blue; ctx.lineWidth=2.5;
+  ctx.beginPath();
+  let penDown = false;
+  for(let i=0;i<=samples;i++){
+    const x = domA+i*step;
+    const y = fn.f(x, params);
+    if(y===null || !isFinite(y) || y<yMin-yRange || y>yMax+yRange){
+      penDown=false; continue;
+    }
+    if(!penDown){ctx.moveTo(toX(x),toY(y));penDown=true;}
+    else ctx.lineTo(toX(x),toY(y));
+  }
+  ctx.stroke();
+
+  // Highlighted point from table
+  if(selX!==null){
+    const y = fn.f(selX, params);
+    if(y!==null && isFinite(y) && y>=yMin && y<=yMax){
+      // vertical dashed line
+      ctx.strokeStyle=C.teal; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+      ctx.beginPath(); ctx.moveTo(toX(selX),pad.t); ctx.lineTo(toX(selX),toY(y)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(pad.l,toY(y)); ctx.lineTo(toX(selX),toY(y)); ctx.stroke();
+      ctx.setLineDash([]);
+      // dot
+      ctx.fillStyle=C.teal;
+      ctx.beginPath(); ctx.arc(toX(selX),toY(y),6,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.font=`bold 10px 'JetBrains Mono',monospace`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('●', toX(selX), toY(y));
+      // label
+      ctx.fillStyle=C.teal; ctx.font=`bold 11px 'JetBrains Mono',monospace`;
+      ctx.textAlign='left'; ctx.textBaseline='bottom';
+      ctx.fillText(`(${selX}, ${y.toFixed(2)})`, toX(selX)+8, toY(y)-4);
+    }
+  }
+
+  // Title
+  ctx.fillStyle=C.blue; ctx.font=`bold 12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText(fn.eqFn(params), pad.l+4, 4);
+}
+
+function updateFeedback() {
+  const fn = FNS[fnIdx];
+  document.getElementById('fb').innerHTML = fn.feedback(params);
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setFn(0, document.querySelector('.fn-btn.active'));
+</script>
+</body>
+</html>

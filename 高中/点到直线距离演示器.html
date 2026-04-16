@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>点到直线距离演示器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="解析几何">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="拖动点和直线，实时计算点到直线距离，垂线动画高亮，公式 d=|Ax₀+By₀+C|/√(A²+B²) 可视化">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:680px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:680px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:move;}
+    .formula-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--blue);text-align:center;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 解析几何 · 认知动作：变换</div>
+  <h1>点到直线距离演示器</h1>
+  <p class="sub">拖动红点或蓝色直线，实时显示最短距离（垂线段）</p>
+</header>
+<main>
+  <canvas id="cvs"></canvas>
+  <div class="formula-box" id="formulaBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 点到直线的"最短路径"只有垂线动画才能感受
+// PEDAGOGY V5 操作先于符号: 先拖点感受距离变化，再看公式
+// PEDAGOGY V6 动作—数学一致: 拖动点=改变x₀,y₀，垂线实时更新
+// PEDAGOGY V8 概念反馈: "从点P向直线作垂线，垂线段长度就是点到直线的距离"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=340;
+
+// Coordinate system: unit = 40px, center at canvas center
+let scale=50; // px per unit
+let P={x:2,y:3}; // the point
+// Line: Ax + By + C = 0, use slope-intercept to define via two points
+let lineA={x:-4,y:-2}, lineB={x:4,y:1};
+let dragging=null; // 'point', 'lineA', 'lineB'
+let lastMx=0,lastMy=0;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+  scale=Math.min(r.width,H)/10;
+}
+
+function canvasToCoord(px,py){
+  const r=cvs.getBoundingClientRect();
+  return {x:(px-r.width/2)/scale, y:-(py-H/2)/scale};
+}
+function coordToCanvas(x,y){
+  const r=cvs.getBoundingClientRect();
+  return [r.width/2+x*scale, H/2-y*scale];
+}
+
+function getLineCoeffs(){
+  const dx=lineB.x-lineA.x, dy=lineB.y-lineA.y;
+  const A=dy, B=-dx, C=-(A*lineA.x+B*lineA.y);
+  return {A,B,C};
+}
+
+function footOfPerpendicular(){
+  const {A,B,C}=getLineCoeffs();
+  const d2=A*A+B*B;
+  const t=-(A*P.x+B*P.y+C)/d2;
+  return {x:P.x+A*t, y:P.y+B*t};
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+
+  // Grid
+  ctx.strokeStyle='#e4e2da';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+  for(let x=Math.ceil(-W/2/scale);x<=W/2/scale;x++){
+    const [px]=coordToCanvas(x,0);
+    ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,H);ctx.stroke();
+  }
+  for(let y=Math.ceil(-H/2/scale);y<=H/2/scale;y++){
+    const [,py]=coordToCanvas(0,y);
+    ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(W,py);ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Axes
+  ctx.strokeStyle='#a8a69f';ctx.lineWidth=1.5;
+  const [ax0]=coordToCanvas(0,0);
+  ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(ax0,0);ctx.lineTo(ax0,H);ctx.stroke();
+
+  // Axis labels
+  ctx.fillStyle='#a8a69f';ctx.font=`10px 'JetBrains Mono',monospace`;
+  for(let i=-6;i<=6;i++){
+    if(i===0) continue;
+    const [px,py]=coordToCanvas(i,0);
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(i,px,H/2+3);
+    const [px2,py2]=coordToCanvas(0,i);
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(i,ax0-3,py2);
+  }
+
+  // The line (extended to canvas)
+  const {A,B,C}=getLineCoeffs();
+  ctx.strokeStyle='#2a5c8f';ctx.lineWidth=2;
+  // Intersect with canvas bounds
+  let pts=[];
+  // x boundaries
+  [-W/2/scale, W/2/scale].forEach(x=>{
+    if(Math.abs(B)>0.001){const y=(-A*x-C)/B;pts.push({x,y});}
+  });
+  [-H/2/scale, H/2/scale].forEach(y=>{
+    if(Math.abs(A)>0.001){const x=(-B*y-C)/A;pts.push({x,y});}
+  });
+  const inBounds=pts.filter(p=>Math.abs(p.x)<=W/2/scale+0.1&&Math.abs(p.y)<=H/2/scale+0.1);
+  if(inBounds.length>=2){
+    const p1=coordToCanvas(inBounds[0].x,inBounds[0].y);
+    const p2=coordToCanvas(inBounds[1].x,inBounds[1].y);
+    ctx.beginPath();ctx.moveTo(...p1);ctx.lineTo(...p2);ctx.stroke();
+  }
+
+  // Perpendicular foot
+  const foot=footOfPerpendicular();
+  const dist=Math.sqrt((P.x-foot.x)**2+(P.y-foot.y)**2);
+
+  // Distance line (perpendicular)
+  const pp=coordToCanvas(P.x,P.y);
+  const fp=coordToCanvas(foot.x,foot.y);
+  ctx.strokeStyle='#dc2626';ctx.lineWidth=2.5;ctx.setLineDash([6,3]);
+  ctx.beginPath();ctx.moveTo(...pp);ctx.lineTo(...fp);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Right angle at foot
+  const dx=(P.x-foot.x)/dist, dy=(P.y-foot.y)/dist;
+  const s=0.25; // small square size in units
+  const qx1=foot.x+dx*s-dy*s*0.5, qy1=foot.y+dy*s+dx*s*0.5; // wrong, simple approximation
+  // Just draw a simple right angle mark
+  const sq=8; // px
+  const nx=fp[0]-pp[0], ny=fp[1]-pp[1];
+  const len=Math.sqrt(nx*nx+ny*ny);
+  if(len>10){
+    const unx=nx/len, uny=ny/len;
+    // Get perpendicular to the distance line (which is parallel to the line)
+    const {A:la,B:lb}=getLineCoeffs();
+    const lineLen=Math.sqrt(la*la+lb*lb);
+    const ltx=-lb/lineLen, lty=la/lineLen; // direction along the line
+    ctx.strokeStyle='#dc2626';ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.moveTo(fp[0]+unx*sq,fp[1]+uny*sq);
+    ctx.lineTo(fp[0]+unx*sq+ltx*sq,fp[1]+uny*sq+lty*sq);
+    ctx.lineTo(fp[0]+ltx*sq,fp[1]+lty*sq);
+    ctx.stroke();
+  }
+
+  // Distance label
+  const mx=(pp[0]+fp[0])/2+15, my=(pp[1]+fp[1])/2;
+  ctx.fillStyle='#dc2626';ctx.font=`bold 13px 'JetBrains Mono',monospace`;
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText(`d=${dist.toFixed(3)}`,mx,my);
+
+  // Point P
+  ctx.fillStyle='#dc2626';
+  ctx.beginPath();ctx.arc(...pp,7,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font=`bold 12px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('P',pp[0],pp[1]);
+
+  // Foot F
+  ctx.fillStyle='#0f6e56';
+  ctx.beginPath();ctx.arc(...fp,5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#0f6e56';ctx.font=`bold 11px 'JetBrains Mono',monospace`;
+  ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText('F',fp[0]+6,fp[1]-2);
+
+  // Line endpoint handles
+  [lineA,lineB].forEach(lp=>{
+    const cp=coordToCanvas(lp.x,lp.y);
+    ctx.strokeStyle='#2a5c8f';ctx.fillStyle='#e8f0f8';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(...cp,6,0,Math.PI*2);ctx.fill();ctx.stroke();
+  });
+
+  updateFormula(A,B,C,dist);
+}
+
+function updateFormula(A,B,C,dist){
+  const a=A.toFixed(2),b=B.toFixed(2),c=C.toFixed(2);
+  const num=Math.abs(A*P.x+B*P.y+C).toFixed(3);
+  const den=Math.sqrt(A*A+B*B).toFixed(3);
+  document.getElementById('formulaBox').innerHTML=
+    `d = |${a}×${P.x.toFixed(1)}+${b}×${P.y.toFixed(1)}+${c}| / √(${a}²+${b}²) = ${num}/${den} = ${dist.toFixed(3)}`;
+  document.getElementById('fb').innerHTML=
+    `<strong>点到直线距离公式</strong>：直线 Ax+By+C=0，点 P(x₀,y₀)，则距离 d = |Ax₀+By₀+C|/√(A²+B²)。<br>` +
+    `几何意义：从点P向直线作垂线，垂足为F，PF的长度就是最短距离。<br>` +
+    `当前：P(${P.x.toFixed(1)},${P.y.toFixed(1)})，直线 ${A.toFixed(2)}x+${B.toFixed(2)}y+${C.toFixed(2)}=0，距离 d≈${dist.toFixed(3)}。`;
+}
+
+function getHandleAt(mx,my){
+  const c=canvasToCoord(mx,my);
+  if(Math.hypot(c.x-P.x,c.y-P.y)<0.4) return 'point';
+  if(Math.hypot(c.x-lineA.x,c.y-lineA.y)<0.4) return 'lineA';
+  if(Math.hypot(c.x-lineB.x,c.y-lineB.y)<0.4) return 'lineB';
+  return null;
+}
+
+cvs.addEventListener('pointerdown',e=>{
+  const r=cvs.getBoundingClientRect();
+  dragging=getHandleAt(e.clientX-r.left,e.clientY-r.top);
+  if(dragging) cvs.setPointerCapture(e.pointerId);
+  lastMx=e.clientX-r.left;lastMy=e.clientY-r.top;
+});
+cvs.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const r=cvs.getBoundingClientRect();
+  const c=canvasToCoord(e.clientX-r.left,e.clientY-r.top);
+  if(dragging==='point') P={...c};
+  else if(dragging==='lineA') lineA={...c};
+  else lineB={...c};
+  draw();
+});
+cvs.addEventListener('pointerup',()=>{dragging=null;});
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

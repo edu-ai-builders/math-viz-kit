@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>梯度下降路径实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="优化">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="逼近">
+  <meta name="desc" content="在损失曲面上点击起点，动画展示梯度下降的路径，理解学习率与收敛的关系">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto Sans SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:crosshair;}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .fn-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .fn-btn{padding:6px 14px;border:2px solid var(--border);border-radius:20px;font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .fn-btn.active,.fn-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 优化 · 认知动作：逼近</div>
+  <h1>梯度下降路径实验室</h1>
+  <p class="sub">点击画布设置起点，看优化算法如何沿着"最陡下坡"找到最低点</p>
+</header>
+<main>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">当前步骤</div><div class="stat-val" id="stepVal" style="color:var(--blue)">0</div></div>
+    <div class="stat"><div class="stat-lbl">当前 x</div><div class="stat-val" id="xVal" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">损失 f(x)</div><div class="stat-val" id="fxVal" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">学习率 α</div><div class="stat-val" id="lrStat" style="color:var(--ink2)">0.1</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">学习率 α（步长）</div>
+      <div class="sl-val" id="lrLabel">0.10</div>
+      <input type="range" id="lrSl" min="0.01" max="1.0" step="0.01" value="0.1">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">最大迭代步数</div>
+      <div class="sl-val" id="maxStepLabel">50</div>
+      <input type="range" id="maxStepSl" min="10" max="200" step="10" value="50">
+    </div>
+  </div>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn(0,this)">x² (单极值)</button>
+    <button class="fn-btn" onclick="setFn(1,this)">x⁴−3x²+x (双极值)</button>
+    <button class="fn-btn" onclick="setFn(2,this)">sin(x)+x/5 (多极值)</button>
+    <button class="fn-btn" onclick="setFn(3,this)">(x−1)²+0.5 (非零最小)</button>
+  </div>
+  <div class="fb" id="fb">点击画布上的任意位置设置起点，梯度下降动画将自动开始。</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 梯度下降的路径只有动画才能展示"下山"的过程
+// PEDAGOGY V3 分步揭示: 点击→动画→收敛，每步可见
+// PEDAGOGY V5 操作先于符号: 先看路径再理解公式 x = x - α·f'(x)
+// PEDAGOGY V6 动作-数学一致: 学习率越大步子越大=动画步距越长
+// PEDAGOGY V7 单一认知动作: 逼近（梯度引导的逼近）
+// PEDAGOGY V8 概念反馈: 揭示局部极小值陷阱和学习率过大时的震荡
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 360;
+
+const C = {
+  blue:'#2a5c8f', blueL:'#e8f0f8', teal:'#0f6e56', tealL:'#e1f5ee',
+  amber:'#854f0b', amberL:'#faeeda', amberD:'#c47a0e', red:'#b84040',
+  ink:'#1a1814', ink2:'#6b6860', ink3:'#a8a69f', border:'#e4e2da', surf:'#fff'
+};
+
+const FNS = [
+  {fn:x=>x*x, grad:x=>2*x, name:'f(x) = x²', min:0},
+  {fn:x=>Math.pow(x,4)-3*x*x+x, grad:x=>4*Math.pow(x,3)-6*x+1, name:'f(x) = x⁴−3x²+x', min:null},
+  {fn:x=>Math.sin(x)+x/5, grad:x=>Math.cos(x)+0.2, name:'f(x) = sin(x)+x/5', min:null},
+  {fn:x=>(x-1)*(x-1)+0.5, grad:x=>2*(x-1), name:'f(x) = (x−1)²+0.5', min:1}
+];
+
+let fnIdx = 0;
+let path = []; // [{x, y}]
+let animIdx = 0;
+let animTimer = null;
+let startX = null;
+
+function setup(){
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr; ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function setFn(idx, btn){
+  fnIdx = idx;
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  path=[]; animIdx=0; startX=null;
+  if(animTimer){ clearInterval(animTimer); animTimer=null; }
+  draw();
+}
+
+function computePath(x0){
+  const lr = parseFloat(document.getElementById('lrSl').value);
+  const maxSteps = parseInt(document.getElementById('maxStepSl').value);
+  const f = FNS[fnIdx].fn, g = FNS[fnIdx].grad;
+  const pts = [{x:x0, y:f(x0)}];
+  let x = x0;
+  for(let i=0;i<maxSteps;i++){
+    const grad = g(x);
+    const xNew = x - lr * grad;
+    if(!isFinite(xNew)||Math.abs(xNew)>20) break;
+    pts.push({x:xNew, y:f(xNew)});
+    if(Math.abs(xNew-x) < 1e-7) break;
+    x = xNew;
+  }
+  return pts;
+}
+
+function draw(){
+  const W = cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const f = FNS[fnIdx].fn;
+  const margin = {left:50, right:16, top:16, bottom:40};
+  const plotW = W-margin.left-margin.right;
+  const plotH = H-margin.top-margin.bottom;
+  const xRange = 4;
+  // Find y range dynamically
+  let yMin=Infinity, yMax=-Infinity;
+  for(let x=-xRange;x<=xRange;x+=0.05){
+    const y=f(x);
+    if(isFinite(y)){yMin=Math.min(yMin,y);yMax=Math.max(yMax,y);}
+  }
+  const yPad = (yMax-yMin)*0.15;
+  yMin-=yPad; yMax+=yPad;
+
+  const xToP = x => margin.left+(x+xRange)/(2*xRange)*plotW;
+  const yToP = y => margin.top+(yMax-y)/(yMax-yMin)*plotH;
+  const pToX = px => (px-margin.left)/(plotW)*(2*xRange)-xRange;
+
+  // Store transform for click handler
+  cvs._xToP = xToP; cvs._pToX = pToX;
+
+  // Grid
+  ctx.strokeStyle=C.border; ctx.lineWidth=0.5;
+  for(let i=-xRange;i<=xRange;i++){ctx.beginPath();ctx.moveTo(xToP(i),margin.top);ctx.lineTo(xToP(i),margin.top+plotH);ctx.stroke();}
+  const ySteps=6;
+  for(let i=0;i<=ySteps;i++){
+    const y=yMin+(yMax-yMin)*i/ySteps;
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(y));ctx.lineTo(margin.left+plotW,yToP(y));ctx.stroke();
+    ctx.fillStyle=C.ink3;ctx.font=`10px 'JetBrains Mono',monospace`;ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(y.toFixed(1),margin.left-3,yToP(y));
+  }
+
+  // x-axis
+  ctx.strokeStyle=C.ink2; ctx.lineWidth=1.5;
+  if(yMin<=0&&yMax>=0){
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(0));ctx.lineTo(margin.left+plotW,yToP(0));ctx.stroke();
+  }
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+  for(let i=-xRange;i<=xRange;i++){if(i!==0)ctx.fillText(String(i),xToP(i),yToP(yMin)+3);}
+
+  // True function curve
+  ctx.strokeStyle=C.blue; ctx.lineWidth=3; ctx.setLineDash([]);
+  ctx.beginPath(); let first=true;
+  for(let px=0;px<=plotW;px+=2){
+    const x=(px/plotW)*(2*xRange)-xRange;
+    const y=f(x);
+    if(!isFinite(y)||y<yMin*2||y>yMax*2){first=true;continue;}
+    first?(ctx.moveTo(margin.left+px,yToP(y)),first=false):ctx.lineTo(margin.left+px,yToP(y));
+  }
+  ctx.stroke();
+
+  // Label
+  ctx.fillStyle=C.blue;ctx.font=`bold 13px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(FNS[fnIdx].name, margin.left+4, margin.top+4);
+
+  // Gradient arrows along curve (show direction)
+  const g=FNS[fnIdx].grad;
+  for(let x=-3.5;x<=3.5;x+=1){
+    const gv=g(x), gm=Math.min(Math.abs(gv),2);
+    const dir=gv>0?-1:1; // gradient points down means we go left if positive
+    const px=xToP(x), py=yToP(f(x));
+    const arrLen=gm*20*0.5;
+    ctx.strokeStyle=C.ink3+'66'; ctx.lineWidth=1.2; ctx.setLineDash([]);
+    ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+dir*arrLen,py);ctx.stroke();
+  }
+
+  // Draw path
+  if(path.length>0&&animIdx>0){
+    const visible=path.slice(0,animIdx+1);
+    // Gradient path line
+    for(let i=1;i<visible.length;i++){
+      const t=(i-1)/(visible.length-1);
+      const col=`rgba(11,110,86,${0.3+t*0.7})`;
+      ctx.strokeStyle=col; ctx.lineWidth=2; ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(xToP(visible[i-1].x),yToP(visible[i-1].y));
+      ctx.lineTo(xToP(visible[i].x),yToP(visible[i].y));
+      ctx.stroke();
+    }
+    // Dots
+    visible.forEach((pt,i)=>{
+      const r=i===0?7:4;
+      const col=i===0?C.red:(i===visible.length-1?C.teal:'#0f6e5699');
+      ctx.fillStyle=col;
+      ctx.beginPath();ctx.arc(xToP(pt.x),yToP(pt.y),r,0,Math.PI*2);ctx.fill();
+    });
+
+    // Gradient arrow at current position
+    if(animIdx>0&&animIdx<path.length){
+      const cp=visible[visible.length-1];
+      const grad=g(cp.x);
+      const arrowScale=20;
+      const ax1=xToP(cp.x), ay1=yToP(cp.y);
+      const ax2=ax1-grad/Math.abs(grad+0.0001)*Math.min(Math.abs(grad)*arrowScale,50);
+      ctx.strokeStyle=C.amber; ctx.lineWidth=2.5;
+      ctx.beginPath();ctx.moveTo(ax1,ay1);ctx.lineTo(ax2,ay1);ctx.stroke();
+      // Arrowhead
+      const dir2=ax2>ax1?1:-1;
+      ctx.fillStyle=C.amber;
+      ctx.beginPath();ctx.moveTo(ax2,ay1);ctx.lineTo(ax2-dir2*8,ay1-5);ctx.lineTo(ax2-dir2*8,ay1+5);ctx.fill();
+    }
+
+    const cur=visible[visible.length-1];
+    document.getElementById('stepVal').textContent = animIdx;
+    document.getElementById('xVal').textContent = cur.x.toFixed(4);
+    document.getElementById('fxVal').textContent = cur.y.toFixed(4);
+  }
+
+  const lr = parseFloat(document.getElementById('lrSl').value);
+  document.getElementById('lrStat').textContent = lr.toFixed(2);
+}
+
+function startAnim(x0){
+  if(animTimer){clearInterval(animTimer);animTimer=null;}
+  path=computePath(x0);
+  animIdx=1;
+  const fb=document.getElementById('fb');
+
+  animTimer=setInterval(()=>{
+    draw();
+    if(animIdx>=path.length-1){
+      clearInterval(animTimer); animTimer=null;
+      const last=path[path.length-1];
+      const isConverged=path.length>2&&Math.abs(last.x-path[path.length-2].x)<1e-5;
+      const lr=parseFloat(document.getElementById('lrSl').value);
+      // PEDAGOGY V8
+      if(isConverged){
+        fb.innerHTML=`收敛！在 <strong>x = ${last.x.toFixed(4)}</strong> 找到极小值（f = ${last.y.toFixed(4)}），共 ${path.length-1} 步。<br>梯度下降规则：<strong>x_new = x - α·f'(x)</strong>，沿梯度反方向移动。`;
+      } else {
+        fb.innerHTML=`已走完 ${path.length-1} 步，当前 x = ${last.x.toFixed(4)}。${lr>0.5?'<strong style="color:var(--red)">学习率过大可能导致震荡！</strong>减小α试试。':'尝试更多步数或从不同起点出发。'}`;
+      }
+    } else {
+      animIdx++;
+      const cur=path[animIdx];
+      const grad=FNS[fnIdx].grad(cur.x);
+      fb.innerHTML=`步骤 ${animIdx}：x = ${cur.x.toFixed(4)}，梯度 f'(x) = ${grad.toFixed(4)}，更新量 = -α·${grad.toFixed(4)} = ${(-parseFloat(document.getElementById('lrSl').value)*grad).toFixed(4)}`;
+    }
+  }, 80);
+}
+
+cvs.addEventListener('click', e=>{
+  const rect=cvs.getBoundingClientRect();
+  const px=e.clientX-rect.left;
+  const W=rect.width;
+  const xRange=4;
+  const margin={left:50};
+  const plotW=W-margin.left-16;
+  const x0=(px-margin.left)/plotW*(2*xRange)-xRange;
+  if(x0<-xRange||x0>xRange) return;
+  startX=x0;
+  startAnim(x0);
+});
+
+document.getElementById('lrSl').addEventListener('input',e=>{
+  document.getElementById('lrLabel').textContent=parseFloat(e.target.value).toFixed(2);
+  document.getElementById('lrStat').textContent=parseFloat(e.target.value).toFixed(2);
+  if(startX!==null) startAnim(startX);
+});
+
+document.getElementById('maxStepSl').addEventListener('input',e=>{
+  document.getElementById('maxStepLabel').textContent=e.target.value;
+  if(startX!==null) startAnim(startX);
+});
+
+window.addEventListener('resize',()=>{ setup(); draw(); });
+setup(); draw();
+</script>
+</body>
+</html>

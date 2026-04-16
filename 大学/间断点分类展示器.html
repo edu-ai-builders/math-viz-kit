@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>间断点分类展示器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="微积分">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="可去间断点、跳跃间断点、无穷间断点和振荡间断点的动态展示，对比四种类型的图像特征和极限行为">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .type-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .type-btn{padding:8px 4px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);font-size:12px;font-weight:700;text-align:center;transition:all .15s;}
+    .type-btn small{display:block;font-size:10px;font-weight:400;color:var(--ink2);margin-top:2px;}
+    .type-btn.active{color:#fff;border-color:transparent;}
+    .type-btn.active small{color:rgba(255,255,255,.8);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .limit-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--blue);line-height:1.8;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 微积分 · 认知动作：比较</div>
+  <h1>间断点分类展示器</h1>
+  <p class="sub">四种间断点的图像特征与极限行为对比</p>
+</header>
+<main>
+  <div class="type-row">
+    <button class="type-btn active" style="background:#2a5c8f" onclick="setType('removable',this)">可去间断点<small>f(x₀)≠极限</small></button>
+    <button class="type-btn" onclick="setType('jump',this)">跳跃间断点<small>左≠右极限</small></button>
+    <button class="type-btn" onclick="setType('infinite',this)">无穷间断点<small>极限=∞</small></button>
+    <button class="type-btn" onclick="setType('oscillate',this)">振荡间断点<small>极限不存在</small></button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="limit-box" id="limitBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V4 信号聚焦: 每种间断点用独特视觉标记（空心圆/跳跃箭头/渐近线/震荡区域）
+// PEDAGOGY V7 单一认知动作: 比较四种间断点
+// PEDAGOGY V8 概念反馈: 说明左极限、右极限、函数值三者关系
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=300;
+let type='removable';
+
+const TYPES={
+  removable:{
+    color:'#2a5c8f',
+    fn:(x)=>x!==0?(Math.sin(x)/x):2, // f(0)=2 but limit is 1
+    disc:0, // discontinuity at x=0
+    limit:1,fval:2,
+    llim:1,rlim:1,
+    xRange:[-4,4],yRange:[-0.5,2.5],
+    label:'f(x) = sin(x)/x, f(0)=2',
+    desc:'<strong>可去间断点</strong>（第一类间断点）：左右极限存在且相等，但函数值与极限不同（或函数在该点无定义）。<br>图中x=0处：lim f(x)=1，但f(0)=2（空心圆表示极限值，实心圆表示函数值）。<br>可通过重新定义f(0)=1来"补上"间断点，使函数连续。',
+    limitTxt:'lim[x→0⁻] f(x) = 1\nlim[x→0⁺] f(x) = 1\nf(0) = 2  ← 与极限不等\n∴ x=0 是可去间断点'
+  },
+  jump:{
+    color:'#0f6e56',
+    fn:(x)=>x<0?x+1:x-1,
+    disc:0,
+    llim:-1,rlim:-1,
+    xRange:[-4,4],yRange:[-4,4],
+    label:'f(x) = {x+1, x<0; x-1, x≥0}',
+    desc:'<strong>跳跃间断点</strong>（第一类间断点）：左极限和右极限都存在，但不相等，函数"跳跃"了一个距离。<br>图中x=0处：左极限=1，右极限=-1，跳跃量=2。<br>箭头显示了从左侧极限到右侧极限的跳跃。',
+    limitTxt:'lim[x→0⁻] f(x) = 1\nlim[x→0⁺] f(x) = -1\n左极限 ≠ 右极限\n∴ x=0 是跳跃间断点（跳跃量=2）'
+  },
+  infinite:{
+    color:'#854f0b',
+    fn:(x)=>Math.abs(x)<0.01?null:1/x,
+    disc:0,
+    xRange:[-3,3],yRange:[-6,6],
+    label:'f(x) = 1/x',
+    desc:'<strong>无穷间断点</strong>（第二类间断点）：至少一侧极限为无穷大，函数值趋向±∞。<br>图中x=0处：lim[x→0⁺]=+∞，lim[x→0⁻]=-∞。<br>x=0是1/x的无穷间断点，也称"垂直渐近线"。',
+    limitTxt:'lim[x→0⁻] f(x) = -∞\nlim[x→0⁺] f(x) = +∞\n极限为无穷大\n∴ x=0 是无穷间断点（垂直渐近线）'
+  },
+  oscillate:{
+    color:'#b84040',
+    fn:(x)=>Math.abs(x)<0.001?null:Math.sin(1/x),
+    disc:0,
+    xRange:[-1,1],yRange:[-1.5,1.5],
+    label:'f(x) = sin(1/x)',
+    desc:'<strong>振荡间断点</strong>（第二类间断点）：在间断点附近函数值剧烈振荡，极限不存在。<br>图中x=0处：当x→0时，1/x→∞，sin(1/x)在[-1,1]间无限振荡，极限不存在。<br>这种情况无法通过重新定义函数值来修复。',
+    limitTxt:'lim[x→0⁻] f(x) 不存在（振荡）\nlim[x→0⁺] f(x) 不存在（振荡）\n函数在x=0附近无限振荡\n∴ x=0 是振荡间断点'
+  }
+};
+
+function setType(t,btn){
+  type=t;
+  document.querySelectorAll('.type-btn').forEach(b=>{b.classList.remove('active');b.style.background='';});
+  btn.classList.add('active');btn.style.background=TYPES[t].color;
+  draw();
+}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const T=TYPES[type];
+  const [x0,x1]=T.xRange, [y0,y1]=T.yRange;
+  const pad={l:45,r:15,t:20,b:35};
+  const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+
+  function toX(x){return pad.l+(x-x0)/(x1-x0)*cw;}
+  function toY(y){return pad.t+ch-(y-y0)/(y1-y0)*ch;}
+
+  // Grid
+  ctx.strokeStyle='#e4e2da';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+  const xStep=Math.ceil((x1-x0)/8);
+  for(let x=Math.ceil(x0);x<=x1;x+=xStep){ctx.beginPath();ctx.moveTo(toX(x),pad.t);ctx.lineTo(toX(x),pad.t+ch);ctx.stroke();}
+  const yStep=Math.ceil((y1-y0)/6);
+  for(let y=Math.ceil(y0);y<=y1;y+=yStep){ctx.beginPath();ctx.moveTo(pad.l,toY(y));ctx.lineTo(W-pad.r,toY(y));ctx.stroke();}
+  ctx.setLineDash([]);
+
+  // Axes
+  ctx.strokeStyle='#6b6860';ctx.lineWidth=1.5;
+  if(y0<0&&y1>0){ctx.beginPath();ctx.moveTo(pad.l,toY(0));ctx.lineTo(W-pad.r,toY(0));ctx.stroke();}
+  if(x0<0&&x1>0){ctx.beginPath();ctx.moveTo(toX(0),pad.t);ctx.lineTo(toX(0),pad.t+ch);ctx.stroke();}
+
+  // Labels
+  ctx.fillStyle='#a8a69f';ctx.font=`9px 'JetBrains Mono',monospace`;
+  for(let x=Math.ceil(x0);x<=x1;x+=xStep){
+    if(y0<0&&y1>0){ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(x,toX(x),toY(0)+3);}
+    else{ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(x,toX(x),pad.t+ch+3);}
+  }
+  for(let y=Math.ceil(y0);y<=y1;y+=yStep){
+    if(y===0) continue;
+    ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(y,pad.l-3,toY(y));
+  }
+
+  // Plot
+  const S=type==='oscillate'?1000:300;
+  ctx.strokeStyle=T.color;ctx.lineWidth=2.5;
+  ctx.beginPath();
+  let penDown=false;
+  for(let i=0;i<=S;i++){
+    const x=x0+i/S*(x1-x0);
+    if(type==='jump'&&Math.abs(x)<(x1-x0)/S*1.5){penDown=false;continue;}
+    if(type==='infinite'&&Math.abs(x)<0.05){penDown=false;continue;}
+    const y=T.fn(x);
+    if(y===null||!isFinite(y)||y<y0-0.5||y>y1+0.5){penDown=false;continue;}
+    if(!penDown){ctx.moveTo(toX(x),toY(y));penDown=true;}
+    else ctx.lineTo(toX(x),toY(y));
+  }
+  ctx.stroke();
+
+  // Discontinuity markers
+  const d=T.disc;
+  if(type==='removable'){
+    // Hollow circle at limit value
+    ctx.fillStyle='#fff';ctx.strokeStyle=T.color;ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(toX(d),toY(T.limit),6,0,Math.PI*2);ctx.fill();ctx.stroke();
+    // Solid circle at function value
+    ctx.fillStyle=T.color;
+    ctx.beginPath();ctx.arc(toX(d),toY(T.fval),6,0,Math.PI*2);ctx.fill();
+  } else if(type==='jump'){
+    // Left endpoint (filled)
+    ctx.fillStyle='#fff';ctx.strokeStyle=T.color;ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(toX(d),toY(T.fn(d-0.001)),6,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.fillStyle=T.color;
+    ctx.beginPath();ctx.arc(toX(d),toY(T.fn(d)),6,0,Math.PI*2);ctx.fill();
+    // Jump arrow
+    const ly=toY(T.fn(d-0.001)),ry=toY(T.fn(d));
+    ctx.strokeStyle='#dc2626';ctx.lineWidth=1.5;ctx.setLineDash([3,2]);
+    ctx.beginPath();ctx.moveTo(toX(d)+10,ly);ctx.lineTo(toX(d)+10,ry);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#dc2626';ctx.font=`11px 'JetBrains Mono',monospace`;
+    ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillText('跳跃=2',toX(d)+14,(ly+ry)/2);
+  } else if(type==='infinite'){
+    // Vertical asymptote line
+    ctx.strokeStyle='#dc262660';ctx.lineWidth=1;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(toX(d),pad.t);ctx.lineTo(toX(d),pad.t+ch);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#dc2626';ctx.font=`11px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText('垂直渐近线',toX(d),pad.t+4);
+  } else {
+    // Shade oscillation zone
+    ctx.fillStyle=T.color+'18';
+    ctx.fillRect(pad.l,pad.t,toX(0.3)-pad.l,ch);
+    ctx.fillStyle=T.color;ctx.font=`10px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center';ctx.fillText('振荡区域',toX(0.15),pad.t+12);
+  }
+
+  document.getElementById('limitBox').textContent=T.limitTxt;
+  document.getElementById('fb').innerHTML=T.desc;
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

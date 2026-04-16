@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>多元函数等高线联动器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="多元微积分">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="等高线热图+3D透视投影联动，拖动点观察截面，体现f(x,y)的几何意义">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .panels{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    #cvs2d{cursor:crosshair;}
+    .fn-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .fn-btn{padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);font-weight:700;transition:all .2s;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 多元微积分 · 认知动作：变换</div>
+  <h1>多元函数等高线联动器</h1>
+  <p class="sub">左侧等高线图点击选点，右侧3D投影实时同步，体验 f(x,y) 的全貌</p>
+</header>
+<main>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn(0,this)">x²+y²（碗）</button>
+    <button class="fn-btn" onclick="setFn(1,this)">x²-y²（鞍）</button>
+    <button class="fn-btn" onclick="setFn(2,this)">sin(r)/r（波）</button>
+  </div>
+  <div class="panels">
+    <div><canvas id="cvs2d" height="300"></canvas></div>
+    <div><canvas id="cvs3d" height="300"></canvas></div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 等高线与3D曲面联动只有同步才能建立两种表征的连接
+// PEDAGOGY V2 表征桥接: 等高线热图 + 3D曲面 + 截面曲线三联动
+// PEDAGOGY V7 单一认知动作: 变换（点击等高线图 → 3D曲面同步显示该点的位置）
+// PEDAGOGY V8 概念反馈: "等高线密集=坡度陡；等高线稀疏=坡度缓"
+
+const cvs2d = document.getElementById('cvs2d');
+const cvs3d = document.getElementById('cvs3d');
+const ctx2 = cvs2d.getContext('2d');
+const ctx3 = cvs3d.getContext('2d');
+const H = 300;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da'
+};
+
+const FNS = [
+  { label:'x²+y²', f:(x,y)=>x*x+y*y, desc:'碗形函数，只有一个极小值点在原点' },
+  { label:'x²-y²', f:(x,y)=>x*x-y*y, desc:'马鞍面，原点是鞍点（x方向极小，y方向极大）' },
+  { label:'sinc(r)', f:(x,y)=>{const r=Math.sqrt(x*x+y*y);return r<0.01?1:Math.sin(r)/r;}, desc:'同心波浪面，等高线为同心圆' },
+];
+
+let fnIdx = 0;
+let selX = 0.5, selY = 0.5;
+let rotAngle = 0.6;
+
+function setup() {
+  const r2 = cvs2d.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs2d.width = r2.width*dpr; cvs2d.height = H*dpr; ctx2.scale(dpr,dpr); cvs2d.style.height = H+'px';
+  const r3 = cvs3d.getBoundingClientRect();
+  cvs3d.width = r3.width*dpr; cvs3d.height = H*dpr; ctx3.scale(dpr,dpr); cvs3d.style.height = H+'px';
+}
+
+function setFn(i, btn) {
+  fnIdx = i;
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+const DOMAIN = 2.5;
+const N2D = 80;
+const N3D = 20;
+
+function draw() {
+  draw2D(); draw3D(); updateFeedback();
+}
+
+function draw2D() {
+  const W = cvs2d.getBoundingClientRect().width;
+  ctx2.clearRect(0,0,W,H);
+  const fn = FNS[fnIdx];
+  const pad = 15;
+  const cw = W-2*pad, ch = H-2*pad;
+
+  // Compute f range
+  let fMin=Infinity, fMax=-Infinity;
+  for(let i=0;i<N2D;i++) for(let j=0;j<N2D;j++){
+    const x=-DOMAIN+i/N2D*2*DOMAIN, y=-DOMAIN+j/N2D*2*DOMAIN;
+    const f=fn.f(x,y); fMin=Math.min(fMin,f); fMax=Math.max(fMax,f);
+  }
+
+  // Heatmap
+  const cw2=cw/N2D, ch2=ch/N2D;
+  for(let i=0;i<N2D;i++) for(let j=0;j<N2D;j++){
+    const x=-DOMAIN+i/N2D*2*DOMAIN, y=DOMAIN-j/N2D*2*DOMAIN;
+    const f=fn.f(x,y);
+    const t=Math.max(0,Math.min(1,(f-fMin)/(fMax-fMin)));
+    const r_=Math.round(42+t*(220-42));
+    const g_=Math.round(92+t*(220-92));
+    const b_=Math.round(143+t*(40-143));
+    ctx2.fillStyle=`rgb(${r_},${g_},${b_})`;
+    ctx2.fillRect(pad+i*cw2, pad+j*ch2, cw2+1, ch2+1);
+  }
+
+  // Contour lines
+  const nC=10;
+  for(let ci=1;ci<nC;ci++){
+    const fVal=fMin+ci/nC*(fMax-fMin);
+    ctx2.fillStyle='rgba(255,255,255,0.7)';
+    for(let i=0;i<N2D-1;i++) for(let j=0;j<N2D-1;j++){
+      const x0=-DOMAIN+i/N2D*2*DOMAIN, y0=DOMAIN-j/N2D*2*DOMAIN;
+      const x1=-DOMAIN+(i+1)/N2D*2*DOMAIN;
+      const y1=DOMAIN-(j+1)/N2D*2*DOMAIN;
+      const v00=fn.f(x0,y0), v10=fn.f(x1,y0), v01=fn.f(x0,y1);
+      if((v00-fVal)*(v10-fVal)<0 || (v00-fVal)*(v01-fVal)<0){
+        ctx2.beginPath(); ctx2.arc(pad+(i+0.5)*cw2, pad+(j+0.5)*ch2, 0.7, 0, Math.PI*2); ctx2.fill();
+      }
+    }
+  }
+
+  // Selected point
+  function toX(x){return pad+(x/DOMAIN*0.5+0.5)*cw;}
+  function toY(y){return pad+(0.5-y/DOMAIN*0.5)*ch;}
+  const spx=toX(selX), spy=toY(selY);
+  ctx2.fillStyle='#fff'; ctx2.strokeStyle=C.amber; ctx2.lineWidth=2;
+  ctx2.beginPath(); ctx2.arc(spx, spy, 6, 0, Math.PI*2); ctx2.fill(); ctx2.stroke();
+
+  // f value label
+  const fSel=fn.f(selX,selY);
+  ctx2.fillStyle=C.amber; ctx2.font=`bold 11px 'JetBrains Mono',monospace`;
+  ctx2.textAlign='left'; ctx2.textBaseline='top';
+  ctx2.fillText(`f(${selX.toFixed(2)},${selY.toFixed(2)})=${fSel.toFixed(3)}`, pad+2, 2);
+
+  // Axes
+  ctx2.strokeStyle='rgba(255,255,255,0.5)'; ctx2.lineWidth=1;
+  ctx2.beginPath(); ctx2.moveTo(toX(0),pad); ctx2.lineTo(toX(0),pad+ch); ctx2.stroke();
+  ctx2.beginPath(); ctx2.moveTo(pad,toY(0)); ctx2.lineTo(pad+cw,toY(0)); ctx2.stroke();
+
+  // Axis labels
+  ctx2.fillStyle='rgba(255,255,255,0.7)'; ctx2.font=`10px 'JetBrains Mono',monospace`;
+  ctx2.textAlign='right'; ctx2.textBaseline='top';
+  ctx2.fillText('x →',pad+cw,toY(0)+2);
+  ctx2.textAlign='left'; ctx2.textBaseline='bottom';
+  ctx2.fillText('y ↑',toX(0)+2,pad);
+}
+
+function draw3D() {
+  const W3 = cvs3d.getBoundingClientRect().width;
+  ctx3.clearRect(0,0,W3,H);
+  const fn = FNS[fnIdx];
+
+  // Simple 3D projection (isometric-like)
+  const cx=W3*0.45, cy=H*0.5;
+  const scX=W3*0.18, scY=H*0.12, scZ=H*0.22;
+  const cosA=Math.cos(rotAngle), sinA=Math.sin(rotAngle);
+  const cosB=Math.cos(-0.4), sinB=Math.sin(-0.4);
+
+  // Compute f range for z scaling
+  let fMin=Infinity, fMax=-Infinity;
+  for(let i=0;i<=N3D;i++) for(let j=0;j<=N3D;j++){
+    const x=-DOMAIN+i/N3D*2*DOMAIN, y=-DOMAIN+j/N3D*2*DOMAIN;
+    const f=fn.f(x,y); fMin=Math.min(fMin,f); fMax=Math.max(fMax,f);
+  }
+  const fRange=Math.max(fMax-fMin,0.1);
+
+  function project(x,y,fv){
+    // Rotate around y-axis
+    const x2=x*cosA+y*sinA;
+    const z2=(fv-fMin)/fRange*1.5-0.75;
+    const y2=-x*sinA+y*cosA;
+    // Tilt
+    const x3=x2;
+    const y3=y2*cosB+z2*sinB;
+    const z3=-y2*sinB+z2*cosB;
+    return [cx+x3*scX, cy-y3*scY-z3*scZ];
+  }
+
+  // Draw surface as grid
+  for(let i=0;i<N3D;i++){
+    for(let j=0;j<N3D;j++){
+      const x0=-DOMAIN+i/N3D*2*DOMAIN, y0=-DOMAIN+j/N3D*2*DOMAIN;
+      const x1=-DOMAIN+(i+1)/N3D*2*DOMAIN, y1=-DOMAIN+(j+1)/N3D*2*DOMAIN;
+      const f00=fn.f(x0,y0),f10=fn.f(x1,y0),f01=fn.f(x0,y1),f11=fn.f(x1,y1);
+      const fAvg=(f00+f10+f01+f11)/4;
+      const t=Math.max(0,Math.min(1,(fAvg-fMin)/fRange));
+      const r_=Math.round(42+t*(220-42));
+      const g_=Math.round(92+t*(220-92));
+      const b_=Math.round(143+t*(40-143));
+      ctx3.fillStyle=`rgba(${r_},${g_},${b_},0.7)`;
+      ctx3.strokeStyle=`rgba(${r_},${g_},${b_},0.3)`;
+      ctx3.lineWidth=0.5;
+      ctx3.beginPath();
+      ctx3.moveTo(...project(x0,y0,f00));
+      ctx3.lineTo(...project(x1,y0,f10));
+      ctx3.lineTo(...project(x1,y1,f11));
+      ctx3.lineTo(...project(x0,y1,f01));
+      ctx3.closePath();
+      ctx3.fill(); ctx3.stroke();
+    }
+  }
+
+  // Selected point on surface
+  const fSel=fn.f(selX,selY);
+  const [spx3,spy3]=project(selX,selY,fSel);
+  // Vertical drop line
+  const [spx3b,spy3b]=project(selX,selY,fMin);
+  ctx3.strokeStyle=C.amber; ctx3.lineWidth=1.5; ctx3.setLineDash([3,3]);
+  ctx3.beginPath(); ctx3.moveTo(spx3,spy3); ctx3.lineTo(spx3b,spy3b); ctx3.stroke();
+  ctx3.setLineDash([]);
+  ctx3.fillStyle=C.amber;
+  ctx3.beginPath(); ctx3.arc(spx3,spy3,5,0,Math.PI*2); ctx3.fill();
+  ctx3.fillStyle=C.amber; ctx3.font=`bold 11px 'JetBrains Mono',monospace`;
+  ctx3.textAlign='left'; ctx3.textBaseline='bottom';
+  ctx3.fillText(`z=${fSel.toFixed(2)}`, spx3+6, spy3);
+
+  ctx3.fillStyle=C.ink; ctx3.font=`bold 12px 'Noto Sans SC',sans-serif`;
+  ctx3.textAlign='left'; ctx3.textBaseline='top';
+  ctx3.fillText(`y = ${fn.label}`, 6, 4);
+}
+
+function updateFeedback() {
+  const fn = FNS[fnIdx];
+  const fSel = fn.f(selX, selY);
+  document.getElementById('fb').innerHTML =
+    `<strong>${fn.label}</strong>（${fn.desc}）<br>` +
+    `当前点 (${selX.toFixed(2)}, ${selY.toFixed(2)})，函数值 f = ${fSel.toFixed(4)}<br>` +
+    `<strong>等高线的含义</strong>：同一等高线上所有点的函数值相等（即 f(x,y) = 常数）。<br>` +
+    `等高线密集 → 坡度陡（梯度大）；等高线稀疏 → 坡度缓（梯度小）。<br>` +
+    `点击左侧等高线图选择点，右侧3D视图同步显示该点在曲面上的位置。`;
+}
+
+cvs2d.addEventListener('click', e=>{
+  const rect=cvs2d.getBoundingClientRect();
+  const W=rect.width;
+  const pad=15,cw=W-2*pad;
+  const mx=((e.clientX-rect.left-pad)/cw-0.5)*2*DOMAIN;
+  const my=(0.5-(e.clientY-rect.top-pad)/(H-2*pad))*2*DOMAIN;
+  selX=Math.max(-DOMAIN*0.9,Math.min(DOMAIN*0.9,mx));
+  selY=Math.max(-DOMAIN*0.9,Math.min(DOMAIN*0.9,my));
+  draw();
+});
+
+window.addEventListener('resize', ()=>{setup();draw();});
+setup(); draw();
+</script>
+</body>
+</html>

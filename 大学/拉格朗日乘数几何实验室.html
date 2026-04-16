@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>拉格朗日乘数几何实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="多元优化">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="逼近">
+  <meta name="desc" content="等高线与约束曲线动态相切，拖动约束条件，直觉理解拉格朗日条件∇f=λ∇g">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .prob-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+    .prob-btn{padding:10px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;background:var(--surface);font-family:'JetBrains Mono',monospace;font-weight:700;transition:all .2s;}
+    .prob-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .ctrl-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--blue);margin-bottom:4px;}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 多元优化 · 认知动作：逼近</div>
+  <h1>拉格朗日乘数几何实验室</h1>
+  <p class="sub">等高线与约束曲线相切时达到最优——可视化 ∇f = λ∇g 的几何含义</p>
+</header>
+<main>
+  <div class="prob-row">
+    <button class="prob-btn active" onclick="setProb(0,this)">最大化 x+y，约束 x²+y²=c</button>
+    <button class="prob-btn" onclick="setProb(1,this)">最大化 xy，约束 x+y=c</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="ctrl-box">
+    <div class="ctrl-label">约束参数 c（调整约束条件大小）</div>
+    <div class="ctrl-val" id="cVal">c = 4.00</div>
+    <input type="range" id="cSlider" min="0.5" max="8" step="0.1" value="4" oninput="update()">
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 等高线与约束曲线"相切"只有动态调参才能感受
+// PEDAGOGY V4 信号聚焦: 蓝色等高线，红色约束曲线，绿色标最优点
+// PEDAGOGY V5 操作先于符号: 先看相切点，后揭示λ公式
+// PEDAGOGY V7 单一认知动作: 逼近（等高线"接触"约束的最大值点）
+// PEDAGOGY V8 概念反馈: "最优点处∇f∥∇g，它们指向同一方向——这就是拉格朗日条件"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 360;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+const PROBS = [
+  {
+    label:'max f=x+y，约束 g=x²+y²=c',
+    f: (x,y)=>x+y, fx: (x,y)=>1, fy: (x,y)=>1,
+    g: (x,y,c)=>x*x+y*y-c, gx:(x,y)=>2*x, gy:(x,y)=>2*y,
+    optPoint: c => [Math.sqrt(c/2), Math.sqrt(c/2)], // max at (√(c/2), √(c/2))
+    optVal: c => 2*Math.sqrt(c/2),
+    domain: 4,
+    desc: 'f(x,y) = x+y，g(x,y) = x²+y² = c（圆形约束）',
+    optFormula: 'x* = y* = √(c/2)，最大值 = √(2c)',
+  },
+  {
+    label:'max f=xy，约束 g=x+y=c',
+    f: (x,y)=>x*y, fx: (x,y)=>y, fy: (x,y)=>x,
+    g: (x,y,c)=>x+y-c, gx:(x,y)=>1, gy:(x,y)=>1,
+    optPoint: c => [c/2, c/2],
+    optVal: c => (c/2)*(c/2),
+    domain: 6,
+    desc: 'f(x,y) = xy，g(x,y) = x+y = c（直线约束）',
+    optFormula: 'x* = y* = c/2，最大值 = c²/4（AM-GM不等式）',
+  },
+];
+
+let probIdx = 0;
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setProb(i, btn) {
+  probIdx = i;
+  document.querySelectorAll('.prob-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('cSlider').value = probIdx === 0 ? 4 : 4;
+  update();
+}
+
+function update() {
+  const c = parseFloat(document.getElementById('cSlider').value);
+  document.getElementById('cVal').textContent = `c = ${c.toFixed(2)}`;
+  draw(c);
+  updateFeedback(c);
+}
+
+function draw(c) {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+  const prob = PROBS[probIdx];
+  const d = prob.domain;
+  const pad = 30;
+  const cw = W - 2*pad, ch = H - 2*pad;
+
+  function toX(x) { return pad + (x/d*0.5+0.5)*cw; }
+  function toY(y) { return pad + (0.5-y/d*0.5)*ch; }
+
+  // Compute f range for contours
+  let fMin = Infinity, fMax = -Infinity;
+  for (let i=0; i<=50; i++) for (let j=0; j<=50; j++) {
+    const x = -d+i/50*2*d, y = -d+j/50*2*d;
+    const fv = prob.f(x,y);
+    fMin = Math.min(fMin, fv); fMax = Math.max(fMax, fv);
+  }
+
+  // Background heatmap (light)
+  const N = 60;
+  const cellW = cw/N, cellH = ch/N;
+  for (let i=0; i<N; i++) for (let j=0; j<N; j++) {
+    const x = -d+i/N*2*d, y = d-j/N*2*d;
+    const fv = prob.f(x,y);
+    const t = Math.max(0, Math.min(1, (fv-fMin)/(fMax-fMin)));
+    const r_ = Math.round(232 + t*(42-232));
+    const g_ = Math.round(244 + t*(92-244));
+    const b_ = Math.round(253 + t*(143-253));
+    ctx.fillStyle = `rgba(${r_},${g_},${b_},0.4)`;
+    ctx.fillRect(pad+i*cellW, pad+j*cellH, cellW+1, cellH+1);
+  }
+
+  // Contour lines for f
+  const nContours = 10;
+  for (let ci=1; ci<nContours; ci++) {
+    const fVal = fMin + ci/nContours*(fMax-fMin);
+    ctx.strokeStyle = C.blueL.replace('f8','cc');
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    let prevOn = false;
+    for (let i=0; i<=200; i++) {
+      const x = -d + i/200*2*d;
+      // For f=x+y: y = fVal - x (line)
+      // For f=xy: y = fVal/x
+      let y;
+      if (probIdx === 0) y = fVal - x;
+      else y = Math.abs(x) > 0.01 ? fVal/x : NaN;
+      if (isNaN(y) || y < -d || y > d) { prevOn = false; continue; }
+      const xx = toX(x), yy = toY(y);
+      if (!prevOn) { ctx.moveTo(xx,yy); prevOn = true; }
+      else ctx.lineTo(xx, yy);
+    }
+    ctx.stroke();
+  }
+
+  // Constraint curve (red)
+  ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  if (probIdx === 0) {
+    // Circle x²+y²=c
+    const R = Math.sqrt(c);
+    for (let angle=0; angle<=2*Math.PI+0.01; angle+=0.02) {
+      const x = R*Math.cos(angle), y = R*Math.sin(angle);
+      const xx = toX(x), yy = toY(y);
+      if (angle === 0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
+    }
+  } else {
+    // Line x+y=c
+    for (let i=0; i<=100; i++) {
+      const x = -d+i/100*2*d, y = c-x;
+      if (y < -d || y > d) continue;
+      const xx = toX(x), yy = toY(y);
+      if (i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
+    }
+  }
+  ctx.stroke();
+
+  // Optimal point
+  const [ox, oy] = prob.optPoint(c);
+  if (!isNaN(ox) && !isNaN(oy) && Math.abs(ox) <= d && Math.abs(oy) <= d) {
+    const opx = toX(ox), opy = toY(oy);
+
+    // Gradient of f at optimal
+    const gfx = prob.fx(ox,oy), gfy = prob.fy(ox,oy);
+    const gfMag = Math.sqrt(gfx*gfx+gfy*gfy);
+    // Gradient of g at optimal
+    const ggx = prob.gx(ox,oy), ggy = prob.gy(ox,oy);
+    const ggMag = Math.sqrt(ggx*ggx+ggy*ggy);
+
+    const arrowLen = Math.min(cw,ch)*0.12;
+    if (gfMag > 0) drawArrow(opx, opy, opx+gfx/gfMag*arrowLen, opy-gfy/gfMag*arrowLen, C.blue, 2.5, '∇f');
+    if (ggMag > 0) drawArrow(opx, opy, opx+ggx/ggMag*arrowLen*0.8, opy-ggy/ggMag*arrowLen*0.8, '#dc2626', 2, '∇g');
+
+    ctx.fillStyle = C.teal;
+    ctx.beginPath(); ctx.arc(opx, opy, 8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = `bold 11px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('★', opx, opy);
+
+    ctx.fillStyle = C.teal; ctx.font = `bold 12px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(`最优点 (${ox.toFixed(2)},${oy.toFixed(2)}) f*=${prob.f(ox,oy).toFixed(3)}`, opx+12, opy-20);
+  }
+
+  // Axes
+  ctx.strokeStyle = C.ink3; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(toX(0), pad); ctx.lineTo(toX(0), pad+ch); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(pad, toY(0)); ctx.lineTo(pad+cw, toY(0)); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Labels
+  ctx.fillStyle = C.ink; ctx.font = `bold 12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(prob.desc, pad+4, 4);
+  ctx.fillStyle = '#dc2626'; ctx.font = `11px 'Noto Sans SC',sans-serif`;
+  ctx.fillText(`约束曲线（红）`, pad+4, 18);
+  ctx.fillStyle = C.blue;
+  ctx.fillText(`目标函数等高线（蓝）`, pad+4+100, 18);
+}
+
+function drawArrow(x1,y1,x2,y2,col,lw,label) {
+  const dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy);
+  if(len<2) return;
+  const ax=dx/len,ay=dy/len;
+  ctx.strokeStyle=col;ctx.lineWidth=lw;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.fillStyle=col;
+  ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-ax*10+ay*5,y2-ay*10-ax*5);ctx.lineTo(x2-ax*10-ay*5,y2-ay*10+ax*5);ctx.closePath();ctx.fill();
+  if(label){ctx.font=`bold 11px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(label,x2+4,y2);}
+}
+
+function updateFeedback(c) {
+  const prob = PROBS[probIdx];
+  const [ox, oy] = prob.optPoint(c);
+  const fOpt = !isNaN(ox) ? prob.f(ox,oy) : NaN;
+  const gfx = prob.fx(ox,oy), gfy = prob.fy(ox,oy);
+  const ggx = prob.gx(ox,oy), ggy = prob.gy(ox,oy);
+  const lambda = Math.abs(ggx) > 0.01 ? gfx/ggx : gfy/ggy;
+
+  document.getElementById('fb').innerHTML =
+    `<strong>拉格朗日条件 ∇f = λ∇g</strong>：最优点处目标函数的梯度与约束梯度平行（等高线与约束曲线相切）。<br>` +
+    `最优点 (${ox.toFixed(3)},${oy.toFixed(3)})：∇f = (${gfx.toFixed(3)},${gfy.toFixed(3)})，∇g = (${ggx.toFixed(3)},${ggy.toFixed(3)})，λ ≈ ${lambda.toFixed(3)}<br>` +
+    `<strong>最优值 f* = ${isNaN(fOpt)?'N/A':fOpt.toFixed(4)}</strong>（${prob.optFormula.replace('c', c.toFixed(2))}）<br>` +
+    `<strong>λ（乘数）的含义</strong>：约束放松一单位（c增加1），目标函数最优值约增加 λ。`;
+}
+
+window.addEventListener('resize', () => { setup(); update(); });
+setup(); update();
+</script>
+</body>
+</html>

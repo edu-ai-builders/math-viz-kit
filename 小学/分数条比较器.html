@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>分数条比较器 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="分数">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="用等长分数条直观比较分数大小，理解分子分母对大小的影响">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;
+      --blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;
+      --teal:#0f6e56;--teal-light:#e1f5ee;
+      --amber:#854f0b;--amber-light:#faeeda;
+      --radius:12px;--radius-sm:8px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:700px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:700px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;height:380px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .frac-ctrl{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;}
+    .frac-title{font-size:13px;color:var(--ink2);margin-bottom:10px;}
+    .frac-display{font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace;text-align:center;margin-bottom:10px;}
+    .frac-num{display:flex;align-items:center;justify-content:center;gap:4px;position:relative;}
+    .frac-int{display:flex;flex-direction:column;align-items:center;gap:0;}
+    .frac-line{width:36px;height:3px;background:currentColor;margin:1px 0;}
+    .sl-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);}
+    .sl-row span{min-width:24px;text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;}
+    input[type=range]{flex:1;accent-color:var(--blue);}
+    .verdict{background:var(--blue-light);border:2px solid var(--blue);border-radius:var(--radius);padding:14px 18px;text-align:center;font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);opacity:0;transition:opacity .4s;}
+    .verdict.show{opacity:1;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;opacity:0;transition:opacity .4s;}
+    .fb.show{opacity:1;}
+    @media(max-width:500px){.controls{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 分数 · 认知动作：比较</div>
+  <h1>分数条比较器</h1>
+  <p class="sub">用等长的条子比较分数，大小一眼看清</p>
+</header>
+<main>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="frac-ctrl">
+      <div class="frac-title">分数 A（蓝色）</div>
+      <div class="frac-display" id="dispA" style="color:var(--blue)">
+        <div class="frac-num">
+          <div class="frac-int">
+            <span id="numA">1</span>
+            <div class="frac-line" style="background:var(--blue)"></div>
+            <span id="denA">2</span>
+          </div>
+        </div>
+      </div>
+      <div class="sl-row"><span>分子</span><input type="range" id="numSlA" min="1" max="11" value="1"><span id="numAv">1</span></div>
+      <div class="sl-row" style="margin-top:6px"><span>分母</span><input type="range" id="denSlA" min="2" max="12" value="2"><span id="denAv">2</span></div>
+    </div>
+    <div class="frac-ctrl">
+      <div class="frac-title">分数 B（橙色）</div>
+      <div class="frac-display" id="dispB" style="color:var(--amber)">
+        <div class="frac-num">
+          <div class="frac-int">
+            <span id="numB">3</span>
+            <div class="frac-line" style="background:var(--amber)"></div>
+            <span id="denB">4</span>
+          </div>
+        </div>
+      </div>
+      <div class="sl-row"><span>分子</span><input type="range" id="numSlB" min="1" max="11" value="3"><span id="numBv">3</span></div>
+      <div class="sl-row" style="margin-top:6px"><span>分母</span><input type="range" id="denSlB" min="2" max="12" value="4"><span id="denBv">4</span></div>
+    </div>
+  </div>
+  <div class="verdict" id="verdict"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：比较
+// V1 动态跃迁：拖动分母分子时，条子实时伸缩变化，静态图无法做到
+// V2 表征桥接：分数符号 + 条状图形 + 文字描述三联动
+// V4 信号聚焦：蓝色=分数A，橙色=分数B，颜色含义单一
+// V6 动作-数学一致：分母滑杆往右=分母变大=每格更小=条子缩短
+// V7 单一认知动作：只做"比较"
+// V8 概念反馈：揭示"分母越大，每格越小"的本质规律
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',amber:'#854f0b',amberL:'#faeeda',teal:'#0f6e56',tealL:'#e1f5ee',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let nA=1,dA=2,nB=3,dB=4, interactions=0;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=380*dpr; ctx.scale(dpr,dpr); cvs.style.height='380px';
+}
+
+function gcd(a,b){return b===0?a:gcd(b,a%b);}
+function simplify(n,d){const g=gcd(n,d);return{n:n/g,d:d/g};}
+function decimal(n,d){return n/d;}
+
+function drawFractionBar(x,y,totalW,barH,n,d,fillColor,borderColor,label) {
+  const cellW=totalW/d;
+  // Empty bar background
+  ctx.fillStyle='#f0eeea'; ctx.strokeStyle=borderColor+'66'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.roundRect(x,y,totalW,barH,4); ctx.fill(); ctx.stroke();
+  // Filled portion
+  ctx.fillStyle=fillColor;
+  ctx.beginPath(); ctx.roundRect(x,y,cellW*n,barH,4); ctx.fill();
+  // Cell dividers
+  ctx.strokeStyle='#fff'; ctx.lineWidth=2;
+  for(let i=1;i<d;i++){
+    const lx=x+i*cellW;
+    ctx.beginPath(); ctx.moveTo(lx,y); ctx.lineTo(lx,y+barH); ctx.stroke();
+  }
+  // Label inside filled region
+  if(cellW*n>30) {
+    ctx.fillStyle='#fff'; ctx.font=`bold 13px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(`${n}/${d}`,x+cellW*n/2,y+barH/2);
+  }
+  // Cell count label
+  ctx.fillStyle=borderColor; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(label,x+totalW+10,y+barH/2);
+}
+
+function drawDivisionLines(x,y,totalW,barH,d,color) {
+  // Show all d equal divisions
+  ctx.strokeStyle=color+'66'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+  for(let i=0;i<=d;i++){
+    const lx=x+i*(totalW/d);
+    ctx.beginPath(); ctx.moveTo(lx,y-4); ctx.lineTo(lx,y+barH+4); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=380;
+  ctx.clearRect(0,0,W,H);
+
+  const margin=24, barW=W-margin*2-60, barH=44;
+  const rowA=70, rowB=170, rowRef=270;
+
+  // ── Reference bar (integer 1) ──────────────────────
+  ctx.fillStyle=C.ink3; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText('整体（1）',margin,rowRef-22);
+  ctx.fillStyle='#e8e6e0'; ctx.strokeStyle=C.border; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.roundRect(margin,rowRef,barW,14,3); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=C.ink3; ctx.font=`11px 'Noto Sans SC',sans-serif`; ctx.textAlign='left';
+  ctx.fillText('← 整体长度相同 →',margin+4,rowRef+7);
+
+  // ── Fraction A bar ─────────────────────────────────
+  ctx.fillStyle=C.ink2; ctx.font=`13px 'Noto Sans SC',sans-serif`; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(`分数 A：分成 ${dA} 等份，取 ${nA} 份`,margin,rowA-22);
+  drawDivisionLines(margin,rowA,barW,barH,dA,C.blue);
+  drawFractionBar(margin,rowA,barW,barH,nA,dA,C.blue,C.blue,`${nA}/${dA} ≈ ${(nA/dA).toFixed(2)}`);
+
+  // ── Fraction B bar ─────────────────────────────────
+  ctx.fillStyle=C.ink2; ctx.font=`13px 'Noto Sans SC',sans-serif`;
+  ctx.fillText(`分数 B：分成 ${dB} 等份，取 ${nB} 份`,margin,rowB-22);
+  drawDivisionLines(margin,rowB,barW,barH,dB,C.amber);
+  drawFractionBar(margin,rowB,barW,barH,nB,dB,C.amber,C.amber,`${nB}/${dB} ≈ ${(nB/dB).toFixed(2)}`);
+
+  // ── Comparison arrow ───────────────────────────────
+  const lenA=barW*(nA/dA), lenB=barW*(nB/dB);
+  const compY=rowA+barH+8;
+  ctx.strokeStyle=C.blue; ctx.lineWidth=2; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(margin,compY); ctx.lineTo(margin+lenA,compY); ctx.stroke();
+  ctx.strokeStyle=C.amber;
+  ctx.beginPath(); ctx.moveTo(margin,compY+6); ctx.lineTo(margin+lenB,compY+6); ctx.stroke();
+
+  // Comparison sign
+  const midX=Math.max(lenA,lenB)/2+margin;
+  const va=nA/dA, vb=nB/dB;
+  const sign=va>vb?'>':va<vb?'<':'=';
+  ctx.fillStyle=sign==='='?C.teal:C.ink; ctx.font=`bold 22px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText(`${nA}/${dA} ${sign} ${nB}/${dB}`,W/2,rowB+barH+20);
+
+  // Cell size comparison annotation
+  if(dA!==dB) {
+    const cellA=barW/dA, cellB=barW/dB;
+    ctx.fillStyle=C.ink3; ctx.font=`11px 'Noto Sans SC',sans-serif`; ctx.textAlign='center';
+    ctx.fillText(`每格宽: A=${cellA.toFixed(0)}px  B=${cellB.toFixed(0)}px (分母越大每格越窄)`,W/2,H-12);
+  }
+}
+
+function updateDisplay(){
+  ['numA','denA'].forEach(id=>document.getElementById(id).textContent=id==='numA'?nA:dA);
+  ['numB','denB'].forEach(id=>document.getElementById(id).textContent=id==='numB'?nB:dB);
+  ['numAv','denAv','numBv','denBv'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(id==='numAv')el.textContent=nA;
+    else if(id==='denAv')el.textContent=dA;
+    else if(id==='numBv')el.textContent=nB;
+    else el.textContent=dB;
+  });
+  draw();
+  interactions++;
+  showFeedback();
+}
+
+// ── 5. 概念反馈 ──────────────────────────────────────
+function showFeedback(){
+  // PEDAGOGY V8: reveal the mathematical reason, not just >/</=
+  const va=nA/dA, vb=nB/dB;
+  const verdict=document.getElementById('verdict'), fb=document.getElementById('fb');
+  const sign=va>vb?'>':va<vb?'<':'=';
+  verdict.textContent=`${nA}/${dA}  ${sign}  ${nB}/${dB}`;
+  verdict.classList.add('show');
+
+  let msg='';
+  if(dA===dB) {
+    msg=`两个分数分母相同（都是 ${dA}），每格一样大。<strong>分子${nA>nB?'A更大':'B更大'}</strong>，所以 ${nA}/${dA} ${sign} ${nB}/${dB}。`;
+  } else if(nA===nB) {
+    msg=`两个分数分子相同（都是 ${nA}），取的份数一样多。<strong>分母 ${dA>dB?`A(${dA})更大，每格更小`:`B(${dB})更大，每格更小`}</strong>，所以分母小的分数更大。`;
+  } else {
+    const sA=simplify(nA,dA), sB=simplify(nB,dB);
+    msg=`${nA}/${dA} 约等于 <strong>${va.toFixed(3)}</strong>，${nB}/${dB} 约等于 <strong>${vb.toFixed(3)}</strong>。`;
+    if(dA!==dB) msg+=`<br>注意：分母 ${dA} 把整体分成 ${dA} 份，分母 ${dB} 把整体分成 ${dB} 份，<strong>每份的大小不同</strong>。`;
+  }
+  if(sign==='=') msg+=`<br>🎉 两个分数<strong>相等</strong>！它们在整体中占同样长度。`;
+  fb.innerHTML=msg; fb.classList.add('show');
+}
+
+// ── 6. 初始化 ─────────────────────────────────────────
+['numSlA','denSlA','numSlB','denSlB'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',e=>{
+    const v=parseInt(e.target.value);
+    if(id==='numSlA'){nA=Math.min(v,dA);document.getElementById('numSlA').value=nA;}
+    else if(id==='denSlA'){dA=v;nA=Math.min(nA,dA);document.getElementById('numSlA').max=dA;document.getElementById('numSlA').value=nA;}
+    else if(id==='numSlB'){nB=Math.min(v,dB);document.getElementById('numSlB').value=nB;}
+    else{dB=v;nB=Math.min(nB,dB);document.getElementById('numSlB').max=dB;document.getElementById('numSlB').value=nB;}
+    updateDisplay();
+  });
+});
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); draw(); showFeedback();
+</script>
+</body>
+</html>

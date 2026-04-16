@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三角恒等变换演示器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="三角函数">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="单位圆上动态演示sin/cos加法公式和二倍角公式，线段长度对应各三角值，公式来源一目了然">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .mode-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .mode-btn{padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);font-size:13px;font-weight:700;text-align:center;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .layout{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .right-panel{display:flex;flex-direction:column;gap:8px;}
+    .slider-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;}
+    .sl-row{margin-bottom:8px;}
+    .sl-label{font-size:12px;color:var(--ink2);margin-bottom:3px;display:flex;justify-content:space-between;}
+    .sl-label strong{font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    .formula-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--blue);line-height:1.8;}
+    .formula-box strong{font-family:'JetBrains Mono',monospace;font-size:14px;}
+    .values-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+    .val-item{background:var(--bg);border-radius:6px;padding:6px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;}
+    .val-item span{color:var(--ink2);font-size:11px;font-family:'Noto Sans SC',sans-serif;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+    @media(max-width:560px){.layout{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 三角函数 · 认知动作：变换</div>
+  <h1>三角恒等变换演示器</h1>
+  <p class="sub">单位圆上直观理解加法公式和二倍角公式的几何来源</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('add',this)">sin/cos 加法公式</button>
+    <button class="mode-btn" onclick="setMode('double',this)">二倍角公式</button>
+    <button class="mode-btn" onclick="setMode('aux',this)">辅助角公式</button>
+  </div>
+  <div class="layout">
+    <canvas id="cvs"></canvas>
+    <div class="right-panel">
+      <div class="slider-box">
+        <div class="sl-row">
+          <div class="sl-label"><span>角 α</span><strong id="aLbl">30°</strong></div>
+          <input type="range" id="slA" min="0" max="360" step="1" value="30" oninput="update()">
+        </div>
+        <div class="sl-row" id="bRow">
+          <div class="sl-label"><span>角 β</span><strong id="bLbl">45°</strong></div>
+          <input type="range" id="slB" min="0" max="360" step="1" value="45" oninput="update()">
+        </div>
+      </div>
+      <div class="formula-box" id="formulaBox"></div>
+      <div class="values-grid" id="valGrid"></div>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 加法公式只有单位圆动态线段才能说清楚
+// PEDAGOGY V5 操作先于符号: 先拖动角度看线段，再看公式
+// PEDAGOGY V8 概念反馈: 解释各线段对应哪个三角值
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=300;
+let mode='add';
+let alpha=30,beta=45;
+
+function setMode(m,btn){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('bRow').style.display=m==='add'?'':'none';
+  update();
+}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function deg(d){return d*Math.PI/180;}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2,cy=H/2;
+  const R=Math.min(W,H)*0.38;
+
+  // Unit circle
+  ctx.strokeStyle='#c8c5be';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
+
+  // Axes
+  ctx.strokeStyle='#a8a69f';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(cx-R-15,cy);ctx.lineTo(cx+R+15,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,cy-R-15);ctx.lineTo(cx,cy+R+15);ctx.stroke();
+
+  // Axis labels
+  ctx.fillStyle='#a8a69f';ctx.font=`10px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center';ctx.fillText('x',cx+R+20,cy+4);
+  ctx.textAlign='left';ctx.fillText('y',cx+4,cy-R-8);
+
+  const a=deg(alpha), b=deg(beta);
+
+  if(mode==='add'){
+    drawAddMode(cx,cy,R,a,b);
+  } else if(mode==='double'){
+    drawDoubleMode(cx,cy,R,a);
+  } else {
+    drawAuxMode(cx,cy,R,a);
+  }
+}
+
+function drawAddMode(cx,cy,R,a,b){
+  // Draw angle alpha arc
+  ctx.strokeStyle='#2a5c8f44';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R*0.25,0,-a,true);ctx.stroke();
+  ctx.strokeStyle='#0f6e5644';
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R*0.3,-a,-(a+b),true);ctx.stroke();
+
+  // Point A at angle alpha
+  const ax=cx+R*Math.cos(a),ay=cy-R*Math.sin(a);
+  // Point B at angle alpha+beta
+  const bx=cx+R*Math.cos(a+b),by=cy-R*Math.sin(a+b);
+
+  // Draw radii
+  ctx.strokeStyle='#2a5c8f';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ax,ay);ctx.stroke();
+  ctx.strokeStyle='#0f6e56';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(bx,by);ctx.stroke();
+
+  // sin(a+b) vertical line
+  ctx.strokeStyle='#dc2626';ctx.lineWidth=2.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(bx,cy);ctx.lineTo(bx,by);ctx.stroke();
+  // cos(a+b) horizontal line
+  ctx.strokeStyle='#854f0b';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(cx,by);ctx.lineTo(bx,by);ctx.stroke();
+
+  // Labels for sin(a+b) and cos(a+b)
+  ctx.fillStyle='#dc2626';ctx.font=`bold 11px 'JetBrains Mono',monospace`;
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText('sin(α+β)',bx+4,(by+cy)/2);
+  ctx.fillStyle='#854f0b';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText('cos(α+β)',(cx+bx)/2,by+4);
+
+  // Points
+  drawDot(ax,ay,'#2a5c8f','A(α)');
+  drawDot(bx,by,'#0f6e56','B(α+β)');
+
+  // Angle labels
+  ctx.fillStyle='#2a5c8f';ctx.font=`12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('α',cx+R*0.32*Math.cos(a/2),cy-R*0.32*Math.sin(a/2));
+  ctx.fillStyle='#0f6e56';
+  ctx.fillText('β',cx+R*0.36*Math.cos(a+b/2),cy-R*0.36*Math.sin(a+b/2));
+}
+
+function drawDoubleMode(cx,cy,R,a){
+  const ax=cx+R*Math.cos(a),ay=cy-R*Math.sin(a);
+  const a2x=cx+R*Math.cos(2*a),a2y=cy-R*Math.sin(2*a);
+
+  // Chord from (1,0) to angle a
+  ctx.strokeStyle='#c8c5be';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(cx+R,cy);ctx.lineTo(ax,ay);ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.strokeStyle='#2a5c8f';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ax,ay);ctx.stroke();
+  ctx.strokeStyle='#0f6e56';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(a2x,a2y);ctx.stroke();
+
+  // sin(2a) vertical
+  ctx.strokeStyle='#dc2626';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(a2x,cy);ctx.lineTo(a2x,a2y);ctx.stroke();
+  ctx.fillStyle='#dc2626';ctx.font=`bold 11px 'JetBrains Mono',monospace`;
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText('sin2α',a2x+4,(a2y+cy)/2);
+
+  // cos(2a) horizontal
+  ctx.strokeStyle='#854f0b';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(cx,a2y);ctx.lineTo(a2x,a2y);ctx.stroke();
+  ctx.fillStyle='#854f0b';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText('cos2α',(cx+a2x)/2,a2y+4);
+
+  // sin(a) component
+  ctx.strokeStyle='#2a5c8f88';ctx.lineWidth=1.5;ctx.setLineDash([4,2]);
+  ctx.beginPath();ctx.moveTo(ax,cy);ctx.lineTo(ax,ay);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#2a5c8f';ctx.font=`11px 'JetBrains Mono',monospace`;
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  ctx.fillText('sinα',ax-4,(ay+cy)/2);
+
+  drawDot(ax,ay,'#2a5c8f','α');
+  drawDot(a2x,a2y,'#0f6e56','2α');
+
+  ctx.fillStyle='#2a5c8f';ctx.font=`12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('α',cx+R*0.3*Math.cos(a/2),cy-R*0.3*Math.sin(a/2));
+  ctx.fillStyle='#0f6e56';
+  ctx.fillText('2α',cx+R*0.22*Math.cos(a),cy-R*0.22*Math.sin(a));
+}
+
+function drawAuxMode(cx,cy,R,a){
+  // Illustrate a*sinx + b*cosx = R*sin(x+phi)
+  // Here we use unit vectors: show sin(α) and cos(α) as components
+  const ax=cx+R*Math.cos(a),ay=cy-R*Math.sin(a);
+
+  ctx.strokeStyle='#2a5c8f';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ax,ay);ctx.stroke();
+
+  // Projections
+  ctx.strokeStyle='#dc2626';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(ax,cy);ctx.lineTo(ax,ay);ctx.stroke();
+  ctx.strokeStyle='#854f0b';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ax,cy);ctx.stroke();
+
+  // Right angle marker
+  const sq=8;
+  ctx.strokeStyle='#888';ctx.lineWidth=1;
+  ctx.strokeRect(ax-sq,cy-sq,sq,sq);
+
+  ctx.fillStyle='#dc2626';ctx.font=`bold 12px 'JetBrains Mono',monospace`;
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText('sinα',ax+5,(ay+cy)/2);
+  ctx.fillStyle='#854f0b';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText('cosα',(cx+ax)/2,cy+5);
+  ctx.fillStyle='#2a5c8f';
+  ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText('1',ax+5,ay-2);
+
+  // Angle arc
+  ctx.strokeStyle='#2a5c8f44';ctx.lineWidth=1;
+  ctx.beginPath();ctx.arc(cx,cy,R*0.2,0,-a,true);ctx.stroke();
+  ctx.fillStyle='#2a5c8f';ctx.font=`12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('α',cx+R*0.25*Math.cos(a/2),cy-R*0.25*Math.sin(a/2));
+
+  drawDot(ax,ay,'#2a5c8f','P');
+}
+
+function drawDot(x,y,col,label){
+  ctx.fillStyle=col;
+  ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
+  if(label){
+    ctx.fillStyle=col;ctx.font=`bold 11px 'JetBrains Mono',monospace`;
+    ctx.textAlign='left';ctx.textBaseline='bottom';
+    ctx.fillText(label,x+7,y-3);
+  }
+}
+
+function update(){
+  alpha=parseInt(document.getElementById('slA').value);
+  beta=parseInt(document.getElementById('slB').value);
+  document.getElementById('aLbl').textContent=alpha+'°';
+  document.getElementById('bLbl').textContent=beta+'°';
+
+  const a=deg(alpha),b=deg(beta);
+  const sa=Math.sin(a),ca=Math.cos(a),sb=Math.sin(b),cb=Math.cos(b);
+  const sab=Math.sin(a+b),cab=Math.cos(a+b);
+  const s2a=Math.sin(2*a),c2a=Math.cos(2*a);
+
+  let formula='',vals='',fbText='';
+
+  if(mode==='add'){
+    formula=`<strong>sin(α+β) = sinα·cosβ + cosα·sinβ</strong><br>
+= ${sa.toFixed(3)}×${cb.toFixed(3)} + ${ca.toFixed(3)}×${sb.toFixed(3)}<br>
+= ${(sa*cb).toFixed(3)} + ${(ca*sb).toFixed(3)} = <strong>${sab.toFixed(3)}</strong><br><br>
+<strong>cos(α+β) = cosα·cosβ − sinα·sinβ</strong><br>
+= ${ca.toFixed(3)}×${cb.toFixed(3)} − ${sa.toFixed(3)}×${sb.toFixed(3)} = <strong>${cab.toFixed(3)}</strong>`;
+    vals=`<div class="val-item"><span>sinα</span><br>${sa.toFixed(4)}</div>
+<div class="val-item"><span>cosα</span><br>${ca.toFixed(4)}</div>
+<div class="val-item"><span>sinβ</span><br>${sb.toFixed(4)}</div>
+<div class="val-item"><span>cosβ</span><br>${cb.toFixed(4)}</div>`;
+    fbText=`<strong>加法公式</strong>：两角之和的正弦/余弦，等于单位圆上对应点的投影之和。红线=sin(α+β)为纵坐标，棕线=cos(α+β)为横坐标。`;
+  } else if(mode==='double'){
+    formula=`<strong>sin2α = 2sinα·cosα</strong><br>
+= 2×${sa.toFixed(3)}×${ca.toFixed(3)} = <strong>${s2a.toFixed(3)}</strong><br><br>
+<strong>cos2α = cos²α − sin²α</strong><br>
+= ${(ca*ca).toFixed(3)} − ${(sa*sa).toFixed(3)} = <strong>${c2a.toFixed(3)}</strong><br>
+= 1−2sin²α = <strong>${(1-2*sa*sa).toFixed(3)}</strong><br>
+= 2cos²α−1 = <strong>${(2*ca*ca-1).toFixed(3)}</strong>`;
+    vals=`<div class="val-item"><span>sinα</span><br>${sa.toFixed(4)}</div>
+<div class="val-item"><span>cosα</span><br>${ca.toFixed(4)}</div>
+<div class="val-item"><span>sin2α</span><br>${s2a.toFixed(4)}</div>
+<div class="val-item"><span>cos2α</span><br>${c2a.toFixed(4)}</div>`;
+    fbText=`<strong>二倍角公式</strong>：二倍角=将α在单位圆上"走两步"。sin2α=2sinα cosα 可从加法公式令β=α直接推导。cos2α有三种等价形式，都来自 cos²α+sin²α=1。`;
+  } else {
+    const amp=1; // unit amplitude
+    formula=`<strong>辅助角公式</strong><br>
+a·sinx + b·cosx = R·sin(x+φ)<br>
+其中 R = √(a²+b²)，tan φ = b/a<br><br>
+当前 α=${alpha}°：<br>
+sinα = ${sa.toFixed(3)}（纵投影）<br>
+cosα = ${ca.toFixed(3)}（横投影）<br>
+R = √(sin²α+cos²α) = <strong>1</strong>`;
+    vals=`<div class="val-item"><span>sinα</span><br>${sa.toFixed(4)}</div>
+<div class="val-item"><span>cosα</span><br>${ca.toFixed(4)}</div>
+<div class="val-item"><span>tanα</span><br>${(Math.abs(ca)>0.001?(sa/ca).toFixed(4):'∞')}</div>
+<div class="val-item"><span>R</span><br>1.0000</div>`;
+    fbText=`<strong>辅助角公式</strong>：a·sinx + b·cosx 可用一个正弦波 R·sin(x+φ) 来表示。红线是 sinα（纵分量），棕线是 cosα（横分量），两者构成直角三角形，斜边长=1（半径）。`;
+  }
+
+  document.getElementById('formulaBox').innerHTML=formula;
+  document.getElementById('valGrid').innerHTML=vals;
+  document.getElementById('fb').innerHTML=fbText;
+  draw();
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();update();
+</script>
+</body>
+</html>

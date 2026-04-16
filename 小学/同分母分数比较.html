@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>同分母分数比较 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="分数">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="分数条长度可视化比较同分母分数大小，直观理解分子越大分数越大">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:end;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .result-display{text-align:center;font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.controls{grid-template-columns:1fr 1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 分数 · 认知动作：比较</div>
+  <h1>同分母分数比较</h1>
+  <p class="sub">相同分母，谁的分子大，谁就大——分数条一眼看出大小</p>
+</header>
+<main>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">分母（共几份）</div>
+      <div class="sl-val" id="denLabel">6</div>
+      <input type="range" id="denSl" min="2" max="12" value="6">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">分数甲（蓝）</div>
+      <div class="sl-val" id="numALabel" style="color:var(--blue)">4</div>
+      <input type="range" id="numASl" min="1" max="11" value="4">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">分数乙（橙）</div>
+      <div class="sl-val" id="numBLabel" style="color:var(--amber)">2</div>
+      <input type="range" id="numBSl" min="1" max="11" value="2">
+    </div>
+  </div>
+  <div class="result-display" id="resultDisplay"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 分数大小只有并排的条形才能直观感受
+// PEDAGOGY V4 信号聚焦: 蓝=甲分数，橙=乙分数，灰=未着色部分
+// PEDAGOGY V5 操作先于符号: 先看颜色长度，再看符号关系
+// PEDAGOGY V7 单一认知动作: 比较（谁更长）
+// PEDAGOGY V8 概念反馈: 分母相同时，分子越大，分数越大
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=320;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const den=parseInt(document.getElementById('denSl').value);
+  let numA=parseInt(document.getElementById('numASl').value);
+  let numB=parseInt(document.getElementById('numBSl').value);
+  if(numA>den) numA=den;
+  if(numB>den) numB=den;
+  document.getElementById('numASl').max=den;
+  document.getElementById('numBSl').max=den;
+
+  const margin={left:80,right:24,top:40,bottom:40};
+  const barH=60;
+  const gap=40;
+  const barW=W-margin.left-margin.right;
+  const y1=margin.top;
+  const y2=y1+barH+gap;
+
+  // Title
+  ctx.fillStyle=C.ink;ctx.font=`bold 14px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText('分数条（同分母比较）',W/2,8);
+
+  // Draw fraction bars
+  [[numA,C.blue,C.blueL,'甲',y1],[numB,C.amberD,C.amberL,'乙',y2]].forEach(([num,color,lightColor,label,y])=>{
+    // Label
+    ctx.fillStyle=C.ink;ctx.font=`bold 16px 'JetBrains Mono',monospace`;ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(`${num}/${den}`,margin.left-8,y+barH/2);
+
+    // Full bar background
+    ctx.fillStyle=C.border;
+    ctx.beginPath();ctx.roundRect(margin.left,y,barW,barH,8);ctx.fill();
+
+    // Segment dividers first
+    const segW=barW/den;
+    for(let i=0;i<=den;i++){
+      const x=margin.left+i*segW;
+      ctx.strokeStyle=C.surf;ctx.lineWidth=2;ctx.setLineDash([]);
+      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+barH);ctx.stroke();
+    }
+
+    // Filled portion
+    const fillW=(num/den)*barW;
+    ctx.fillStyle=color;
+    ctx.beginPath();ctx.roundRect(margin.left,y,fillW,barH,8);ctx.fill();
+
+    // Re-draw dividers over fill
+    for(let i=0;i<=num;i++){
+      const x=margin.left+i*segW;
+      ctx.strokeStyle='rgba(255,255,255,0.6)';ctx.lineWidth=2;ctx.setLineDash([]);
+      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+barH);ctx.stroke();
+    }
+
+    // Fraction label inside bar
+    ctx.fillStyle='#fff';ctx.font=`bold 18px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+    if(num>0) ctx.fillText(`${num}/${den}`,margin.left+fillW/2,y+barH/2);
+
+    // Row label
+    ctx.fillStyle=color;ctx.font=`bold 14px 'Noto Sans SC',sans-serif`;ctx.textAlign='left';ctx.textBaseline='top';
+    ctx.fillText(label,W-margin.right+4,y+2);
+  });
+
+  // Comparison arrow/bracket
+  const arrowX=margin.left+barW+16;
+  const mid1=y1+barH/2;
+  const mid2=y2+barH/2;
+  ctx.strokeStyle=C.teal;ctx.lineWidth=2;ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(margin.left+(numA/den)*barW,mid1);ctx.lineTo(margin.left+(numA/den)*barW+20,mid1);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(margin.left+(numB/den)*barW,mid2);ctx.lineTo(margin.left+(numB/den)*barW+20,mid2);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Size comparison line
+  const compareX=margin.left+barW*0.5;
+  ctx.strokeStyle=C.ink3;ctx.lineWidth=1.5;ctx.setLineDash([5,4]);
+  ctx.beginPath();ctx.moveTo(compareX,y1-8);ctx.lineTo(compareX,y2+barH+8);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Update labels
+  document.getElementById('denLabel').textContent=den;
+  document.getElementById('numALabel').textContent=numA;
+  document.getElementById('numBLabel').textContent=numB;
+
+  // Result
+  const res=document.getElementById('resultDisplay');
+  let sym,color;
+  if(numA>numB){sym='>';color=C.blue;}
+  else if(numA<numB){sym='<';color=C.amberD;}
+  else{sym='=';color=C.teal;}
+  res.innerHTML=`<span style="color:${C.blue}">${numA}/${den}</span> <span style="color:${color};font-size:32px">${sym}</span> <span style="color:${C.amberD}">${numB}/${den}</span>`;
+
+  // PEDAGOGY V8
+  const diff=numA-numB;
+  document.getElementById('fb').innerHTML=
+    `分母都是 <strong>${den}</strong>，表示把整体均分成 ${den} 份。<br>` +
+    `甲取了 <strong>${numA}</strong> 份，乙取了 <strong>${numB}</strong> 份。<br>` +
+    `<strong>同分母比较：看分子，分子大的分数大。</strong> ` +
+    (diff>0?`${numA} > ${numB}，所以 ${numA}/${den} > ${numB}/${den}。`:
+     diff<0?`${numA} < ${numB}，所以 ${numA}/${den} < ${numB}/${den}。`:
+     `${numA} = ${numB}，两个分数相等。`);
+}
+
+document.getElementById('denSl').addEventListener('input',draw);
+document.getElementById('numASl').addEventListener('input',draw);
+document.getElementById('numBSl').addEventListener('input',draw);
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>立方体截面可视化工具 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="立体几何">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="分解">
+  <meta name="desc" content="用平面切割正方体，动画展示6种截面形状（三角形到正六边形），理解截面形状与切割方式的关系">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .cut-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .cut-btn{padding:10px 8px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);font-size:13px;font-weight:700;transition:all .2s;text-align:center;}
+    .cut-btn small{display:block;font-size:11px;font-weight:400;color:var(--ink2);margin-top:2px;}
+    .cut-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .cut-btn.active small{color:rgba(255,255,255,0.8);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .info-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+    .info-chip{background:var(--teal-light);border:1px solid var(--teal);border-radius:var(--radius-sm);padding:6px 14px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--teal);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 立体几何 · 认知动作：分解</div>
+  <h1>立方体截面可视化工具</h1>
+  <p class="sub">选择切割方式，动画展示截面形状，理解三维截面与切割位置的关系</p>
+</header>
+<main>
+  <div class="cut-grid" id="cutGrid"></div>
+  <canvas id="cvs"></canvas>
+  <div class="info-row">
+    <div class="info-chip" id="chipShape">截面形状：—</div>
+    <div class="info-chip" id="chipEdge">截面边数：—</div>
+  </div>
+  <div class="fb" id="fb">选择切割方式，查看截面。</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 三维截面只有动画才能让学生"看懂"是什么形状
+// PEDAGOGY V3 分步揭示: 先看正方体框架，再看切割动画，再高亮截面
+// PEDAGOGY V4 信号聚焦: 截面高亮红色，正方体灰色线框
+// PEDAGOGY V7 单一认知动作: 分解（截面是三维体被平面分解后的二维结果）
+// PEDAGOGY V8 概念反馈: "平行于底面→正方形；过三条棱的中点→正三角形"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 360;
+
+// Cube vertices (unit cube, centered at origin, coords -0.5 to 0.5)
+// Vertices: 0-7, front face (z=0.5): 0(-.5,-.5), 1(.5,-.5), 2(.5,.5), 3(-.5,.5)
+//           back face (z=-0.5): 4(-.5,-.5), 5(.5,-.5), 6(.5,.5), 7(-.5,.5)
+const VERTS = [
+  [-1,-1, 1],[ 1,-1, 1],[ 1, 1, 1],[-1, 1, 1], // front: 0,1,2,3
+  [-1,-1,-1],[ 1,-1,-1],[ 1, 1,-1],[-1, 1,-1]   // back:  4,5,6,7
+];
+
+// Cube edges
+const EDGES = [
+  [0,1],[1,2],[2,3],[3,0], // front
+  [4,5],[5,6],[6,7],[7,4], // back
+  [0,4],[1,5],[2,6],[3,7]  // sides
+];
+
+// Cuts: define as polygon vertices (interpolated from cube verts)
+// Each cut has: name, shape, polygon (array of 3D points), desc
+const CUTS = [
+  {
+    name:'平行底面', shape:'正方形', edges:4, color:'#dc2626',
+    polyFn:()=>[[-1,-1,0],[1,-1,0],[1,1,0],[-1,1,0]],
+    desc:'截面<strong>平行于底面</strong>（水平切割）：截面是正方形，边长等于正方体棱长。<br>正方形有4条边，截面面积为棱长的平方。这是最基本的截面，也是矩形截面的特例。'
+  },
+  {
+    name:'平行侧面', shape:'长方形', edges:4, color:'#7b3f9e',
+    polyFn:()=>[[-1,-1,-0.7],[-1,-1,0.7],[-1,1,0.7],[-1,1,-0.7]],
+    desc:'截面<strong>平行于侧面</strong>（竖直切割）：截面也是正方形（正方体情况下），实质是矩形截面。<br>如果是长方体，则会得到长方形截面，与切割方向平行的面大小相同。'
+  },
+  {
+    name:'对角截面', shape:'矩形', edges:4, color:'#d97706',
+    polyFn:()=>[[1,-1,-1],[-1,-1,-1],[-1,1,1],[1,1,1]],
+    desc:'截面<strong>过对角线且垂直底面</strong>：截面是矩形，长为正方体棱长，宽为底面对角线长度（√2·a）。<br>这种截面揭示了正方体的对角面关系，面积 = 棱长 × 底面对角线。'
+  },
+  {
+    name:'三顶点（三角形）', shape:'正三角形', edges:3, color:'#0f6e56',
+    polyFn:()=>[[1,-1,-1],[-1,1,-1],[-1,-1,1]],
+    desc:'截面<strong>过三个相邻顶点</strong>：截面是正三角形。<br>正三角形三个顶点都是正方体的顶点，三条边都是正方体的面对角线，边长为 √2·a。这是正方体截面中最美妙的情形。'
+  },
+  {
+    name:'四棱中点（正六边形）', shape:'正六边形', edges:6, color:'#2a5c8f',
+    polyFn:()=>{
+      // Cut through midpoints of 6 edges of the cube
+      // The regular hexagon cut: midpoints of 6 edges
+      const s = 1;
+      return [
+        [s, 0,-s],[0, s,-s],[-s, s, 0],[-s, 0, s],[0,-s, s],[s,-s, 0]
+      ].map(v=>v.map(x=>x*0.5*Math.sqrt(2)));
+    },
+    desc:'截面<strong>过6条棱的中点</strong>：截面是正六边形！这是正方体最著名的截面。<br>切割平面垂直于正方体的体对角线，截面为正六边形，边长 = √2/2·a。每两条边平行，相对两边的距离相等。'
+  },
+  {
+    name:'五边形截面', shape:'五边形', edges:5, color:'#854f0b',
+    polyFn:()=>[
+      [1,-1,-1],[-1,-1,-1],[-1,0,0.5],[-0.2,1,1],[1,0.5,0.2]
+    ],
+    desc:'截面<strong>过5条棱</strong>：截面是五边形。<br>当切割平面不平行于任何面、也不经过体对角线时，可得到五边形截面。正方体截面的边数可以是3、4、5或6，不可能是7边形或更多。'
+  }
+];
+
+let cutIdx = 0;
+let animT = 0;
+let animId = null;
+let rotY = -0.5; // 旋转角度 (isometric-like)
+let rotX = 0.35;
+let isDragging = false;
+let lastMouse = {x:0,y:0};
+
+// Build buttons
+const grid = document.getElementById('cutGrid');
+CUTS.forEach((c,i)=>{
+  const btn = document.createElement('button');
+  btn.className='cut-btn'+(i===0?' active':'');
+  btn.innerHTML=`${c.name}<small>截面：${c.shape}</small>`;
+  btn.onclick=()=>setCut(i,btn);
+  grid.appendChild(btn);
+});
+
+function setCut(i, btn) {
+  cutIdx = i;
+  document.querySelectorAll('.cut-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  animT = 0;
+  cancelAnimationFrame(animId);
+  animate();
+  updateInfo();
+}
+
+function updateInfo() {
+  const c = CUTS[cutIdx];
+  document.getElementById('chipShape').textContent = `截面形状：${c.shape}`;
+  document.getElementById('chipEdge').textContent = `截面边数：${c.edges}`;
+  document.getElementById('fb').innerHTML = c.desc;
+}
+
+function animate() {
+  animT = 0;
+  function step() {
+    animT = Math.min(1, animT + 0.015);
+    draw();
+    if(animT < 1) animId = requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr;
+  ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+// 3D projection: isometric-style
+function project(v, W) {
+  const [x,y,z] = v;
+  // Rotate around Y axis
+  const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+  const x2 = x*cosY + z*sinY;
+  const z2 = -x*sinY + z*cosY;
+  // Rotate around X axis
+  const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+  const y2 = y*cosX - z2*sinX;
+  const z3 = y*sinX + z2*cosX;
+  // Project
+  const scale = W*0.22;
+  const cx = W/2, cy = H/2;
+  return [cx + x2*scale, cy + y2*scale];
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0,0,W,H);
+
+  // Draw cube edges (back first for hidden line effect)
+  const C_EDGE_BACK = '#d0cdc5';
+  const C_EDGE_FRONT = '#6b6860';
+
+  // Determine which edges are "back" by checking z of both endpoints
+  EDGES.forEach(([i,j])=>{
+    const p1 = project(VERTS[i],W);
+    const p2 = project(VERTS[j],W);
+    const avgZ = (VERTS[i][2]+VERTS[j][2])/2;
+    const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+    const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+    // Project the midpoint z
+    const mx=(VERTS[i][0]+VERTS[j][0])/2, my=(VERTS[i][1]+VERTS[j][1])/2, mz=(VERTS[i][2]+VERTS[j][2])/2;
+    const mx2 = -mx*sinY + mz*cosY;
+    const mz2 = my*sinX + mx2*cosX;
+    const isBack = mz2 > 0;
+    ctx.strokeStyle = isBack ? C_EDGE_BACK : C_EDGE_FRONT;
+    ctx.lineWidth = isBack ? 1 : 1.5;
+    ctx.setLineDash(isBack ? [3,3] : []);
+    ctx.beginPath(); ctx.moveTo(...p1); ctx.lineTo(...p2); ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // Draw vertices
+  VERTS.forEach(v=>{
+    const [px,py] = project(v,W);
+    ctx.fillStyle='#a8a69f';
+    ctx.beginPath(); ctx.arc(px,py,2.5,0,Math.PI*2); ctx.fill();
+  });
+
+  // Draw cross-section polygon (animated)
+  const cut = CUTS[cutIdx];
+  const poly = cut.polyFn();
+  const ease = animT<0.5?2*animT*animT:1-(-2*animT+2)**2/2;
+  const n = poly.length;
+
+  if(n >= 3 && ease > 0) {
+    // Interpolate polygon: grow from centroid
+    const cx3 = poly.reduce((s,v)=>s+v[0],0)/n;
+    const cy3 = poly.reduce((s,v)=>s+v[1],0)/n;
+    const cz3 = poly.reduce((s,v)=>s+v[2],0)/n;
+    const animPoly = poly.map(v=>[
+      cx3+(v[0]-cx3)*ease, cy3+(v[1]-cy3)*ease, cz3+(v[2]-cz3)*ease
+    ]);
+    const projPoly = animPoly.map(v=>project(v,W));
+
+    // Fill
+    ctx.globalAlpha = 0.25*ease;
+    ctx.fillStyle = cut.color;
+    ctx.beginPath();
+    ctx.moveTo(...projPoly[0]);
+    projPoly.slice(1).forEach(p=>ctx.lineTo(...p));
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Stroke
+    ctx.strokeStyle = cut.color; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(...projPoly[0]);
+    projPoly.slice(1).forEach(p=>ctx.lineTo(...p));
+    ctx.closePath(); ctx.stroke();
+
+    // Vertices of cut
+    projPoly.forEach(([px,py])=>{
+      ctx.fillStyle=cut.color;
+      ctx.beginPath(); ctx.arc(px,py,5,0,Math.PI*2); ctx.fill();
+    });
+  }
+
+  // Shape name label
+  ctx.fillStyle=cut.color; ctx.font=`bold 14px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText(`截面：${cut.shape}（${n}边形）`, W/2, 10);
+
+  // Drag hint
+  ctx.fillStyle='#a8a69f'; ctx.font=`11px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('拖动旋转视角', W/2, H-6);
+}
+
+// Drag to rotate
+cvs.addEventListener('pointerdown', e=>{
+  isDragging = true; cvs.setPointerCapture(e.pointerId);
+  const r = cvs.getBoundingClientRect();
+  lastMouse = {x:e.clientX-r.left, y:e.clientY-r.top};
+});
+cvs.addEventListener('pointermove', e=>{
+  if(!isDragging) return;
+  const r = cvs.getBoundingClientRect();
+  const mx = e.clientX-r.left, my = e.clientY-r.top;
+  rotY += (mx-lastMouse.x)*0.008;
+  rotX += (my-lastMouse.y)*0.008;
+  rotX = Math.max(-1.2, Math.min(1.2, rotX));
+  lastMouse = {x:mx,y:my};
+  draw();
+});
+cvs.addEventListener('pointerup',()=>{isDragging=false;});
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();
+setCut(0, document.querySelector('.cut-btn.active'));
+</script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>百分数折扣模拟器 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="百分数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="缩放">
+  <meta name="desc" content="商品打折购物情境，直观理解百分数与折扣的关系">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;
+      --blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;
+      --teal:#0f6e56;--teal-light:#e1f5ee;
+      --amber:#854f0b;--amber-light:#faeeda;
+      --red:#b84040;--red-light:#fdeaea;
+      --radius:12px;--radius-sm:8px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:700px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:700px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .product-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;display:flex;align-items:center;gap:16px;}
+    .product-icon{font-size:48px;}
+    .product-info{flex:1;}
+    .product-name{font-size:16px;font-weight:600;}
+    .product-price{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    .product-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+    .prod-btn{padding:6px 12px;border:1px solid var(--border);border-radius:20px;font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .prod-btn:hover,.prod-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .discount-ctrl{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;}
+    .disc-label{font-size:13px;color:var(--ink2);margin-bottom:8px;}
+    .disc-row{display:flex;align-items:center;gap:10px;}
+    .disc-val{font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--red);min-width:70px;}
+    input[type=range]{flex:1;accent-color:var(--red);}
+    .discount-presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+    .preset-btn{padding:6px 12px;border:1px solid var(--border);border-radius:20px;font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .preset-btn:hover{background:var(--red);color:#fff;border-color:var(--red);}
+    canvas{width:100%;height:180px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .price-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+    .price-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;text-align:center;}
+    .price-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .price-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.price-row{grid-template-columns:1fr;}.product-btns{gap:4px;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学高年级 · 百分数 · 认知动作：缩放</div>
+  <h1>百分数折扣模拟器</h1>
+  <p class="sub">商场打折活动——用滑杆调折扣，看实际价格怎么变</p>
+</header>
+<main>
+  <div class="product-card">
+    <div class="product-icon" id="prodIcon">👟</div>
+    <div class="product-info">
+      <div class="product-name" id="prodName">运动鞋</div>
+      <div class="product-price" id="prodPrice" style="color:var(--ink2)">原价：¥<span id="origPriceNum">280</span></div>
+      <div class="product-btns">
+        <button class="prod-btn active" onclick="setProduct(0,this)">👟 运动鞋 ¥280</button>
+        <button class="prod-btn" onclick="setProduct(1,this)">🎒 书包 ¥120</button>
+        <button class="prod-btn" onclick="setProduct(2,this)">📚 书本 ¥45</button>
+        <button class="prod-btn" onclick="setProduct(3,this)">🎮 玩具 ¥399</button>
+      </div>
+    </div>
+  </div>
+  <div class="discount-ctrl">
+    <div class="disc-label">折扣率（打几折）</div>
+    <div class="disc-row">
+      <div class="disc-val" id="discVal">70%</div>
+      <input type="range" id="discSl" min="10" max="99" value="70">
+      <div style="font-size:13px;color:var(--ink2)">即<span id="discChinese">七折</span></div>
+    </div>
+    <div class="discount-presets">
+      <span style="font-size:12px;color:var(--ink2);align-self:center">常见折扣：</span>
+      <button class="preset-btn" onclick="setDiscount(95)">九五折</button>
+      <button class="preset-btn" onclick="setDiscount(90)">九折</button>
+      <button class="preset-btn" onclick="setDiscount(80)">八折</button>
+      <button class="preset-btn" onclick="setDiscount(70)">七折</button>
+      <button class="preset-btn" onclick="setDiscount(50)">五折</button>
+      <button class="preset-btn" onclick="setDiscount(30)">三折</button>
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="price-row">
+    <div class="price-box">
+      <div class="price-label">原价</div>
+      <div class="price-val" id="pb1" style="color:var(--ink2)">¥280</div>
+    </div>
+    <div class="price-box" style="background:var(--red-light);border-color:var(--red)">
+      <div class="price-label">折后价</div>
+      <div class="price-val" id="pb2" style="color:var(--red)">¥196</div>
+    </div>
+    <div class="price-box" style="background:var(--teal-light);border-color:var(--teal)">
+      <div class="price-label">节省</div>
+      <div class="price-val" id="pb3" style="color:var(--teal)">¥84</div>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：缩放
+// V1 动态跃迁：折扣滑杆移动，价格条实时缩短，节省区域可见
+// V2 表征桥接：百分数 + 条形图 + 价格数值三联动
+// V6 动作-数学一致：滑杆向左=折扣减小=价格条缩短=节省更多
+// V7 单一认知动作：缩放（折扣=原价乘以百分比）
+// V8 概念反馈：揭示折扣本质，给出计算公式
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',amberL:'#faeeda',red:'#b84040',redL:'#fdeaea',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+const PRODUCTS=[
+  {icon:'👟',name:'运动鞋',price:280},
+  {icon:'🎒',name:'书包',price:120},
+  {icon:'📚',name:'书本',price:45},
+  {icon:'🎮',name:'玩具',price:399},
+];
+let currentProd=0, discPct=70;
+
+const CHINESE_DISC={10:'一折',20:'两折',30:'三折',40:'四折',50:'五折',60:'六折',70:'七折',80:'八折',90:'九折',95:'九五折',99:'九九折'};
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=180*dpr; ctx.scale(dpr,dpr); cvs.style.height='180px';
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=180;
+  ctx.clearRect(0,0,W,H);
+  const p=PRODUCTS[currentProd];
+  const orig=p.price, disc=Math.round(orig*discPct/100), saved=orig-disc;
+  const margin=20, barY=50, barH=44, maxBarW=W-margin*2-80;
+
+  // Bar background (original price)
+  ctx.fillStyle=C.ink3+'44';
+  ctx.beginPath(); ctx.roundRect(margin,barY,maxBarW,barH,6); ctx.fill();
+  ctx.strokeStyle=C.border; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.roundRect(margin,barY,maxBarW,barH,6); ctx.stroke();
+  ctx.fillStyle=C.ink2; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='left'; ctx.textBaseline='bottom';
+  ctx.fillText(`原价 ¥${orig}`,margin,barY-4);
+
+  // Discounted portion
+  const dw=maxBarW*discPct/100;
+  ctx.fillStyle=C.red+'aa';
+  ctx.beginPath(); ctx.roundRect(margin,barY,dw,barH,6); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font=`bold 15px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  if(dw>50) ctx.fillText(`¥${disc}`,margin+dw/2,barY+barH/2);
+
+  // Saved portion label
+  if(maxBarW-dw>20){
+    ctx.fillStyle=C.teal; ctx.font=`bold 13px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(`省¥${saved}`,margin+dw+(maxBarW-dw)/2,barY+barH/2);
+  }
+
+  // Saved bar (below)
+  const savedBarY=barY+barH+24;
+  const sw=maxBarW*(1-discPct/100);
+  ctx.fillStyle=C.teal+'33'; ctx.strokeStyle=C.teal; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.roundRect(margin+dw,savedBarY,Math.max(sw,2),24,4); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=C.ink2; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='left'; ctx.textBaseline='bottom';
+  ctx.fillText(`节省 ${100-discPct}% → ¥${saved}`,margin,savedBarY-4);
+
+  // Percentage scale
+  for(let p=0;p<=10;p++){
+    const x=margin+maxBarW*p/10;
+    ctx.strokeStyle=C.ink3; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,barY-2); ctx.lineTo(x,barY+2); ctx.stroke();
+    ctx.fillStyle=C.ink3; ctx.font=`10px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(`${p*10}%`,x,barY-12);
+  }
+
+  // Discount pointer
+  ctx.strokeStyle=C.red; ctx.lineWidth=2; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(margin+dw,barY-2); ctx.lineTo(margin+dw,barY+barH+2); ctx.stroke();
+  ctx.setLineDash([]);
+  // Triangle pointer
+  ctx.fillStyle=C.red;
+  ctx.beginPath(); ctx.moveTo(margin+dw,barY-4); ctx.lineTo(margin+dw-5,barY-12); ctx.lineTo(margin+dw+5,barY-12); ctx.closePath(); ctx.fill();
+
+  // Price labels on right
+  ctx.fillStyle=C.ink2; ctx.font=`13px 'Noto Sans SC',sans-serif`; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(`¥${orig}`,margin+maxBarW+8,barY+barH/2);
+  ctx.fillStyle=C.red;
+  ctx.fillText(`¥${disc}`,margin+maxBarW+8,savedBarY+12);
+}
+
+function updateDisplay(){
+  const p=PRODUCTS[currentProd];
+  const orig=p.price, disc=Math.round(orig*discPct/100), saved=orig-disc;
+  document.getElementById('discVal').textContent=`${discPct}%`;
+  const chinese=CHINESE_DISC[discPct]||`${Math.floor(discPct/10)}折${discPct%10>0?discPct%10+'分':''}`;
+  document.getElementById('discChinese').textContent=chinese;
+  document.getElementById('pb1').textContent=`¥${orig}`;
+  document.getElementById('pb2').textContent=`¥${disc}`;
+  document.getElementById('pb3').textContent=`¥${saved}`;
+  // PEDAGOGY V8
+  const fb=document.getElementById('fb');
+  fb.innerHTML=`<strong>${p.name}</strong> 原价 ¥${orig}，打 <strong>${discPct}%（${chinese}）</strong>：<br>
+  折后价 = ${orig} × ${discPct}% = ${orig} × ${discPct/100} = <strong>¥${disc}</strong><br>
+  节省了 ${orig} × ${(100-discPct)/100} = ${orig} × ${100-discPct}% = <strong>¥${saved}</strong>（${(100-discPct)}%）<br>
+  ${saved===0?'不打折，原价购买。':saved>orig/2?`哇！节省超过一半价格，非常划算！`:`折扣后价格是原价的 ${discPct}%。`}`;
+  draw();
+}
+
+function setProduct(idx,btn){
+  currentProd=idx;
+  document.querySelectorAll('.prod-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const p=PRODUCTS[idx];
+  document.getElementById('prodIcon').textContent=p.icon;
+  document.getElementById('prodName').textContent=p.name;
+  document.getElementById('origPriceNum').textContent=p.price;
+  updateDisplay();
+}
+
+function setDiscount(pct){
+  discPct=pct;
+  document.getElementById('discSl').value=pct;
+  updateDisplay();
+}
+
+document.getElementById('discSl').addEventListener('input',e=>{
+  discPct=parseInt(e.target.value);
+  updateDisplay();
+});
+
+window.addEventListener('resize',()=>{setup();draw();updateDisplay();});
+setup(); updateDisplay();
+</script>
+</body>
+</html>

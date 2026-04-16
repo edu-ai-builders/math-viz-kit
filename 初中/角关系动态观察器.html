@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>角关系动态观察器 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="角">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="拖动角度，实时高亮对顶角/补角/余角，动中不变直观验证角的关系定理">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:680px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:680px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .mode-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .mode-btn{padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);font-size:13px;font-weight:700;transition:all .2s;text-align:center;}
+    .mode-btn small{display:block;font-size:11px;font-weight:400;color:var(--ink2);}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .mode-btn.active small{color:rgba(255,255,255,.75);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:grab;}
+    .angle-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+    .angle-chip{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 14px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 角 · 认知动作：比较</div>
+  <h1>角关系动态观察器</h1>
+  <p class="sub">拖动改变角度，观察对顶角/补角/余角的"动中不变"规律</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('vertical',this)">对顶角<small>相等</small></button>
+    <button class="mode-btn" onclick="setMode('supp',this)">补角<small>和=180°</small></button>
+    <button class="mode-btn" onclick="setMode('comp',this)">余角<small>和=90°</small></button>
+    <button class="mode-btn" onclick="setMode('all',this)">综合<small>四个角</small></button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="angle-row" id="angleRow"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: "动中不变"的角关系必须通过动态演示才能感受
+// PEDAGOGY V4 信号聚焦: 高亮色=关注的角，灰色=参考角
+// PEDAGOGY V7 单一认知动作: 比较（拖动前后角度对比，验证关系不变）
+// PEDAGOGY V8 概念反馈: "无论怎么拖，对顶角始终相等"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 320;
+const C = {blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',amber:'#854f0b',amberL:'#faeeda',red:'#dc2626',ink:'#1a1814',ink2:'#6b6860',border:'#e4e2da'};
+
+let mode = 'vertical';
+let alpha = 50; // degrees, the main angle
+let isDragging = false;
+
+function setMode(m, btn) {
+  mode = m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw(); updateInfo();
+}
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr;
+  ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function drawArc(cx, cy, r, startDeg, endDeg, color, fill=false) {
+  const s = startDeg*Math.PI/180, e = endDeg*Math.PI/180;
+  ctx.beginPath();
+  ctx.moveTo(cx,cy);
+  ctx.arc(cx,cy,r,s,e);
+  ctx.closePath();
+  if(fill){ctx.fillStyle=color+'40';ctx.fill();}
+  ctx.strokeStyle=color; ctx.lineWidth=2; ctx.stroke();
+}
+
+function drawLine(cx,cy,ang,len,col,lw=2) {
+  const rad=ang*Math.PI/180;
+  ctx.strokeStyle=col; ctx.lineWidth=lw;
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(rad)*len,cy+Math.sin(rad)*len); ctx.stroke();
+}
+
+function labelAng(cx,cy,r,startDeg,endDeg,text,col) {
+  const midDeg=(startDeg+endDeg)/2;
+  const rad=midDeg*Math.PI/180;
+  ctx.fillStyle=col; ctx.font=`bold 13px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(text, cx+Math.cos(rad)*(r+18), cy+Math.sin(rad)*(r+18));
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2, cy=H/2;
+  const lineLen=W*0.35;
+
+  if(mode==='vertical') {
+    // Two intersecting lines, 4 angles
+    const a1=alpha, a2=alpha+180, a3=alpha+90, a4=alpha+270;
+    // Draw 4 rays
+    [0,90,180,270].forEach(offset=>{
+      drawLine(cx,cy,alpha+offset,lineLen,'#6b6860',1.5);
+    });
+    // Angle 1 (alpha in 1st quad)
+    const β = 180-alpha;
+    drawArc(cx,cy,45,alpha,alpha+90,C.blue,true);
+    drawArc(cx,cy,45,alpha+90,alpha+180,C.amber,true);
+    drawArc(cx,cy,45,alpha+180,alpha+270,C.blue,true);
+    drawArc(cx,cy,45,alpha+270,alpha+360,C.amber,true);
+    labelAng(cx,cy,50,alpha,alpha+90,'∠1',C.blue);
+    labelAng(cx,cy,50,alpha+90,alpha+180,'∠2',C.amber);
+    labelAng(cx,cy,50,alpha+180,alpha+270,'∠3',C.blue);
+    labelAng(cx,cy,50,alpha+270,alpha+360,'∠4',C.amber);
+    ctx.fillStyle=C.blue; ctx.font=`12px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText('蓝色=对顶角（∠1=∠3），橙色=对顶角（∠2=∠4）', W/2, 8);
+  } else if(mode==='supp') {
+    // Supplementary: ray from left to center, and one rotatable ray
+    drawLine(cx,cy,180,lineLen,'#6b6860',1.5);
+    drawLine(cx,cy,0,lineLen,'#6b6860',1.5);
+    drawLine(cx,cy,-alpha,lineLen,C.blue,2.5);
+    drawArc(cx,cy,60,180,360-alpha,C.blue,true);
+    drawArc(cx,cy,60,360-alpha,360,C.amber,true);
+    labelAng(cx,cy,65,180,360-alpha,'∠α',C.blue);
+    labelAng(cx,cy,65,360-alpha,360,'∠β',C.amber);
+    ctx.fillStyle=C.ink; ctx.font=`12px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText('补角：∠α + ∠β = 180°', W/2, 8);
+  } else if(mode==='comp') {
+    // Complementary: right angle corner
+    drawLine(cx,cy+60,0,lineLen,'#6b6860',1.5);
+    drawLine(cx,cy+60,270,lineLen,'#6b6860',1.5);
+    const clamp = Math.min(Math.max(alpha,5),85);
+    drawLine(cx,cy+60,270+clamp,Math.min(lineLen,120),C.blue,2.5);
+    // right angle box
+    ctx.strokeStyle='#6b6860'; ctx.lineWidth=1;
+    ctx.strokeRect(cx+2,cy+60-18,16,16);
+    drawArc(cx,cy+60,55,270,270+clamp,C.blue,true);
+    drawArc(cx,cy+60,55,270+clamp,360,C.amber,true);
+    labelAng(cx,cy+60,60,270,270+clamp,'∠α',C.blue);
+    labelAng(cx,cy+60,60,270+clamp,360,'∠β',C.amber);
+    ctx.fillStyle=C.ink; ctx.font=`12px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText('余角：∠α + ∠β = 90°', W/2, 8);
+  } else { // all
+    const a1=alpha, β=180-alpha, γ=alpha, δ=beta=180-alpha;
+    [0,90,180,270].forEach(offset=>{
+      drawLine(cx,cy,alpha+offset,lineLen,'#6b6860',1.5);
+    });
+    drawArc(cx,cy,40,alpha,alpha+90,C.blue,true);
+    drawArc(cx,cy,50,alpha+90,alpha+180,C.amber,true);
+    drawArc(cx,cy,40,alpha+180,alpha+270,C.blue,true);
+    drawArc(cx,cy,50,alpha+270,alpha+360,C.amber,true);
+    labelAng(cx,cy,45,alpha,alpha+90,`${(90-alpha%90).toFixed(0)}°`,C.blue);
+    labelAng(cx,cy,55,alpha+90,alpha+180,`${(alpha%90).toFixed(0)}°`,C.amber);
+    labelAng(cx,cy,45,alpha+180,alpha+270,`${(90-alpha%90).toFixed(0)}°`,C.blue);
+    labelAng(cx,cy,55,alpha+270,alpha+360,`${(alpha%90).toFixed(0)}°`,C.amber);
+  }
+
+  // Center dot
+  ctx.fillStyle=C.ink;
+  ctx.beginPath(); ctx.arc(cx,cy,4,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#6b6860'; ctx.font=`11px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('拖动旋转', W/2, H-4);
+}
+
+function updateInfo() {
+  const a = ((alpha%90)+90)%90;
+  const β = 90-a;
+  const γ = 180-a;
+  const row = document.getElementById('angleRow');
+  if(mode==='vertical') {
+    const a1=((alpha%90)+90)%90, a2=90-a1;
+    row.innerHTML=`<div class="angle-chip" style="color:${C.blue}">∠1 = ∠3 = ${a1.toFixed(1)}°</div>
+      <div class="angle-chip" style="color:${C.amber}">∠2 = ∠4 = ${a2.toFixed(1)}°</div>
+      <div class="angle-chip">∠1+∠2 = 180°</div>`;
+    document.getElementById('fb').innerHTML=`<strong>对顶角相等定理</strong>：两直线相交所得的对顶角相等。<br>无论怎么旋转，蓝色的∠1始终等于∠3，橙色的∠2始终等于∠4——这就是"动中不变"的几何量。`;
+  } else if(mode==='supp') {
+    row.innerHTML=`<div class="angle-chip" style="color:${C.blue}">∠α = ${alpha.toFixed(1)}°</div>
+      <div class="angle-chip" style="color:${C.amber}">∠β = ${(180-alpha).toFixed(1)}°</div>
+      <div class="angle-chip">和 = ${(180).toFixed(1)}°</div>`;
+    document.getElementById('fb').innerHTML=`<strong>互补</strong>：两角之和为180°。<br>∠α=${alpha.toFixed(1)}°，∠β=${(180-alpha).toFixed(1)}°，∠α+∠β=180°。拖动射线，两角始终互补。`;
+  } else if(mode==='comp') {
+    const cl=Math.min(Math.max(alpha,5),85);
+    row.innerHTML=`<div class="angle-chip" style="color:${C.blue}">∠α = ${cl.toFixed(1)}°</div>
+      <div class="angle-chip" style="color:${C.amber}">∠β = ${(90-cl).toFixed(1)}°</div>
+      <div class="angle-chip">和 = 90°</div>`;
+    document.getElementById('fb').innerHTML=`<strong>互余</strong>：两角之和为90°。<br>∠α=${cl.toFixed(1)}°，∠β=${(90-cl).toFixed(1)}°，∠α+∠β=90°。拖动射线，两角始终互余。`;
+  } else {
+    row.innerHTML=`<div class="angle-chip">对顶角相等</div><div class="angle-chip">相邻角互补</div>`;
+    document.getElementById('fb').innerHTML=`<strong>综合关系</strong>：两直线相交形成4个角：对顶角相等（蓝色），相邻角互补（蓝+橙=180°）。`;
+  }
+}
+
+cvs.addEventListener('pointerdown',e=>{isDragging=true;cvs.setPointerCapture(e.pointerId);});
+cvs.addEventListener('pointermove',e=>{
+  if(!isDragging) return;
+  const r=cvs.getBoundingClientRect();
+  const x=e.clientX-r.left-r.width/2, y=e.clientY-r.top-H/2;
+  alpha=(Math.atan2(y,x)*180/Math.PI+360)%360;
+  draw(); updateInfo();
+});
+cvs.addEventListener('pointerup',()=>{isDragging=false;});
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); draw(); updateInfo();
+</script>
+</body>
+</html>

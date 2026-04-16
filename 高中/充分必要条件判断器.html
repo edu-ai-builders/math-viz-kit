@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>充分必要条件判断器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="逻辑">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="C">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="韦恩图和命题卡片交互，判断充分条件、必要条件和充要条件的关系，举反例辅助理解">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .examples-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;}
+    .ex-card{padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);transition:all .15s;}
+    .ex-card.active{border-color:var(--blue);background:var(--blue-light);}
+    .ex-card .ex-title{font-size:12px;font-weight:700;color:var(--ink);}
+    .ex-card .ex-sub{font-size:11px;color:var(--ink2);margin-top:2px;}
+    .layout{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .right-panel{display:flex;flex-direction:column;gap:8px;}
+    .logic-table{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;}
+    .logic-table table{width:100%;border-collapse:collapse;}
+    .logic-table th{background:var(--bg);font-size:12px;padding:6px 10px;text-align:center;border-bottom:1px solid var(--border);}
+    .logic-table td{font-size:13px;padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);}
+    .logic-table tr:last-child td{border-bottom:none;}
+    .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;}
+    .tag-yes{background:var(--teal-light);color:var(--teal);}
+    .tag-no{background:#fee2e2;color:#dc2626;}
+    .result-box{padding:12px 14px;border-radius:var(--radius-sm);font-size:14px;font-weight:700;text-align:center;}
+    .result-box.cns{background:var(--teal-light);color:var(--teal);}
+    .result-box.only-s{background:var(--blue-light);color:var(--blue);}
+    .result-box.only-n{background:var(--amber-light);color:var(--amber);}
+    .result-box.neither{background:#fee2e2;color:#dc2626;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+    @media(max-width:540px){.layout{grid-template-columns:1fr;}.examples-grid{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 逻辑 · 认知动作：比较</div>
+  <h1>充分必要条件判断器</h1>
+  <p class="sub">韦恩图直观展示充分/必要/充要条件的集合关系</p>
+</header>
+<main>
+  <div class="examples-grid" id="exGrid"></div>
+  <div class="layout">
+    <canvas id="cvs"></canvas>
+    <div class="right-panel">
+      <div class="logic-table">
+        <table>
+          <tr><th>方向</th><th>命题</th><th>成立？</th></tr>
+          <tr id="rowP"><td>P→Q</td><td id="pqText">—</td><td id="pqVal">—</td></tr>
+          <tr id="rowQ"><td>Q→P</td><td id="qpText">—</td><td id="qpVal">—</td></tr>
+        </table>
+      </div>
+      <div class="result-box" id="resultBox">请选择一个命题</div>
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--ink2);line-height:1.8;">
+        <strong style="color:var(--ink);">反例展示</strong><br>
+        <span id="counterEx">—</span>
+      </div>
+    </div>
+  </div>
+  <div class="fb" id="fb">选择上方命题，观察P和Q的集合关系，判断充分/必要条件。</div>
+</main>
+<script>
+// PEDAGOGY V2 表征桥接: 命题↔韦恩图↔逻辑判断三者联动
+// PEDAGOGY V4 信号聚焦: 箭头方向对应蕴含方向
+// PEDAGOGY V8 概念反馈: 自动给出充分/必要/充要/无关的判断
+
+const EXAMPLES=[
+  {P:'x=2',Q:'x²=4',pq:true,qp:false,type:'only-s',name:'充分不必要',desc:'P⊂Q：x=2必然x²=4，但x²=4还可能x=-2',
+   venn:'P⊂Q',counterPQ:'无（P→Q成立）',counterQP:'x=-2时，x²=4但x≠2'},
+  {P:'x>2',Q:'x>0',pq:true,qp:false,type:'only-s',name:'充分不必要',desc:'P⊂Q：x>2必然x>0，但x>0不一定x>2',
+   venn:'P⊂Q',counterPQ:'无（P→Q成立）',counterQP:'x=1时，x>0但x不>2'},
+  {P:'x²=1',Q:'|x|=1',pq:true,qp:true,type:'cns',name:'充要条件',desc:'P=Q：x²=1等价于|x|=1',
+   venn:'P=Q',counterPQ:'无',counterQP:'无'},
+  {P:'四边形是矩形',Q:'四边形是平行四边形',pq:true,qp:false,type:'only-s',name:'充分不必要',desc:'矩形⊂平行四边形',
+   venn:'P⊂Q',counterPQ:'无（矩形必为平行四边形）',counterQP:'菱形是平行四边形但不是矩形'},
+  {P:'三角形有两边相等',Q:'三角形有两角相等',pq:true,qp:true,type:'cns',name:'充要条件',desc:'等腰三角形等价定义',
+   venn:'P=Q',counterPQ:'无',counterQP:'无'},
+  {P:'x>3',Q:'x>1',pq:true,qp:false,type:'only-s',name:'充分不必要',desc:'P⊂Q：x>3必然x>1',
+   venn:'P⊂Q',counterPQ:'无',counterQP:'x=2时，x>1但x不>3'},
+  {P:'x能被4整除',Q:'x能被2整除',pq:true,qp:false,type:'only-s',name:'充分不必要',desc:'4的倍数⊂2的倍数',
+   venn:'P⊂Q',counterPQ:'无',counterQP:'x=6能被2整除但不能被4整除'},
+  {P:'x²>4',Q:'x>2',pq:false,qp:true,type:'only-n',name:'必要不充分',desc:'P⊃Q：x>2必然x²>4，但x<-2时x²>4而x≯2',
+   venn:'P⊃Q',counterPQ:'x=-3时，x²=9>4但x不>2',counterQP:'无（Q→P成立）'},
+];
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=280;
+let curEx=null;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function buildGrid(){
+  const g=document.getElementById('exGrid');
+  g.innerHTML=EXAMPLES.map((e,i)=>`
+    <div class="ex-card" onclick="selectEx(${i},this)">
+      <div class="ex-title">P: ${e.P}</div>
+      <div class="ex-sub">Q: ${e.Q}</div>
+    </div>
+  `).join('');
+}
+
+function selectEx(i,btn){
+  document.querySelectorAll('.ex-card').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  curEx=EXAMPLES[i];
+  drawVenn();
+  updatePanel();
+}
+
+function drawVenn(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2,cy=H/2;
+  const e=curEx;
+
+  if(!e){
+    ctx.fillStyle='#a8a69f';ctx.font=`14px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('请选择一个命题',cx,cy);
+    return;
+  }
+
+  const R=Math.min(W,H)*0.28;
+
+  if(e.venn==='P=Q'){
+    // Same circle
+    ctx.fillStyle='#2a5c8f22';
+    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#2a5c8f';ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle='#0f6e56';ctx.lineWidth=2;ctx.setLineDash([5,4]);
+    ctx.beginPath();ctx.arc(cx,cy,R*0.85,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+
+    ctx.fillStyle='#2a5c8f';ctx.font=`bold 14px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('P = Q',cx,cy);
+
+    // Bidirectional arrow
+    drawArrow(ctx,cx-40,cy-R*1.3,cx+40,cy-R*1.3,'#854f0b',true,true);
+    ctx.fillStyle='#854f0b';ctx.font=`11px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText('P⟺Q（充要条件）',cx,cy-R*1.3-4);
+
+  } else if(e.venn==='P⊂Q'){
+    // P inside Q
+    const qR=R, pR=R*0.55;
+    const qx=cx+qR*0.15, qy=cy;
+    const px=cx-qR*0.2, py=cy;
+
+    ctx.fillStyle='#0f6e5620';
+    ctx.beginPath();ctx.arc(qx,qy,qR,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#0f6e56';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(qx,qy,qR,0,Math.PI*2);ctx.stroke();
+
+    ctx.fillStyle='#2a5c8f30';
+    ctx.beginPath();ctx.arc(px,py,pR,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#2a5c8f';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.arc(px,py,pR,0,Math.PI*2);ctx.stroke();
+
+    ctx.fillStyle='#2a5c8f';ctx.font=`bold 13px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('P',px,py);
+    ctx.fillStyle='#0f6e56';
+    ctx.fillText('Q',qx+qR*0.55,qy);
+
+    // Arrow P→Q
+    drawArrow(ctx,cx-R*0.3,cy-R*1.2,cx+R*0.1,cy-R*1.2,'#2a5c8f',false,true);
+    ctx.fillStyle='#2a5c8f';ctx.font=`11px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center';ctx.fillText('P⟹Q（充分）',cx-R*0.1,cy-R*1.2-12);
+
+    // Arrow Q→P crossed
+    ctx.strokeStyle='#dc2626';ctx.lineWidth=2;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(cx+R*0.3,cy+R*1.1);ctx.lineTo(cx-R*0.1,cy+R*1.1);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#dc2626';ctx.font=`11px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center';ctx.fillText('Q⟹P（❌非必要）',cx+R*0.1,cy+R*1.1+14);
+
+  } else {
+    // P⊃Q: Q inside P
+    const pR=R, qR=R*0.55;
+    const px=cx-pR*0.1, py=cy;
+    const qx=cx+pR*0.2, qy=cy;
+
+    ctx.fillStyle='#2a5c8f20';
+    ctx.beginPath();ctx.arc(px,py,pR,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#2a5c8f';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(px,py,pR,0,Math.PI*2);ctx.stroke();
+
+    ctx.fillStyle='#0f6e5630';
+    ctx.beginPath();ctx.arc(qx,qy,qR,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#0f6e56';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.arc(qx,qy,qR,0,Math.PI*2);ctx.stroke();
+
+    ctx.fillStyle='#2a5c8f';ctx.font=`bold 13px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('P',px-pR*0.55,py);
+    ctx.fillStyle='#0f6e56';
+    ctx.fillText('Q',qx,qy);
+
+    // Arrow Q→P
+    drawArrow(ctx,cx+R*0.2,cy-R*1.2,cx-R*0.2,cy-R*1.2,'#0f6e56',false,true);
+    ctx.fillStyle='#0f6e56';ctx.font=`11px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center';ctx.fillText('Q⟹P（必要）',cx,cy-R*1.2-12);
+
+    // Arrow P→Q crossed
+    ctx.strokeStyle='#dc2626';ctx.lineWidth=2;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(cx-R*0.2,cy+R*1.1);ctx.lineTo(cx+R*0.2,cy+R*1.1);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#dc2626';ctx.font=`11px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center';ctx.fillText('P⟹Q（❌非充分）',cx,cy+R*1.1+14);
+  }
+}
+
+function drawArrow(ctx,x1,y1,x2,y2,color,leftArrow,rightArrow){
+  ctx.strokeStyle=color;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  const ang=Math.atan2(y2-y1,x2-x1);
+  const hs=8;
+  if(rightArrow){
+    ctx.fillStyle=color;ctx.beginPath();
+    ctx.moveTo(x2,y2);ctx.lineTo(x2-hs*Math.cos(ang-0.4),y2-hs*Math.sin(ang-0.4));
+    ctx.lineTo(x2-hs*Math.cos(ang+0.4),y2-hs*Math.sin(ang+0.4));ctx.closePath();ctx.fill();
+  }
+  if(leftArrow){
+    ctx.fillStyle=color;ctx.beginPath();
+    ctx.moveTo(x1,y1);ctx.lineTo(x1+hs*Math.cos(ang-0.4+Math.PI),y1+hs*Math.sin(ang-0.4+Math.PI));
+    ctx.lineTo(x1+hs*Math.cos(ang+0.4+Math.PI),y1+hs*Math.sin(ang+0.4+Math.PI));ctx.closePath();ctx.fill();
+  }
+}
+
+function updatePanel(){
+  if(!curEx) return;
+  const e=curEx;
+
+  document.getElementById('pqText').textContent=`"${e.P}"⟹"${e.Q}"`;
+  document.getElementById('qpText').textContent=`"${e.Q}"⟹"${e.P}"`;
+
+  document.getElementById('pqVal').innerHTML=e.pq?`<span class="tag tag-yes">✓ 成立</span>`:`<span class="tag tag-no">✗ 不成立</span>`;
+  document.getElementById('qpVal').innerHTML=e.qp?`<span class="tag tag-yes">✓ 成立</span>`:`<span class="tag tag-no">✗ 不成立</span>`;
+
+  const rb=document.getElementById('resultBox');
+  rb.className='result-box '+e.type;
+  const labels={cns:'充要条件（等价命题）P⟺Q',only_s:'充分不必要条件 P⟹Q',only_n:'必要不充分条件 Q⟹P',neither:'既非充分也非必要'};
+  rb.textContent=labels[e.type]||e.name;
+
+  document.getElementById('counterEx').innerHTML=`P→Q反例：${e.counterPQ}<br>Q→P反例：${e.counterQP}`;
+
+  const typeMap={cns:'充要条件（充分且必要）：P和Q完全等价，P⟺Q。集合关系：P=Q。',
+    'only-s':'充分不必要：P成立可推出Q（充分），但Q成立不一定有P（非必要）。集合：P⊂Q（P是Q的子集）。',
+    'only-n':'必要不充分：P成立不一定有Q（非充分），但Q成立必有P（必要）。集合：P⊃Q（Q是P的子集）。',
+    neither:'既非充分也非必要：P和Q无蕴含关系，互相不能推出。'};
+
+  document.getElementById('fb').innerHTML=
+    `<strong>${e.name}示例</strong>：P="${e.P}"，Q="${e.Q}"。<br>${typeMap[e.type]||''}<br>${e.desc}`;
+}
+
+window.addEventListener('resize',()=>{setup();if(curEx)drawVenn();});
+setup();buildGrid();
+// Select first by default
+document.querySelector('.ex-card').click();
+</script>
+</body>
+</html>

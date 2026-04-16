@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>位值系统积木 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="数与运算">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="分解">
+  <meta name="desc" content="用积木直观展示个十百位的位值概念，理解数的组成">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;
+      --blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;
+      --teal:#0f6e56;--teal-light:#e1f5ee;
+      --amber:#854f0b;--amber-light:#faeeda;
+      --radius:12px;--radius-sm:8px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:680px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:680px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .number-display{background:var(--surface);border:2px solid var(--blue);border-radius:var(--radius);padding:16px 24px;display:flex;align-items:center;justify-content:center;gap:6px;}
+    .digit-slot{display:flex;flex-direction:column;align-items:center;gap:4px;}
+    .digit-val{font-size:48px;font-weight:700;font-family:'JetBrains Mono',monospace;width:56px;text-align:center;line-height:1;}
+    .digit-name{font-size:11px;color:var(--ink2);}
+    .digit-sep{font-size:40px;color:var(--ink3);align-self:flex-end;padding-bottom:4px;}
+    canvas{width:100%;height:280px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .place-controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+    .place-ctrl{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;align-items:center;gap:8px;}
+    .place-title{font-size:13px;font-weight:600;}
+    .place-val{font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    .place-btns{display:flex;gap:6px;}
+    .plus-btn,.minus-btn{width:36px;height:36px;border:none;border-radius:8px;font-size:20px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;}
+    .plus-btn{background:var(--blue);color:#fff;}
+    .minus-btn{background:var(--blue-light);color:var(--blue);}
+    .plus-btn:hover{filter:brightness(1.1);}
+    .minus-btn:hover{filter:brightness(0.95);}
+    .equation{background:var(--blue-light);border:2px solid var(--blue);border-radius:var(--radius);padding:12px 16px;text-align:center;font-size:17px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);opacity:0;transition:opacity .4s;}
+    .equation.show{opacity:1;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;opacity:0;transition:opacity .5s;}
+    .fb.show{opacity:1;}
+    @media(max-width:500px){.place-controls{grid-template-columns:1fr;} main{padding:12px 16px 24px;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 数与运算 · 认知动作：分解</div>
+  <h1>位值系统积木</h1>
+  <p class="sub">拨动个位、十位、百位，用积木看懂每个数字的真实大小</p>
+</header>
+<main>
+  <div class="number-display">
+    <div class="digit-slot">
+      <div class="digit-val" id="dH" style="color:var(--amber)">1</div>
+      <div class="digit-name">百位</div>
+    </div>
+    <div class="digit-sep">，</div>
+    <div class="digit-slot">
+      <div class="digit-val" id="dT" style="color:var(--teal)">3</div>
+      <div class="digit-name">十位</div>
+    </div>
+    <div class="digit-sep"></div>
+    <div class="digit-slot">
+      <div class="digit-val" id="dO" style="color:var(--blue)">5</div>
+      <div class="digit-name">个位</div>
+    </div>
+    <div style="margin-left:16px;font-size:22px;color:var(--ink2)">=</div>
+    <div class="digit-slot" style="margin-left:8px">
+      <div class="digit-val" id="dTotal" style="color:var(--ink)">135</div>
+      <div class="digit-name">总数</div>
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="place-controls">
+    <div class="place-ctrl">
+      <div class="place-title" style="color:var(--amber)">百位</div>
+      <div class="place-val" id="hv" style="color:var(--amber)">1</div>
+      <div class="place-btns">
+        <button class="minus-btn" style="background:var(--amber-light);color:var(--amber)" onclick="change('h',-1)">−</button>
+        <button class="plus-btn" style="background:var(--amber)" onclick="change('h',1)">+</button>
+      </div>
+    </div>
+    <div class="place-ctrl">
+      <div class="place-title" style="color:var(--teal)">十位</div>
+      <div class="place-val" id="tv" style="color:var(--teal)">3</div>
+      <div class="place-btns">
+        <button class="minus-btn" style="background:var(--teal-light);color:var(--teal)" onclick="change('t',-1)">−</button>
+        <button class="plus-btn" style="background:var(--teal)" onclick="change('t',1)">+</button>
+      </div>
+    </div>
+    <div class="place-ctrl">
+      <div class="place-title" style="color:var(--blue)">个位</div>
+      <div class="place-val" id="ov" style="color:var(--blue)">5</div>
+      <div class="place-btns">
+        <button class="minus-btn" onclick="change('o',-1)">−</button>
+        <button class="plus-btn" onclick="change('o',1)">+</button>
+      </div>
+    </div>
+  </div>
+  <div class="equation" id="equation"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：分解
+// V1 动态跃迁：每改变一位数，积木数量立即变化，位值与量的对应可见
+// V2 表征桥接：数字符号 + 积木堆 + 展开式三联动
+// V4 信号聚焦：百=橙，十=绿，个=蓝，颜色含义单一
+// V5 操作先于符号：先+/-调数，再看展开算式
+// V7 单一认知动作：分解（每位都是独立的量）
+// V8 概念反馈：揭示"十位上的3=3个十=30"的位值本质
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',amberL:'#faeeda',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let h=1,t=3,o=5, interactions=0;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=280*dpr; ctx.scale(dpr,dpr); cvs.style.height='280px';
+}
+
+function drawBlock(x,y,w,ht,col,label,count){
+  ctx.fillStyle=col+'cc'; ctx.strokeStyle=col; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.roundRect(x,y,w,ht,4); ctx.fill(); ctx.stroke();
+  if(label){
+    ctx.fillStyle='#fff'; ctx.font=`bold ${Math.max(9,Math.min(13,ht*0.5))}px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(label,x+w/2,y+ht/2);
+  }
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=280;
+  ctx.clearRect(0,0,W,H);
+
+  const colW=(W-60)/3, margin=20, blockH=22, gap=3, baseY=H-20;
+
+  // Column labels at top
+  const cols=[{label:'百位（×100）',val:h,color:C.amber,x:margin},{label:'十位（×10）',val:t,color:C.teal,x:margin+colW+10},{label:'个位（×1）',val:o,color:C.blue,x:margin+2*(colW+10)}];
+
+  cols.forEach(col=>{
+    ctx.fillStyle=col.color; ctx.font=`bold 12px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(col.label, col.x+colW/2-8, 4);
+
+    // Draw blocks stacked upward
+    for(let i=0;i<col.val;i++){
+      const by=baseY-(i+1)*(blockH+gap);
+      drawBlock(col.x,by,colW-16,blockH,col.color,null,i+1);
+    }
+    // Count label at top of stack
+    if(col.val>0){
+      ctx.fillStyle=col.color; ctx.font=`bold 14px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText(`${col.val}`,col.x+colW/2-8,baseY-col.val*(blockH+gap)-4);
+    } else {
+      ctx.fillStyle=C.ink3; ctx.font=`13px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText('0',col.x+colW/2-8,baseY-4);
+    }
+
+    // Base line
+    ctx.strokeStyle=col.color+'66'; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(col.x,baseY); ctx.lineTo(col.x+colW-16,baseY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Value annotation
+    ctx.fillStyle=col.color+'aa'; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(col.label==='百位（×100）'?`${h*100}`:col.label==='十位（×10）'?`${t*10}`:`${o}`,col.x+colW/2-8,baseY+4);
+  });
+}
+
+function change(place,delta){
+  if(place==='h'){h=Math.max(0,Math.min(9,h+delta));}
+  else if(place==='t'){t=Math.max(0,Math.min(9,t+delta));}
+  else{o=Math.max(0,Math.min(9,o+delta));}
+  interactions++;
+  update();
+}
+
+function update(){
+  const total=h*100+t*10+o;
+  document.getElementById('dH').textContent=h;
+  document.getElementById('dT').textContent=t;
+  document.getElementById('dO').textContent=o;
+  document.getElementById('dTotal').textContent=total;
+  document.getElementById('hv').textContent=h;
+  document.getElementById('tv').textContent=t;
+  document.getElementById('ov').textContent=o;
+
+  // PEDAGOGY V5: show equation only after first interaction
+  if(interactions>0){
+    const parts=[];
+    if(h>0) parts.push(`${h}×100`);
+    if(t>0) parts.push(`${t}×10`);
+    if(o>0) parts.push(`${o}×1`);
+    const eq=document.getElementById('equation');
+    eq.textContent=parts.length>0?`${parts.join(' + ')} = ${total}`:'0';
+    eq.classList.add('show');
+    showFeedback(total);
+  }
+  draw();
+}
+
+function showFeedback(total){
+  // PEDAGOGY V8
+  const fb=document.getElementById('fb');
+  const parts=[];
+  if(h>0) parts.push(`百位的 <strong>${h}</strong> 表示 <strong>${h}个百 = ${h*100}</strong>`);
+  if(t>0) parts.push(`十位的 <strong>${t}</strong> 表示 <strong>${t}个十 = ${t*10}</strong>`);
+  if(o>0) parts.push(`个位的 <strong>${o}</strong> 表示 <strong>${o}个一 = ${o}</strong>`);
+  if(parts.length===0){fb.innerHTML='所有位都是0，总数是0。';fb.classList.add('show');return;}
+  fb.innerHTML=parts.join('，') + `。<br>加起来：${h*100}+${t*10}+${o} = <strong>${total}</strong>。这就是"位值"的意义——同一个数字在不同位置，大小相差10倍！`;
+  fb.classList.add('show');
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); draw();
+</script>
+</body>
+</html>

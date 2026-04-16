@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>相似三角形缩放器 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="相似三角形">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="缩放">
+  <meta name="desc" content="拖动缩放比例实时联动两三角形，理解相似的本质：形状不变，大小等比缩放">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .angle-table{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+    .angle-table table{width:100%;border-collapse:collapse;}
+    .angle-table th{background:var(--bg);padding:7px 10px;font-size:12px;color:var(--ink2);text-align:left;}
+    .angle-table td{padding:7px 10px;font-size:13px;font-family:'JetBrains Mono',monospace;border-top:1px solid var(--border);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.stat-row{grid-template-columns:1fr 1fr;}.controls{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 相似三角形 · 认知动作：缩放</div>
+  <h1>相似三角形缩放器</h1>
+  <p class="sub">改变缩放比例 k，看两个三角形如何保持形状不变，边长等比变化</p>
+</header>
+<main>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">缩放比 k</div><div class="stat-val" id="kStat" style="color:var(--blue)">2.0</div></div>
+    <div class="stat"><div class="stat-lbl">面积比 k²</div><div class="stat-val" id="areaStat" style="color:var(--teal)">4.0</div></div>
+    <div class="stat"><div class="stat-lbl">周长比</div><div class="stat-val" id="perimStat" style="color:var(--amber)">2.0</div></div>
+    <div class="stat"><div class="stat-lbl">角度</div><div class="stat-val" id="angleStat" style="color:var(--ink2)">不变</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">缩放比例 k</div>
+      <div class="sl-val" id="kLabel">2.0</div>
+      <input type="range" id="kSl" min="0.3" max="3.5" step="0.1" value="2.0">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">原三角形顶角 α</div>
+      <div class="sl-val" id="aLabel" style="color:var(--amber)">60°</div>
+      <input type="range" id="aSl" min="20" max="120" step="5" value="60">
+    </div>
+  </div>
+  <div class="angle-table">
+    <table>
+      <thead><tr><th>边</th><th style="color:var(--blue)">△ABC（原）</th><th style="color:var(--teal)">△A'B'C'（缩放）</th><th>比值</th></tr></thead>
+      <tbody id="sideTable"></tbody>
+    </table>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 缩放比变化时两三角形实时联动，静态图无法展示
+// PEDAGOGY V2 表征桥接: 图形 ↔ 边长数值 ↔ 比值表
+// PEDAGOGY V4 信号聚焦: 蓝=原三角形, 绿=相似三角形
+// PEDAGOGY V6 动作-数学一致: 拖动k=两三角形同步缩放
+// PEDAGOGY V7 单一认知动作: 缩放（等比扩大/缩小）
+// PEDAGOGY V8 概念反馈: 揭示角度不变、边长等比、面积比=k²
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 360;
+const C = {
+  blue:'#2a5c8f', blueL:'#e8f0f8', teal:'#0f6e56', tealL:'#e1f5ee',
+  amber:'#854f0b', amberL:'#faeeda',
+  ink:'#1a1814', ink2:'#6b6860', ink3:'#a8a69f', border:'#e4e2da', surf:'#fff'
+};
+
+function setup(){
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr; ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function deg2rad(d){ return d*Math.PI/180; }
+function rad2deg(r){ return r*180/Math.PI; }
+
+// Build triangle from two sides and included angle (SAS)
+// a=bottom side, angle alpha in degrees, b=left side
+function buildTriangle(cx, cy, a, b, alpha){
+  // Place A at bottom-left, B at bottom-right, C above
+  const A = {x: cx - a/2, y: cy};
+  const B = {x: cx + a/2, y: cy};
+  // C is from A at angle alpha from AB
+  const betaA = deg2rad(alpha); // angle at A from AB direction (horizontal)
+  const C2 = {x: A.x + b*Math.cos(betaA), y: A.y - b*Math.sin(betaA)};
+  return [A, B, C2];
+}
+
+// Compute side lengths of triangle
+function sideLengths(pts){
+  const [A,B,C] = pts;
+  return {
+    AB: Math.hypot(B.x-A.x, B.y-A.y),
+    BC: Math.hypot(C.x-B.x, C.y-B.y),
+    CA: Math.hypot(A.x-C.x, A.y-C.y)
+  };
+}
+
+function drawTriangle(pts, color, label, filled){
+  const [A,B,C] = pts;
+  ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.lineTo(C.x,C.y); ctx.closePath();
+  if(filled){ ctx.fillStyle = color+'22'; ctx.fill(); }
+  ctx.stroke();
+  // Vertex labels
+  const offset = 14;
+  const verts = [{pt:A,l:'A',dx:-1,dy:1},{pt:B,l:'B',dx:1,dy:1},{pt:C,l:'C',dx:0,dy:-1}];
+  ctx.font = `bold 13px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle = color;
+  verts.forEach(({pt,l,dx,dy})=>{
+    ctx.fillText(label+l, pt.x+dx*offset, pt.y+dy*offset);
+  });
+}
+
+function drawSideLabel(p1, p2, text, color){
+  const mx = (p1.x+p2.x)/2, my = (p1.y+p2.y)/2;
+  const angle = Math.atan2(p2.y-p1.y, p2.x-p1.x);
+  const perp = angle + Math.PI/2;
+  const d = 16;
+  ctx.fillStyle = color; ctx.font = `12px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(text, mx+Math.cos(perp)*d, my+Math.sin(perp)*d);
+}
+
+function draw(){
+  const W = cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const k = parseFloat(document.getElementById('kSl').value);
+  const alpha = parseInt(document.getElementById('aSl').value);
+
+  // Base triangle size
+  const baseA = 100, baseB = 80;
+  const gap = 30;
+
+  // Original triangle (blue) — left side
+  const tri1cx = W * 0.28;
+  const tri1cy = H * 0.62;
+  const tri1 = buildTriangle(tri1cx, tri1cy, baseA, baseB, alpha);
+
+  // Scaled triangle (teal) — right side
+  const tri2cx = W * 0.72;
+  const tri2cy = H * 0.62;
+  const tri2 = buildTriangle(tri2cx, tri2cy, baseA*k, baseB*k, alpha);
+
+  // Draw grid-like bg hint
+  ctx.strokeStyle = C.border; ctx.lineWidth=0.4;
+  for(let x=0;x<W;x+=40){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for(let y=0;y<H;y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  // Draw connecting "ratio lines" between corresponding vertices
+  ctx.strokeStyle = C.ink3+'44'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+  for(let i=0;i<3;i++){
+    ctx.beginPath(); ctx.moveTo(tri1[i].x, tri1[i].y); ctx.lineTo(tri2[i].x, tri2[i].y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  drawTriangle(tri1, C.blue, '', true);
+  drawTriangle(tri2, C.teal, '\'', true);
+
+  // Side labels
+  const sl1 = sideLengths(tri1);
+  const sl2 = sideLengths(tri2);
+  drawSideLabel(tri1[0], tri1[1], sl1.AB.toFixed(0), C.blue);
+  drawSideLabel(tri1[1], tri1[2], sl1.BC.toFixed(0), C.blue);
+  drawSideLabel(tri1[2], tri1[0], sl1.CA.toFixed(0), C.blue);
+  drawSideLabel(tri2[0], tri2[1], sl2.AB.toFixed(0), C.teal);
+  drawSideLabel(tri2[1], tri2[2], sl2.BC.toFixed(0), C.teal);
+  drawSideLabel(tri2[2], tri2[0], sl2.CA.toFixed(0), C.teal);
+
+  // Legend
+  ctx.fillStyle = C.blue; ctx.font=`bold 14px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('△ABC（原）', tri1cx, H*0.04);
+  ctx.fillStyle = C.teal;
+  ctx.fillText("△A'B'C'（×"+k.toFixed(1)+"）", tri2cx, H*0.04);
+
+  // Update stats
+  document.getElementById('kStat').textContent = k.toFixed(1);
+  document.getElementById('areaStat').textContent = (k*k).toFixed(2);
+  document.getElementById('perimStat').textContent = k.toFixed(1);
+
+  // Update table
+  const tbody = document.getElementById('sideTable');
+  const sides = [
+    {name:'AB (底边)', v1:sl1.AB, v2:sl2.AB},
+    {name:'BC (斜边)', v1:sl1.BC, v2:sl2.BC},
+    {name:'CA (左边)', v1:sl1.CA, v2:sl2.CA},
+  ];
+  tbody.innerHTML = sides.map(s=>`<tr>
+    <td>${s.name}</td>
+    <td style="color:var(--blue)">${s.v1.toFixed(1)}</td>
+    <td style="color:var(--teal)">${s.v2.toFixed(1)}</td>
+    <td><strong>${(s.v2/s.v1).toFixed(2)}</strong></td>
+  </tr>`).join('');
+
+  // PEDAGOGY V8
+  const area1 = 0.5*baseA*baseB*Math.sin(deg2rad(alpha));
+  const area2 = area1 * k*k;
+  document.getElementById('fb').innerHTML = `缩放比 k = <strong>${k.toFixed(1)}</strong>：所有边长同时变为原来的 ${k.toFixed(1)} 倍，三个角度<strong>完全不变</strong>。<br>面积比 = k² = ${(k*k).toFixed(2)}。相似三角形的本质：<strong>形状相同（角相等），大小等比缩放</strong>。`;
+
+  document.getElementById('kLabel').textContent = k.toFixed(1);
+  document.getElementById('aLabel').textContent = alpha+'°';
+}
+
+document.getElementById('kSl').addEventListener('input', draw);
+document.getElementById('aSl').addEventListener('input', draw);
+window.addEventListener('resize',()=>{ setup(); draw(); });
+setup(); draw();
+</script>
+</body>
+</html>

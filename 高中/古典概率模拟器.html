@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>古典概率模拟器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="概率">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="模拟">
+  <meta name="desc" content="等可能样本空间可视化：抛硬币、掷骰子、摸球实验，理论概率 vs 频率统计对比">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:10px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .exp-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .exp-btn{padding:10px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;cursor:pointer;background:var(--surface);font-family:'Noto Sans SC',sans-serif;font-weight:500;transition:all .2s;}
+    .exp-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .ctrl-row{display:flex;gap:8px;flex-wrap:wrap;}
+    .btn{padding:10px 18px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;font-family:'Noto Sans SC',sans-serif;font-weight:500;}
+    .btn-run1{background:var(--blue);color:#fff;}
+    .btn-run10{background:var(--teal);color:#fff;}
+    .btn-run100{background:var(--amber);color:#fff;}
+    .btn-reset{background:var(--surface);border:2px solid var(--border);color:var(--ink2);}
+    .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .stat-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;text-align:center;}
+    .stat-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--blue);}
+    .stat-lbl{font-size:12px;color:var(--ink2);margin-top:2px;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 概率 · 认知动作：模拟</div>
+  <h1>古典概率模拟器</h1>
+  <p class="sub">等可能事件的理论概率 vs 实验频率，大数定律在眼前呈现</p>
+</header>
+<main>
+  <div class="exp-row">
+    <button class="exp-btn active" onclick="setExp('coin',this)">🪙 抛硬币</button>
+    <button class="exp-btn" onclick="setExp('dice',this)">🎲 掷骰子</button>
+    <button class="exp-btn" onclick="setExp('ball',this)">🔴 摸球</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="ctrl-row">
+    <button class="btn btn-run1" onclick="runN(1)">做1次</button>
+    <button class="btn btn-run10" onclick="runN(10)">做10次</button>
+    <button class="btn btn-run100" onclick="runN(100)">做100次</button>
+    <button class="btn btn-reset" onclick="reset()">↺ 清零</button>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-val" id="totalVal">0</div><div class="stat-lbl">总次数</div></div>
+    <div class="stat-box"><div class="stat-val" id="freqVal">—</div><div class="stat-lbl">事件A频率</div></div>
+    <div class="stat-box"><div class="stat-val" id="theoVal">—</div><div class="stat-lbl">理论概率</div></div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 频率收敛到理论概率只有大量实验才能体现
+// PEDAGOGY V3 分步揭示: 一次次实验积累，看着折线逼近理论值
+// PEDAGOGY V5 操作先于符号: 先大量模拟，再解释古典概型公式
+// PEDAGOGY V7 单一认知动作: 模拟（大数定律）
+// PEDAGOGY V8 概念反馈: "你做了100次，频率已非常接近理论值——这就是大数定律"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 280;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da'
+};
+
+const EXPS = {
+  coin: {
+    name: '抛硬币',
+    outcomes: ['正面', '反面'],
+    probs: [0.5, 0.5],
+    eventA: '正面朝上',
+    pA: 0.5,
+    colors: [C.blue, C.amber],
+    formula: 'P(正面) = 1/2（2个等可能结果，1个满足条件）',
+  },
+  dice: {
+    name: '掷骰子',
+    outcomes: ['1','2','3','4','5','6'],
+    probs: [1/6,1/6,1/6,1/6,1/6,1/6],
+    eventA: '点数 ≤ 3',
+    pA: 0.5,
+    colors: [C.teal,C.teal,C.teal,C.blue,C.blue,C.blue],
+    formula: 'P(点数≤3) = 3/6 = 1/2（6个等可能结果，3个满足条件）',
+  },
+  ball: {
+    name: '摸球',
+    outcomes: ['红球1','红球2','红球3','蓝球1','蓝球2'],
+    probs: [1/5,1/5,1/5,1/5,1/5],
+    eventA: '摸到红球',
+    pA: 3/5,
+    colors: ['#c0392b','#c0392b','#c0392b',C.blue,C.blue],
+    formula: 'P(红球) = 3/5（5个等可能结果，3个红球满足条件）',
+  }
+};
+
+let exp = 'coin';
+let counts = {};
+let total = 0;
+let freqHistory = []; // {n, freq} for event A
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setExp(e, btn) {
+  exp = e;
+  document.querySelectorAll('.exp-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  reset();
+}
+
+function reset() {
+  const cfg = EXPS[exp];
+  counts = {};
+  cfg.outcomes.forEach(o => counts[o] = 0);
+  total = 0; freqHistory = [];
+  updateStats();
+  draw();
+}
+
+function runN(n) {
+  const cfg = EXPS[exp];
+  for (let i = 0; i < n; i++) {
+    const r = Math.random();
+    let cum = 0;
+    for (let j = 0; j < cfg.probs.length; j++) {
+      cum += cfg.probs[j];
+      if (r < cum) { counts[cfg.outcomes[j]]++; break; }
+    }
+    total++;
+    // Compute event A count
+    let aCount = 0;
+    if (exp === 'coin') aCount = counts['正面'] || 0;
+    else if (exp === 'dice') aCount = (counts['1']||0)+(counts['2']||0)+(counts['3']||0);
+    else aCount = (counts['红球1']||0)+(counts['红球2']||0)+(counts['红球3']||0);
+    freqHistory.push({ n: total, freq: aCount / total });
+  }
+  updateStats();
+  draw();
+}
+
+function getACount() {
+  if (exp === 'coin') return counts['正面'] || 0;
+  if (exp === 'dice') return (counts['1']||0)+(counts['2']||0)+(counts['3']||0);
+  return (counts['红球1']||0)+(counts['红球2']||0)+(counts['红球3']||0);
+}
+
+function updateStats() {
+  const cfg = EXPS[exp];
+  document.getElementById('totalVal').textContent = total;
+  const freq = total > 0 ? (getACount() / total).toFixed(4) : '—';
+  document.getElementById('freqVal').textContent = freq;
+  document.getElementById('theoVal').textContent = cfg.pA.toFixed(4);
+  updateFeedback();
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+  const cfg = EXPS[exp];
+
+  // Left: sample space grid
+  const leftW = W * 0.38;
+  const cellW = leftW / cfg.outcomes.length - 4;
+  const cellH = 36;
+  const startX = 12;
+  const startY = H / 2 - cellH / 2;
+
+  ctx.fillStyle = C.ink; ctx.font = `bold 13px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('样本空间 Ω', startX, 10);
+
+  cfg.outcomes.forEach((o, i) => {
+    const x = startX + i * (cellW + 4);
+    const isA = (exp==='coin'&&o==='正面') || (exp==='dice'&&parseInt(o)<=3) || (exp==='ball'&&o.startsWith('红'));
+    ctx.fillStyle = isA ? cfg.colors[i] + 'cc' : C.border;
+    roundRect(x, startY, cellW, cellH, 6);
+    ctx.fillStyle = isA ? '#fff' : C.ink2;
+    ctx.font = `bold ${cellW < 30 ? 11 : 13}px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(o, x + cellW/2, startY + cellH/2);
+    // Count
+    if (total > 0) {
+      ctx.fillStyle = C.ink3; ctx.font = `11px 'JetBrains Mono',monospace`;
+      ctx.fillText(counts[o], x + cellW/2, startY + cellH + 10);
+    }
+  });
+
+  // Event A label
+  ctx.fillStyle = C.blue; ctx.font = `12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`事件A：${cfg.eventA}（蓝/彩色格）`, startX, startY + cellH + 28);
+
+  // Divider
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(leftW + 8, 10); ctx.lineTo(leftW + 8, H - 10); ctx.stroke();
+
+  // Right: frequency convergence chart
+  const chartX = leftW + 20;
+  const chartW = W - chartX - 10;
+  const chartY = 30;
+  const chartH = H - chartY - 40;
+
+  ctx.fillStyle = C.ink; ctx.font = `bold 13px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('频率收敛图', chartX, 10);
+
+  // Axes
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(chartX, chartY); ctx.lineTo(chartX, chartY+chartH); ctx.lineTo(chartX+chartW, chartY+chartH); ctx.stroke();
+
+  // y gridlines at 0.25, 0.5, 0.75, 1.0
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  [0.25, 0.5, 0.75, 1.0].forEach(p => {
+    const yy = chartY + chartH - p * chartH;
+    ctx.beginPath(); ctx.moveTo(chartX, yy); ctx.lineTo(chartX+chartW, yy); ctx.stroke();
+    ctx.fillStyle = C.ink3; ctx.font = `10px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(p.toFixed(2), chartX - 3, yy);
+  });
+  ctx.setLineDash([]);
+
+  // Theoretical probability line
+  const pA = cfg.pA;
+  const theoY = chartY + chartH - pA * chartH;
+  ctx.strokeStyle = C.amber; ctx.lineWidth = 2; ctx.setLineDash([6,3]);
+  ctx.beginPath(); ctx.moveTo(chartX, theoY); ctx.lineTo(chartX+chartW, theoY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = C.amber; ctx.font = `11px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  ctx.fillText(`P=${pA.toFixed(2)}`, chartX+chartW, theoY - 2);
+
+  // Frequency curve
+  if (freqHistory.length > 1) {
+    const maxN = freqHistory[freqHistory.length - 1].n;
+    ctx.strokeStyle = C.blue; ctx.lineWidth = 2;
+    ctx.beginPath();
+    freqHistory.forEach((pt, i) => {
+      const xx = chartX + (pt.n / maxN) * chartW;
+      const yy = chartY + chartH - pt.freq * chartH;
+      if (i === 0) ctx.moveTo(xx, yy);
+      else ctx.lineTo(xx, yy);
+    });
+    ctx.stroke();
+    // Current point
+    const last = freqHistory[freqHistory.length - 1];
+    const lx = chartX + (last.n / maxN) * chartW;
+    const ly = chartY + chartH - last.freq * chartH;
+    ctx.fillStyle = C.blue;
+    ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI*2); ctx.fill();
+  }
+
+  // Labels
+  ctx.fillStyle = C.ink2; ctx.font = `11px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('实验次数 n', chartX + chartW/2, chartY + chartH + 6);
+
+  if (total === 0) {
+    ctx.fillStyle = C.ink3; ctx.font = `13px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('点击"做实验"开始', chartX + chartW/2, chartY + chartH/2);
+  }
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y); ctx.arcTo(x+w, y, x+w, y+r, r);
+  ctx.lineTo(x+w, y+h-r); ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+  ctx.lineTo(x+r, y+h); ctx.arcTo(x, y+h, x, y+h-r, r);
+  ctx.lineTo(x, y+r); ctx.arcTo(x, y, x+r, y, r);
+  ctx.closePath(); ctx.fill();
+}
+
+function updateFeedback() {
+  const cfg = EXPS[exp];
+  let msg = `<strong>${cfg.formula}</strong><br>`;
+  if (total === 0) {
+    msg += '古典概型条件：① 样本空间有限；② 每个结果等可能发生。用做实验观察频率如何逼近理论概率。';
+  } else {
+    const freq = getACount() / total;
+    const diff = Math.abs(freq - cfg.pA);
+    if (total < 20) msg += `只做了 ${total} 次，频率波动较大（${(freq*100).toFixed(1)}% vs 理论 ${(cfg.pA*100).toFixed(1)}%）。`;
+    else if (diff < 0.03) msg += `做了 ${total} 次！频率 ${(freq*100).toFixed(1)}% 已非常接近理论概率 ${(cfg.pA*100).toFixed(1)}%。<strong>这就是大数定律</strong>：实验次数越多，频率越接近理论概率。`;
+    else msg += `做了 ${total} 次，频率 ${(freq*100).toFixed(1)}%，理论概率 ${(cfg.pA*100).toFixed(1)}%。继续增加次数，频率会趋近理论值。`;
+  }
+  document.getElementById('fb').innerHTML = msg;
+}
+
+window.addEventListener('resize', () => { setup(); draw(); });
+setup(); reset();
+</script>
+</body>
+</html>

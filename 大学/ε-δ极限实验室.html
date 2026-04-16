@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ε-δ极限实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="极限">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="逼近">
+  <meta name="desc" content="拖动ε带宽度，自动求出δ并高亮验证，直观理解极限的严格ε-δ定义">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:17px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .fn-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .fn-btn{padding:6px 14px;border:2px solid var(--border);border-radius:20px;font-size:13px;font-family:'JetBrains Mono',monospace;background:var(--surface);cursor:pointer;transition:all .2s;}
+    .fn-btn.active,.fn-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.controls{grid-template-columns:1fr;}.stat-row{grid-template-columns:1fr 1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 极限 · 认知动作：逼近</div>
+  <h1>ε-δ 极限实验室</h1>
+  <p class="sub">拖动 ε 滑杆，看 δ 如何自动跟随变化——极限严格定义的几何含义</p>
+</header>
+<main>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">ε（y范围）</div><div class="stat-val" id="epsVal" style="color:var(--amber)">0.50</div></div>
+    <div class="stat"><div class="stat-lbl">δ（x范围）</div><div class="stat-val" id="deltaVal" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">极限点 x₀</div><div class="stat-val" id="x0Val" style="color:var(--teal)">1.0</div></div>
+    <div class="stat"><div class="stat-lbl">极限值 L</div><div class="stat-val" id="LVal" style="color:var(--ink2)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">ε（允许的 y 误差）</div>
+      <div class="sl-val" id="epsLabel" style="color:var(--amber)">0.50</div>
+      <input type="range" id="epsSl" min="0.05" max="2.0" step="0.05" value="0.5">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">极限点 x₀</div>
+      <div class="sl-val" id="x0Label" style="color:var(--teal)">1.0</div>
+      <input type="range" id="x0Sl" min="-2" max="3" step="0.5" value="1.0">
+    </div>
+  </div>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn(0,this)">f(x)=2x−1</button>
+    <button class="fn-btn" onclick="setFn(1,this)">f(x)=x²</button>
+    <button class="fn-btn" onclick="setFn(2,this)">f(x)=sin(x)/x</button>
+    <button class="fn-btn" onclick="setFn(3,this)">f(x)=|x|/x（极限不存在）</button>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: ε-δ的"配对"关系只有动态才能直观感受
+// PEDAGOGY V2 表征桥接: ε带（y区间）↔ δ带（x区间）↔ 代数不等式
+// PEDAGOGY V3 分步揭示: 从大ε开始，缩小ε观察δ的跟随变化
+// PEDAGOGY V5 操作先于符号: 先拖动ε看图形，再理解∀ε∃δ
+// PEDAGOGY V7 单一认知动作: 逼近
+// PEDAGOGY V8 概念反馈: 揭示极限的严格定义含义
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 360;
+
+const C = {
+  blue:'#2a5c8f', blueL:'#e8f0f8', teal:'#0f6e56', tealL:'#e1f5ee',
+  amber:'#854f0b', amberL:'#faeeda', amberD:'#c47a0e', red:'#b84040',
+  ink:'#1a1814', ink2:'#6b6860', ink3:'#a8a69f', border:'#e4e2da', surf:'#fff'
+};
+
+// Functions and their limits
+const FNS = [
+  {
+    fn: x=>2*x-1, name:'f(x)=2x-1',
+    limit: x0=>2*x0-1, // L = 2x0-1
+    // For linear f, |f(x)-L|<ε ↔ |2x-2x0|<ε ↔ |x-x0|<ε/2
+    delta: (eps, x0)=>eps/2,
+    hasLimit: true
+  },
+  {
+    fn: x=>x*x, name:'f(x)=x²',
+    limit: x0=>x0*x0,
+    // |x²-x0²|=|x+x0||x-x0| < (|x0|+1+|x0|)|x-x0| when |x-x0|<1
+    delta: (eps, x0)=>Math.min(1, eps/(2*Math.abs(x0)+1)),
+    hasLimit: true
+  },
+  {
+    fn: x=>x===0?1:Math.sin(x)/x, name:'f(x)=sin(x)/x',
+    limit: x0=>x0===0?1:Math.sin(x0)/x0,
+    delta: (eps, x0)=>eps*0.8, // simplified
+    hasLimit: true
+  },
+  {
+    fn: x=>x>0?1:(x<0?-1:NaN), name:'f(x)=|x|/x',
+    limit: x0=>x0===0?null:(x0>0?1:-1),
+    delta: (eps, x0)=>x0===0?null:eps,
+    hasLimit: false // at x=0
+  }
+];
+
+let fnIdx = 0;
+
+function setup(){
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr; ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function setFn(idx, btn){
+  fnIdx=idx;
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function draw(){
+  const W = cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const eps = parseFloat(document.getElementById('epsSl').value);
+  let x0 = parseFloat(document.getElementById('x0Sl').value);
+  if(x0===0&&fnIdx===3) x0=0; // keep at 0 for discontinuous
+
+  const f = FNS[fnIdx].fn;
+  const L = FNS[fnIdx].limit(x0);
+  const delta = FNS[fnIdx].delta(eps, x0);
+  const hasLimit = FNS[fnIdx].hasLimit || (x0!==0);
+
+  const margin={left:50,right:16,top:16,bottom:40};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const xRange=3, yRange=3;
+  const cx0=x0, cy0=L||0;
+  const xToP=x=>margin.left+(x-cx0+xRange)/(2*xRange)*plotW;
+  const yToP=y=>margin.top+(cy0+yRange-y)/(2*yRange)*plotH;
+  const xCenter=xToP(cx0), yCenter=yToP(cy0||0);
+
+  // Grid
+  ctx.strokeStyle=C.border; ctx.lineWidth=0.5;
+  for(let i=-3;i<=3;i++){
+    ctx.beginPath();ctx.moveTo(xToP(cx0+i),margin.top);ctx.lineTo(xToP(cx0+i),margin.top+plotH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(margin.left,yToP((cy0||0)+i));ctx.lineTo(margin.left+plotW,yToP((cy0||0)+i));ctx.stroke();
+  }
+
+  // ε band (y direction)
+  if(hasLimit&&L!==null){
+    ctx.fillStyle=C.amberD+'22';
+    ctx.fillRect(margin.left, yToP((cy0||0)+eps), plotW, yToP((cy0||0)-eps)-yToP((cy0||0)+eps));
+    // ε boundaries
+    ctx.strokeStyle=C.amberD; ctx.lineWidth=1.5; ctx.setLineDash([6,3]);
+    ctx.beginPath();ctx.moveTo(margin.left,yToP((cy0||0)+eps));ctx.lineTo(margin.left+plotW,yToP((cy0||0)+eps));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(margin.left,yToP((cy0||0)-eps));ctx.lineTo(margin.left+plotW,yToP((cy0||0)-eps));ctx.stroke();
+    ctx.setLineDash([]);
+    // ε labels
+    ctx.fillStyle=C.amberD;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillText(`L+ε=${((cy0||0)+eps).toFixed(2)}`,margin.left+3,yToP((cy0||0)+eps)-10);
+    ctx.fillText(`L-ε=${((cy0||0)-eps).toFixed(2)}`,margin.left+3,yToP((cy0||0)-eps)+10);
+  }
+
+  // δ band (x direction)
+  if(hasLimit&&delta!==null&&L!==null){
+    ctx.fillStyle=C.blue+'22';
+    ctx.fillRect(xToP(cx0-delta),margin.top,xToP(cx0+delta)-xToP(cx0-delta),plotH);
+    ctx.strokeStyle=C.blue; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(xToP(cx0-delta),margin.top);ctx.lineTo(xToP(cx0-delta),margin.top+plotH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(xToP(cx0+delta),margin.top);ctx.lineTo(xToP(cx0+delta),margin.top+plotH);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.blue;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(`-δ`,xToP(cx0-delta),margin.top+plotH+3);
+    ctx.fillText(`+δ`,xToP(cx0+delta),margin.top+plotH+3);
+  }
+
+  // Axes
+  ctx.strokeStyle=C.ink2; ctx.lineWidth=1.5; ctx.setLineDash([]);
+  const axisY = L!==null?yToP(cy0||0):margin.top+plotH/2;
+  ctx.beginPath();ctx.moveTo(margin.left,axisY);ctx.lineTo(margin.left+plotW,axisY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(cx0),margin.top);ctx.lineTo(xToP(cx0),margin.top+plotH);ctx.stroke();
+
+  // Function curve
+  ctx.strokeStyle=C.ink; ctx.lineWidth=2.5; ctx.setLineDash([]);
+  ctx.beginPath(); let first=true;
+  for(let px=0;px<=plotW;px+=2){
+    const x=(px/plotW)*(2*xRange)+cx0-xRange;
+    if(Math.abs(x-cx0)<0.02&&fnIdx===3){first=true;continue;}
+    const y=f(x);
+    if(!isFinite(y)||y<(cy0||0)-yRange*2||y>(cy0||0)+yRange*2){first=true;continue;}
+    first?(ctx.moveTo(margin.left+px,yToP(y)),first=false):ctx.lineTo(margin.left+px,yToP(y));
+  }
+  ctx.stroke();
+
+  // Limit point (open circle for removable discontinuity)
+  if(L!==null){
+    ctx.strokeStyle=C.red; ctx.lineWidth=2.5; ctx.fillStyle=C.surf;
+    ctx.beginPath();ctx.arc(xToP(cx0),yToP(cy0||0),7,0,Math.PI*2);ctx.fill();ctx.stroke();
+    // L horizontal line
+    ctx.strokeStyle=C.teal+'66'; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(cy0||0));ctx.lineTo(margin.left+plotW,yToP(cy0||0));ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.teal;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='bottom';
+    ctx.fillText(`L = ${(cy0||0).toFixed(3)}`,margin.left+3,yToP(cy0||0)-4);
+  }
+
+  // x0 label
+  ctx.fillStyle=C.teal;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText(`x₀=${cx0.toFixed(1)}`,xToP(cx0),margin.top+plotH+3);
+
+  // Update stats
+  document.getElementById('epsVal').textContent=eps.toFixed(2);
+  document.getElementById('epsLabel').textContent=eps.toFixed(2);
+  document.getElementById('x0Val').textContent=cx0.toFixed(1);
+  document.getElementById('x0Label').textContent=cx0.toFixed(1);
+  document.getElementById('LVal').textContent=L!==null?(cy0||0).toFixed(3):'不存在';
+  document.getElementById('deltaVal').textContent=delta!==null?delta.toFixed(4):'—';
+
+  // PEDAGOGY V8
+  const fb=document.getElementById('fb');
+  if(!hasLimit||L===null||delta===null){
+    fb.innerHTML=`<strong style="color:var(--red)">极限不存在！</strong>在 x₀=0 处，从左边趋近得到-1，从右边趋近得到+1，两侧极限不相等，所以 lim 不存在。`;
+  } else {
+    fb.innerHTML=`<strong>ε-δ 定义</strong>：对任意 ε = ${eps.toFixed(2)}（y方向容忍误差），存在 δ = ${delta.toFixed(4)}（x方向控制范围），使得当 <strong>0 < |x-${cx0.toFixed(1)}| < δ</strong> 时，必有 <strong>|f(x)-L| < ε</strong>。<br>几何意义：当 x 落入橙色带内（δ范围），f(x)必然落入蓝色带内（ε范围）。ε越小，δ也越小，但总能找到对应的δ。`;
+  }
+}
+
+document.getElementById('epsSl').addEventListener('input', draw);
+document.getElementById('x0Sl').addEventListener('input', draw);
+window.addEventListener('resize',()=>{ setup(); draw(); });
+setup(); draw();
+</script>
+</body>
+</html>

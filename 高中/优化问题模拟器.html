@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>优化问题模拟器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="导数应用">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="逼近">
+  <meta name="desc" content="围栏/利润/体积三个优化场景，拖动参数观察目标函数最值，导数=0定位极值点">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:ew-resize;}
+    .scene-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .scene-btn{padding:10px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;background:var(--surface);font-family:'Noto Sans SC',sans-serif;font-weight:500;transition:all .2s;}
+    .scene-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .formula-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 16px;font-size:13px;color:var(--ink2);line-height:1.7;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 导数应用 · 认知动作：逼近</div>
+  <h1>优化问题模拟器</h1>
+  <p class="sub">拖动参数寻找最大/最小值，导数 f'(x)=0 定位极值点</p>
+</header>
+<main>
+  <div class="scene-row">
+    <button class="scene-btn active" onclick="setScene('fence',this)">🏠 围栏最大面积</button>
+    <button class="scene-btn" onclick="setScene('profit',this)">📈 利润最大化</button>
+    <button class="scene-btn" onclick="setScene('box',this)">📦 剪角折盒最大体积</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="formula-box" id="formulaBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 拖动参数感受目标函数"爬坡"到最大值的动态过程
+// PEDAGOGY V2 表征桥接: 几何图形 + 函数图像 + 当前值三联动
+// PEDAGOGY V5 操作先于符号: 先拖出感觉再标出导数=0
+// PEDAGOGY V6 动作-数学一致: 左右拖 = x增大/减小
+// PEDAGOGY V7 单一认知动作: 逼近（寻找极值）
+// PEDAGOGY V8 概念反馈: 揭示"极值点处导数=0"的几何意义
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 380;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+const SCENES = {
+  fence: {
+    name: '围栏最大面积',
+    desc: '总围栏长度 L = 40m，围成一个矩形，宽为 x，则长为 (L/2 - x)。\n面积 A(x) = x × (20 - x)，在 x ∈ [0, 20]。',
+    xMin: 0.5, xMax: 19.5, xOpt: 10,
+    f: x => x * (20 - x),
+    df: x => 20 - 2 * x,
+    yLabel: '面积 A (m²)',
+    xLabel: '宽 x (m)',
+    formula: 'A(x) = x(20-x) = 20x - x²，A\'(x) = 20-2x = 0 → x = 10',
+    optLabel: 'A_max = 100 m²',
+    drawScene: drawFenceScene,
+  },
+  profit: {
+    name: '利润最大化',
+    desc: '商品定价 p 元，需求量 q = 100 - 2p（件）。成本 c = 10 元/件。\n利润 π(p) = (p-10)(100-2p)，在 p ∈ [10, 50]。',
+    xMin: 11, xMax: 49, xOpt: 30,
+    f: p => (p - 10) * (100 - 2 * p),
+    df: p => (100 - 2*p) + (p-10)*(-2),
+    yLabel: '利润 π (元)',
+    xLabel: '价格 p (元)',
+    formula: 'π(p) = (p-10)(100-2p)，π\'(p) = 80-4p = 0 → p = 30',
+    optLabel: 'π_max = 800 元',
+    drawScene: drawProfitScene,
+  },
+  box: {
+    name: '剪角折盒最大体积',
+    desc: '正方形纸板边长 12cm，四角各剪去边长 x 的小正方形后折叠成盒子。\n体积 V(x) = x(12-2x)²，在 x ∈ [0, 6]。',
+    xMin: 0.2, xMax: 5.8, xOpt: 2,
+    f: x => x * Math.pow(12 - 2*x, 2),
+    df: x => Math.pow(12-2*x,2) + x*2*(12-2*x)*(-2),
+    yLabel: '体积 V (cm³)',
+    xLabel: '剪角边长 x (cm)',
+    formula: 'V(x) = x(12-2x)²，V\'(x) = (12-2x)(12-6x) = 0 → x = 2',
+    optLabel: 'V_max = 128 cm³',
+    drawScene: drawBoxScene,
+  },
+};
+
+let scene = 'fence';
+let xCur = 8;
+let dragging = false;
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setScene(s, btn) {
+  scene = s;
+  const sc = SCENES[s];
+  xCur = (sc.xMin + sc.xMax) / 2;
+  document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+// Chart region
+const chartPad = { l: 70, r: 20, t: 20, b: 40 };
+const chartFrac = 0.5; // bottom half for chart
+
+function getChartDims(W) {
+  const chartTop = H * (1 - chartFrac) + chartPad.t;
+  const chartH = H * chartFrac - chartPad.t - chartPad.b;
+  const chartW = W - chartPad.l - chartPad.r;
+  return { chartTop, chartH, chartW };
+}
+
+function xToCanvas(x, W) {
+  const sc = SCENES[scene];
+  const { chartW } = getChartDims(W);
+  return chartPad.l + (x - sc.xMin) / (sc.xMax - sc.xMin) * chartW;
+}
+
+function canvasToX(px, W) {
+  const sc = SCENES[scene];
+  const { chartW } = getChartDims(W);
+  return sc.xMin + (px - chartPad.l) / chartW * (sc.xMax - sc.xMin);
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+  const sc = SCENES[scene];
+  const { chartTop, chartH, chartW } = getChartDims(W);
+
+  // Top: scene illustration
+  const sceneH = H * (1 - chartFrac);
+  SCENES[scene].drawScene(W, sceneH, xCur);
+
+  // Divider
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, sceneH); ctx.lineTo(W, sceneH); ctx.stroke();
+
+  // Compute y range
+  const ys = [];
+  for (let i = 0; i <= 100; i++) ys.push(sc.f(sc.xMin + i/100*(sc.xMax-sc.xMin)));
+  const yMax = Math.max(...ys) * 1.1;
+  const yMin = Math.min(0, Math.min(...ys));
+
+  function toY(y) { return chartTop + chartH - (y - yMin) / (yMax - yMin) * chartH; }
+  const x0line = toY(0);
+
+  // Grid
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  [0.25, 0.5, 0.75, 1.0].forEach(p => {
+    const yy = chartTop + chartH - p * chartH;
+    ctx.beginPath(); ctx.moveTo(chartPad.l, yy); ctx.lineTo(W - chartPad.r, yy); ctx.stroke();
+    ctx.fillStyle = C.ink3; ctx.font = `10px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText((yMin + p*(yMax-yMin)).toFixed(0), chartPad.l-3, yy);
+  });
+  ctx.setLineDash([]);
+
+  // Axes
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(chartPad.l, chartTop); ctx.lineTo(chartPad.l, chartTop+chartH); ctx.lineTo(W-chartPad.r, chartTop+chartH); ctx.stroke();
+
+  // Function curve
+  ctx.strokeStyle = C.blue; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  for (let px = 0; px <= chartW; px++) {
+    const x = sc.xMin + px/chartW*(sc.xMax-sc.xMin);
+    const y = sc.f(x);
+    const yy = toY(y);
+    if (px === 0) ctx.moveTo(chartPad.l + px, yy);
+    else ctx.lineTo(chartPad.l + px, yy);
+  }
+  ctx.stroke();
+
+  // Optimal point
+  const xOpt = sc.xOpt, yOpt = sc.f(xOpt);
+  const xOptPx = xToCanvas(xOpt, W), yOptPx = toY(yOpt);
+  ctx.strokeStyle = C.teal; ctx.lineWidth = 1.5; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(xOptPx, chartTop); ctx.lineTo(xOptPx, yOptPx); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(chartPad.l, yOptPx); ctx.lineTo(xOptPx, yOptPx); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = C.teal;
+  ctx.beginPath(); ctx.arc(xOptPx, yOptPx, 6, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = C.teal; ctx.font = `bold 11px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText(`最大值 ${yOpt.toFixed(1)}（x=${xOpt}）`, xOptPx+8, yOptPx-2);
+
+  // Current x indicator
+  const xCurClamped = Math.max(sc.xMin, Math.min(sc.xMax, xCur));
+  const yCur = sc.f(xCurClamped);
+  const xcPx = xToCanvas(xCurClamped, W), ycPx = toY(yCur);
+  ctx.strokeStyle = C.amber; ctx.lineWidth = 1.5; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(xcPx, chartTop + chartH); ctx.lineTo(xcPx, ycPx); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = C.amber;
+  ctx.beginPath(); ctx.arc(xcPx, ycPx, 7, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = `bold 10px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('X', xcPx, ycPx);
+
+  // Tangent line at current x
+  const slope = sc.df(xCurClamped);
+  const tangLen = chartW * 0.08;
+  const dx = tangLen / Math.sqrt(1 + slope * slope * (chartH/(yMax-yMin)) * (chartH/(yMax-yMin)));
+  ctx.strokeStyle = C.amberD + 'aa'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(xcPx - dx, ycPx + slope * dx * chartH/(yMax-yMin));
+  ctx.lineTo(xcPx + dx, ycPx - slope * dx * chartH/(yMax-yMin));
+  ctx.stroke();
+
+  // Derivative label
+  ctx.fillStyle = C.amber; ctx.font = `11px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`x=${xCurClamped.toFixed(2)}, f(x)=${yCur.toFixed(1)}, f'(x)=${slope.toFixed(2)}`, chartPad.l+4, chartTop+2);
+
+  // Axis labels
+  ctx.fillStyle = C.ink2; ctx.font = `11px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(sc.xLabel, chartPad.l + chartW/2, chartTop + chartH + 6);
+  ctx.save(); ctx.translate(14, chartTop + chartH/2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(sc.yLabel, 0, 0); ctx.restore();
+
+  // Update feedback
+  updateFeedback(xCurClamped);
+}
+
+function drawFenceScene(W, sceneH, x) {
+  const sc = SCENES.fence;
+  x = Math.max(sc.xMin, Math.min(sc.xMax, x));
+  const len = 20 - x;
+  const scale = Math.min((W - 60) / 20, (sceneH - 50) / 20);
+  const cx = W / 2, cy = sceneH / 2;
+  const rw = x * scale, rh = len * scale;
+  const rx = cx - rw/2, ry = cy - rh/2;
+  ctx.fillStyle = '#e8f5e9';
+  ctx.fillRect(rx, ry, rw, rh);
+  ctx.strokeStyle = C.amber; ctx.lineWidth = 3;
+  ctx.strokeRect(rx, ry, rw, rh);
+  // Dimension labels
+  ctx.fillStyle = C.ink; ctx.font = `bold 13px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText(`宽 = ${x.toFixed(1)}m`, cx, ry - 2);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(`长 = ${len.toFixed(1)}m`, rx + rw + 6, cy);
+  ctx.fillStyle = C.blue; ctx.font = `bold 14px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(`A = ${(x*len).toFixed(1)} m²`, cx, cy);
+  ctx.fillStyle = C.ink2; ctx.font = `12px 'Noto Sans SC',sans-serif`;
+  ctx.fillText('← 拖动图表调整宽度 →', cx, sceneH - 8);
+}
+
+function drawProfitScene(W, sceneH, p) {
+  const sc = SCENES.profit;
+  p = Math.max(sc.xMin, Math.min(sc.xMax, p));
+  const q = 100 - 2 * p;
+  const profit = (p - 10) * q;
+  const cx = W * 0.5, cy = sceneH * 0.5;
+  // Draw supply/demand diagram (simplified)
+  const barW = 40, scale = sceneH * 0.45 / 800;
+  ctx.fillStyle = profit > 0 ? C.blueL : C.amberL;
+  ctx.fillRect(cx - barW/2, cy - profit*scale, barW, profit*scale);
+  ctx.strokeStyle = profit > 0 ? C.blue : C.amber;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(cx - barW/2, cy - profit*scale, barW, profit*scale);
+  ctx.fillStyle = C.ink; ctx.font = `bold 14px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText(`定价 = ${p.toFixed(0)}元`, cx, cy - profit*scale - 4);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(`需求 = ${Math.max(0,q).toFixed(0)}件`, cx, cy + 8);
+  ctx.fillStyle = profit > 0 ? C.blue : C.amber;
+  ctx.font = `bold 15px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(`利润 = ${profit.toFixed(0)}元`, cx + barW/2 + 8, cy - profit*scale/2);
+}
+
+function drawBoxScene(W, sceneH, x) {
+  const sc = SCENES.box;
+  x = Math.max(sc.xMin, Math.min(sc.xMax, x));
+  const side = 12 - 2*x;
+  const vol = x * side * side;
+  const scale = (Math.min(W - 60, sceneH - 40)) / 12;
+  const cx = W / 2, cy = sceneH * 0.48;
+  const s = 12 * scale;
+  const rx = cx - s/2, ry = cy - s/2;
+  // Paper with corner cuts
+  ctx.fillStyle = '#fafafa'; ctx.strokeStyle = C.ink3; ctx.lineWidth = 1;
+  ctx.fillRect(rx, ry, s, s); ctx.strokeRect(rx, ry, s, s);
+  // Cut corners (amber)
+  const cs = x * scale;
+  [[0,0],[1,0],[0,1],[1,1]].forEach(([fx,fy]) => {
+    const cx2 = rx + fx*(s-cs), cy2 = ry + fy*(s-cs);
+    ctx.fillStyle = C.amberL;
+    ctx.fillRect(cx2, cy2, cs, cs);
+    ctx.strokeStyle = C.amber; ctx.lineWidth = 1.5;
+    ctx.strokeRect(cx2, cy2, cs, cs);
+    ctx.fillStyle = C.amber; ctx.font = `9px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('x', cx2+cs/2, cy2+cs/2);
+  });
+  // Labels
+  ctx.fillStyle = C.blue; ctx.font = `bold 13px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(`V = ${vol.toFixed(1)} cm³  (x=${x.toFixed(2)}, 边长=${side.toFixed(2)})`, cx, ry + s + 6);
+}
+
+function updateFeedback(x) {
+  const sc = SCENES[scene];
+  const y = sc.f(x), dy = sc.df(x);
+  const yOpt = sc.f(sc.xOpt);
+  let msg;
+  if (Math.abs(dy) < 0.5) {
+    msg = `当前 f'(x) ≈ 0，<strong>这正是极值点附近</strong>！切线水平，函数到达最高/最低点。`;
+  } else if (dy > 0) {
+    msg = `当前 f'(x) = ${dy.toFixed(2)} > 0，函数<strong>仍在上升</strong>，向右移动可以增大目标值。`;
+  } else {
+    msg = `当前 f'(x) = ${dy.toFixed(2)} < 0，函数<strong>已在下降</strong>，向左移动可以增大目标值。`;
+  }
+  document.getElementById('fb').innerHTML = `<strong>${sc.name}</strong>：${msg}<br>${sc.formula}<br><strong>最优值：${sc.optLabel}</strong>`;
+  document.getElementById('formulaBox').textContent = sc.desc;
+}
+
+// Drag handling
+cvs.addEventListener('pointerdown', e => {
+  dragging = true;
+  cvs.setPointerCapture(e.pointerId);
+  handleDrag(e);
+});
+cvs.addEventListener('pointermove', e => { if (dragging) handleDrag(e); });
+cvs.addEventListener('pointerup', () => { dragging = false; });
+
+function handleDrag(e) {
+  const rect = cvs.getBoundingClientRect();
+  const px = e.clientX - rect.left;
+  const W = rect.width;
+  const x = canvasToX(px, W);
+  const sc = SCENES[scene];
+  xCur = Math.max(sc.xMin, Math.min(sc.xMax, x));
+  draw();
+}
+
+window.addEventListener('resize', () => { setup(); draw(); });
+setup();
+setScene('fence', document.querySelector('.scene-btn.active'));
+</script>
+</body>
+</html>

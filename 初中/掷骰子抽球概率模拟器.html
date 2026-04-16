@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>掷骰子抽球概率模拟器 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="概率">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="模拟">
+  <meta name="desc" content="多次重复实验，频率逐渐稳定于理论概率，理解实验频率与理论概率的关系">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+    .btn{padding:10px 18px;border:2px solid var(--blue);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--blue);color:#fff;font-weight:600;}
+    .btn-outline{background:var(--surface);color:var(--blue);}
+    .btn-sm{padding:8px 12px;font-size:12px;}
+    .mode-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .mode-btn{flex:1;min-width:100px;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .mode-btn.active{background:var(--teal);color:#fff;border-color:var(--teal);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 概率 · 认知动作：模拟</div>
+  <h1>掷骰子抽球概率模拟器</h1>
+  <p class="sub">重复实验次数越多，频率越稳定——亲眼看频率收敛到理论概率</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setExp(0,this)">🎲 掷骰子（1~6）</button>
+    <button class="mode-btn" onclick="setExp(1,this)">🔴 抽彩球（红白蓝）</button>
+    <button class="mode-btn" onclick="setExp(2,this)">🪙 抛硬币（正反）</button>
+    <button class="mode-btn" onclick="setExp(3,this)">🃏 抽牌（花色）</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">总次数</div><div class="stat-val" id="totalN" style="color:var(--blue)">0</div></div>
+    <div class="stat"><div class="stat-lbl">目标事件</div><div class="stat-val" id="targetN" style="color:var(--teal)">0</div></div>
+    <div class="stat"><div class="stat-lbl">实验频率</div><div class="stat-val" id="freqV" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">理论概率</div><div class="stat-val" id="theoryV" style="color:var(--ink)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="btn-row">
+    <button class="btn" onclick="runN(1)">掷 1 次</button>
+    <button class="btn" onclick="runN(10)">掷 10 次</button>
+    <button class="btn" onclick="runN(100)">掷 100 次</button>
+    <button class="btn" onclick="runN(1000)">掷 1000 次</button>
+    <button class="btn btn-outline" onclick="reset()">重置</button>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 频率收敛只有积累实验才能体验
+// PEDAGOGY V3 分步揭示: 先少量实验看波动，再大量实验看稳定
+// PEDAGOGY V5 操作先于符号: 先按按钮看图，再理解概率定义
+// PEDAGOGY V7 单一认知动作: 模拟（重复实验，频率→概率）
+// PEDAGOGY V8 概念反馈: 揭示"频率稳定性：实验次数无限增大，频率趋近于理论概率"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=300;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+const OUTCOME_COLORS=['#2a5c8f','#0f6e56','#854f0b','#7b3f9e','#b84040','#0a7a8a'];
+
+const EXPS=[
+  {
+    name:'掷骰子',outcomes:['1','2','3','4','5','6'],probs:[1/6,1/6,1/6,1/6,1/6,1/6],
+    target:'点数≤3',targetFn:o=>parseInt(o)<=3,theory:0.5
+  },
+  {
+    name:'抽彩球',outcomes:['红','红','红','白','白','蓝'],probs:[3/6,1/6,1/6,1/6,1/6,1/6],
+    target:'红球',targetFn:o=>o==='红',theory:3/6,
+    uniqueOutcomes:['红','白','蓝'],uniqueProbs:[3/6,2/6,1/6]
+  },
+  {
+    name:'抛硬币',outcomes:['正','反'],probs:[0.5,0.5],
+    target:'正面',targetFn:o=>o==='正',theory:0.5
+  },
+  {
+    name:'抽牌花色',outcomes:['♠','♥','♦','♣'],probs:[0.25,0.25,0.25,0.25],
+    target:'红色(♥♦)',targetFn:o=>o==='♥'||o==='♦',theory:0.5
+  },
+];
+
+let expIdx=0;
+let counts={};
+let total=0;
+let freqHistory=[];
+
+function getExp(){return EXPS[expIdx];}
+
+function getOutcomes(){
+  const e=getExp();
+  return e.uniqueOutcomes||e.outcomes;
+}
+
+function getProbs(){
+  const e=getExp();
+  return e.uniqueProbs||e.probs;
+}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setExp(i,btn){
+  expIdx=i;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  reset();
+}
+
+function reset(){
+  counts={};
+  total=0;
+  freqHistory=[];
+  getOutcomes().forEach(o=>{counts[o]=0;});
+  draw();
+}
+
+function sample(){
+  const e=getExp();
+  const r=Math.random();
+  let cum=0;
+  for(let i=0;i<e.outcomes.length;i++){
+    cum+=e.probs[i];
+    if(r<cum) return e.outcomes[i];
+  }
+  return e.outcomes[e.outcomes.length-1];
+}
+
+function runN(n){
+  const e=getExp();
+  for(let i=0;i<n;i++){
+    const o=sample();
+    if(!counts[o]) counts[o]=0;
+    counts[o]++;
+    total++;
+    const targetCount=Object.entries(counts).filter(([k])=>e.targetFn(k)).reduce((s,[,v])=>s+v,0);
+    if(i%Math.max(1,Math.floor(n/200))===0||i===n-1){
+      freqHistory.push(targetCount/total);
+    }
+  }
+  // Keep last 500 points
+  if(freqHistory.length>500) freqHistory=freqHistory.slice(-500);
+  draw();
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const e=getExp();
+  const outs=getOutcomes();
+  const probs=getProbs();
+  const theory=e.theory;
+
+  // Layout: left=bar chart, right=frequency history
+  const divX=W*0.45;
+  const margin={left:12,right:12,top:24,bottom:36};
+  const barW=divX-margin.left-margin.right;
+  const lineW=W-divX-margin.right;
+
+  // --- Bar chart (left) ---
+  const n=outs.length;
+  const bw=barW/(n*1.4);
+  const maxProb=Math.max(...probs)*1.2;
+  const barH=H-margin.top-margin.bottom;
+  const bToY=p=>margin.top+(1-p/maxProb)*barH;
+
+  // Theory bars (outline)
+  outs.forEach((o,i)=>{
+    const x=margin.left+(i+0.2)*barW/n;
+    const theoryY=bToY(probs[i]);
+    ctx.fillStyle=OUTCOME_COLORS[i]+'22';
+    ctx.fillRect(x,theoryY,bw,margin.top+barH-theoryY);
+    ctx.strokeStyle=OUTCOME_COLORS[i];ctx.lineWidth=1.5;ctx.setLineDash([3,2]);
+    ctx.strokeRect(x,theoryY,bw,margin.top+barH-theoryY);
+    ctx.setLineDash([]);
+  });
+
+  // Actual bars (filled)
+  outs.forEach((o,i)=>{
+    const x=margin.left+(i+0.2)*barW/n;
+    const cnt=counts[o]||0;
+    const freq=total>0?cnt/total:0;
+    const fy=bToY(freq);
+    ctx.fillStyle=OUTCOME_COLORS[i];
+    ctx.fillRect(x,fy,bw,margin.top+barH-fy);
+    ctx.fillStyle='#fff';ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+    if(freq>0.02) ctx.fillText(`${(freq*100).toFixed(0)}%`,x+bw/2,margin.top+barH-2);
+    ctx.fillStyle=OUTCOME_COLORS[i];ctx.font=`13px 'Noto Sans SC',sans-serif`;ctx.textBaseline='top';
+    ctx.fillText(o,x+bw/2,margin.top+barH+4);
+  });
+
+  // Axis line
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,margin.top+barH);ctx.lineTo(divX-4,margin.top+barH);ctx.stroke();
+  ctx.fillStyle=C.ink2;ctx.font=`bold 11px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText('各结果频率（实际 vs 理论）',margin.left+barW/2,margin.top-18);
+
+  // --- Frequency history (right) ---
+  const lx=divX+8;
+  const lw=lineW-8;
+  const lh=H-margin.top-margin.bottom;
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let i=0;i<=5;i++){
+    const y=margin.top+i*(lh/5);
+    ctx.beginPath();ctx.moveTo(lx,y);ctx.lineTo(lx+lw,y);ctx.stroke();
+    ctx.fillStyle=C.ink3;ctx.font=`10px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillText(`${((5-i)*20)}%`,lx+2,y);
+  }
+
+  // Theory line
+  const ty=margin.top+lh*(1-theory);
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([6,4]);
+  ctx.beginPath();ctx.moveTo(lx,ty);ctx.lineTo(lx+lw,ty);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='right';ctx.textBaseline='middle';
+  ctx.fillText(`理论${(theory*100).toFixed(0)}%`,lx+lw,ty-10);
+
+  // Frequency line
+  if(freqHistory.length>1){
+    ctx.strokeStyle=C.blue;ctx.lineWidth=2;ctx.setLineDash([]);
+    ctx.beginPath();
+    freqHistory.forEach((f,i)=>{
+      const x=lx+(i/(freqHistory.length-1))*lw;
+      const y=margin.top+lh*(1-f);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    // Last point
+    const lastF=freqHistory[freqHistory.length-1];
+    ctx.fillStyle=C.amberD;ctx.beginPath();ctx.arc(lx+lw,margin.top+lh*(1-lastF),5,0,Math.PI*2);ctx.fill();
+  }
+
+  ctx.fillStyle=C.blue;ctx.font=`bold 11px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText(`"${e.target}"频率变化`,lx+lw/2,margin.top-18);
+  ctx.fillStyle=C.ink3;ctx.font=`10px 'Noto Sans SC',sans-serif`;
+  ctx.fillText('次数增加→',lx+lw/2,margin.top+lh+4);
+
+  // Stats
+  const targetCnt=Object.entries(counts).filter(([k])=>e.targetFn(k)).reduce((s,[,v])=>s+v,0);
+  const freq=total>0?targetCnt/total:0;
+  document.getElementById('totalN').textContent=String(total);
+  document.getElementById('targetN').textContent=String(targetCnt);
+  document.getElementById('freqV').textContent=total>0?(freq*100).toFixed(1)+'%':'—';
+  document.getElementById('theoryV').textContent=(theory*100).toFixed(1)+'%';
+
+  // PEDAGOGY V8
+  const diff=Math.abs(freq-theory);
+  document.getElementById('fb').innerHTML=
+    `目标事件"${e.target}"，理论概率 = <strong>${(theory*100).toFixed(1)}%</strong>。<br>` +
+    `当前 ${total} 次实验，频率 = <strong>${total>0?(freq*100).toFixed(2)+'%':'—'}</strong>，` +
+    `${total>0?`偏差 = ${(diff*100).toFixed(2)}%。`:'尚未开始实验。'}<br>` +
+    `<strong>频率稳定性：</strong>实验次数越多，频率越接近理论概率——这是概率的统计定义基础。<br>` +
+    `${total>=100?'次数已足够多，频率开始稳定。继续增加看收敛效果。':'建议先掷100次，再掷1000次，对比频率的稳定性。'}`;
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();reset();
+</script>
+</body>
+</html>

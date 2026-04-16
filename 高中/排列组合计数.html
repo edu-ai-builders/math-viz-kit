@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>排列与组合 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="排列组合">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="分解">
+  <meta name="desc" content="动态展示从n个中选r个的排列与组合过程，理解顺序有无的本质区别">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .mode-row{display:flex;gap:6px;}
+    .mode-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 排列组合 · 认知动作：分解</div>
+  <h1>排列与组合</h1>
+  <p class="sub">从 n 个中选 r 个：有顺序=排列，无顺序=组合——可视化所有方案</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('perm',this)">排列 A(n,r)（有顺序）</button>
+    <button class="mode-btn" onclick="setMode('comb',this)">组合 C(n,r)（无顺序）</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">从 n 个中选 r 个</div><div class="stat-val" id="nrVal" style="color:var(--blue)">5选3</div></div>
+    <div class="stat"><div class="stat-lbl" id="countLbl">排列数 A(n,r)</div><div class="stat-val" id="countVal" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">公式</div><div class="stat-val" id="formulaVal" style="font-size:14px;color:var(--teal)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">总数 n</div>
+      <div class="sl-val" id="nLabel">5</div>
+      <input type="range" id="nSl" min="2" max="8" value="5">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">选取数 r</div>
+      <div class="sl-val" id="rLabel">3</div>
+      <input type="range" id="rSl" min="1" max="7" value="3">
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 方案的枚举只有动态才能清晰展示
+// PEDAGOGY V3 分步揭示: 小n先展示全部方案，大n展示代表性方案
+// PEDAGOGY V5 操作先于符号: 先看方案数，再理解公式
+// PEDAGOGY V7 单一认知动作: 分解（每次选一个，乘法原理）
+// PEDAGOGY V8 概念反馈: 揭示"排列-组合=r!（顺序的数量）"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=360;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+const ITEM_COLORS=['#2a5c8f','#0f6e56','#854f0b','#7b3f9e','#b84040','#0a7a8a','#5a7a2a','#8a4a0a'];
+const LABELS='ABCDEFGH';
+
+let mode='perm';
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setMode(m,btn){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function factorial(n){ return n<=1?1:n*factorial(n-1); }
+
+function perm(n,r){ return factorial(n)/factorial(n-r); }
+function comb(n,r){ return factorial(n)/(factorial(r)*factorial(n-r)); }
+
+// Generate all permutations of r items from [0..n-1]
+function genPerms(n,r,maxCount=30){
+  const result=[];
+  function bt(arr,remaining){
+    if(arr.length===r){ result.push([...arr]); return; }
+    if(result.length>=maxCount) return;
+    for(let i=0;i<n;i++){
+      if(!remaining.includes(i)){
+        remaining.push(i);
+        arr.push(i);
+        bt(arr,remaining);
+        arr.pop();
+        remaining.pop();
+      }
+    }
+  }
+  bt([],[]);
+  return result;
+}
+
+// Generate all combinations of r items from [0..n-1]
+function genCombs(n,r,maxCount=30){
+  const result=[];
+  function bt(start,arr){
+    if(arr.length===r){ result.push([...arr]); return; }
+    if(result.length>=maxCount) return;
+    for(let i=start;i<n;i++){
+      arr.push(i);
+      bt(i+1,arr);
+      arr.pop();
+    }
+  }
+  bt(0,[]);
+  return result;
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  let n=parseInt(document.getElementById('nSl').value);
+  let r=parseInt(document.getElementById('rSl').value);
+  if(r>n) r=n;
+
+  const permCount=perm(n,r);
+  const combCount=comb(n,r);
+  const count=mode==='perm'?permCount:combCount;
+  const maxShow=24;
+
+  // Generate items
+  const items=mode==='perm'?genPerms(n,r,maxShow):genCombs(n,r,maxShow);
+  const hasMore=count>maxShow;
+
+  // Layout: grid of item rows
+  const margin={left:16,right:16,top:40,bottom:16};
+  const plotW=W-margin.left-margin.right;
+  const cols=Math.min(Math.ceil(Math.sqrt(items.length)),6);
+  const rows=Math.ceil(items.length/cols);
+  const cellW=plotW/cols;
+  const cellH=Math.min((H-margin.top-margin.bottom)/rows, 50);
+  const itemSize=Math.min(20,cellW/(r+1));
+
+  // Title
+  ctx.fillStyle=C.ink;ctx.font=`bold 14px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText(`${mode==='perm'?'排列':'组合'}方案展示（共 ${count} 种${hasMore?`，显示前${maxShow}种`:''}）`,W/2,8);
+
+  items.forEach((item,idx)=>{
+    const col=idx%cols, row=Math.floor(idx/cols);
+    const bx=margin.left+col*cellW;
+    const by=margin.top+row*cellH;
+    const cx2=bx+cellW/2, cy2=by+cellH/2;
+
+    // Background
+    ctx.fillStyle=C.blueL+'66';
+    ctx.beginPath();ctx.roundRect(bx+2,by+2,cellW-4,cellH-4,6);ctx.fill();
+
+    // Item dots
+    const totalW=item.length*(itemSize*2+4)-4;
+    const startX=cx2-totalW/2+itemSize;
+    item.forEach((itemIdx,pos)=>{
+      const ix=startX+pos*(itemSize*2+4);
+      ctx.fillStyle=ITEM_COLORS[itemIdx%ITEM_COLORS.length];
+      ctx.beginPath();ctx.arc(ix,cy2,itemSize,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#fff';ctx.font=`bold ${Math.max(10,itemSize*0.8)}px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(LABELS[itemIdx],ix,cy2);
+    });
+
+    // Arrow between positions (for permutation, show order)
+    if(mode==='perm'&&item.length>1){
+      for(let p=0;p<item.length-1;p++){
+        const ix1=startX+p*(itemSize*2+4)+itemSize;
+        const ix2=startX+(p+1)*(itemSize*2+4)-itemSize;
+        ctx.strokeStyle=C.ink3;ctx.lineWidth=1;ctx.setLineDash([]);
+        ctx.fillStyle=C.ink3;
+        ctx.beginPath();ctx.moveTo(ix1+2,cy2);ctx.lineTo(ix2-2,cy2);ctx.stroke();
+      }
+    }
+  });
+
+  // N items pool (top)
+  const poolY=18;
+  const poolStartX=W/2-n*(28)/2;
+  if(n<=8){
+    for(let i=0;i<n;i++){
+      ctx.fillStyle=ITEM_COLORS[i];
+      ctx.beginPath();ctx.arc(poolStartX+i*28,poolY,10,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#fff';ctx.font=`bold 11px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(LABELS[i],poolStartX+i*28,poolY);
+    }
+  }
+
+  // Update display
+  document.getElementById('nrVal').textContent=`${n}选${r}`;
+  document.getElementById('nLabel').textContent=n;
+  document.getElementById('rLabel').textContent=r;
+  document.getElementById('countLbl').textContent=mode==='perm'?`排列 A(${n},${r})`:`组合 C(${n},${r})`;
+  document.getElementById('countVal').textContent=String(count);
+  const formulaText=mode==='perm'?`${n}!/${(n-r)}!=${count}`:`${n}!/(${r}!×${n-r}!)=${count}`;
+  document.getElementById('formulaVal').textContent=formulaText;
+
+  // PEDAGOGY V8
+  const fb=document.getElementById('fb');
+  if(mode==='perm'){
+    fb.innerHTML=`<strong>排列</strong>：从 ${n} 个中选 ${r} 个，<strong>有顺序</strong>（ABC ≠ BAC）。<br>` +
+      `A(${n},${r}) = ${n}×${n-1}×…×${n-r+1} = ${n}!/${n-r}! = <strong>${count}</strong>。<br>` +
+      `每步选择逐渐减少：第1个有${n}种选法，第2个有${n-1}种……这是<strong>乘法原理</strong>。`;
+  } else {
+    fb.innerHTML=`<strong>组合</strong>：从 ${n} 个中选 ${r} 个，<strong>无顺序</strong>（{A,B,C} = {B,C,A}）。<br>` +
+      `C(${n},${r}) = A(${n},${r}) / ${r}! = ${permCount} / ${factorial(r)} = <strong>${count}</strong>。<br>` +
+      `<strong>排列数 ÷ r! = 组合数</strong>，因为同一组合有 ${r}! = ${factorial(r)} 种排列方式，除以这个重复数即可。`;
+  }
+}
+
+document.getElementById('nSl').addEventListener('input',()=>{
+  const n=parseInt(document.getElementById('nSl').value);
+  const rSl=document.getElementById('rSl');
+  rSl.max=n; if(parseInt(rSl.value)>n) rSl.value=n;
+  draw();
+});
+document.getElementById('rSl').addEventListener('input',draw);
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

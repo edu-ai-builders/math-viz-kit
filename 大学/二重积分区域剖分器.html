@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>二重积分区域剖分器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="多元微积分">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="二重积分的黎曼和可视化，区域细分成小矩形柱体，理解二重积分作为体积之和的极限">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .fn-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .fn-btn{padding:6px 12px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);font-family:'JetBrains Mono',monospace;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .ctrl-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .ctrl-label{font-size:12px;color:var(--ink2);}
+    input[type=range]{accent-color:var(--blue);width:120px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--blue);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:#0a0a14;border:1px solid var(--border);}
+    .result-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--blue);line-height:1.8;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 多元微积分 · 认知动作：累积</div>
+  <h1>二重积分区域剖分器</h1>
+  <p class="sub">矩形网格细分演示二重黎曼和，理解体积累积过程</p>
+</header>
+<main>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn('paraboloid',this)">z=1-x²-y²（抛物面）</button>
+    <button class="fn-btn" onclick="setFn('saddle',this)">z=x²-y²（鞍面）</button>
+    <button class="fn-btn" onclick="setFn('plane',this)">z=x+y（平面）</button>
+    <button class="fn-btn" onclick="setFn('gaussian',this)">z=e^(-x²-y²)（高斯）</button>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctrl-label">网格 N =</span>
+    <input type="range" id="slN" min="2" max="20" step="1" value="6" oninput="updateN()">
+    <span class="ctrl-val" id="nLbl">6×6</span>
+    <span class="ctrl-label" style="margin-left:12px;">旋转：</span>
+    <input type="range" id="slRot" min="0" max="360" step="2" value="30" oninput="updateRot()">
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="result-box" id="resultBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 二重积分必须用3D柱体叠加才能"感受"体积
+// PEDAGOGY V3 分步揭示: 滑杆控制N，从粗到细感受逼近过程
+// PEDAGOGY V8 概念反馈: 实时显示黎曼和与真实值的误差
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=360;
+let fn='paraboloid';
+let N=6;
+let rotAngle=30*Math.PI/180;
+
+const FNS={
+  paraboloid:{f:(x,y)=>Math.max(0,1-x*x-y*y),domain:[-1,1,-1,1],exact:Math.PI/2,label:'z=1-x²-y²（区域[-1,1]²≥0部分）'},
+  saddle:{f:(x,y)=>x*x-y*y,domain:[-1,1,-1,1],exact:0,label:'z=x²-y²（区域[-1,1]²）'},
+  plane:{f:(x,y)=>x+y+2,domain:[0,2,0,2],exact:12,label:'z=x+y+2（区域[0,2]²）'},
+  gaussian:{f:(x,y)=>Math.exp(-x*x-y*y),domain:[-2,2,-2,2],exact:Math.PI*(1-Math.exp(-4)),label:'z=e^(-x²-y²)（近似区域）'},
+};
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function updateN(){N=parseInt(document.getElementById('slN').value);document.getElementById('nLbl').textContent=N+'×'+N;draw();}
+function updateRot(){rotAngle=parseInt(document.getElementById('slRot').value)*Math.PI/180;draw();}
+function setFn(k,btn){fn=k;document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');draw();}
+
+function project3D(x,y,z,W){
+  const cx=W/2,cy=H*0.5;
+  const s=Math.min(W,H)*0.2;
+  const cosa=Math.cos(rotAngle),sina=Math.sin(rotAngle);
+  const rx=x*cosa-y*sina;
+  const ry=x*sina+y*cosa;
+  const rz=z;
+  const tilt=0.5;
+  return [cx+rx*s,cy-(ry*tilt+rz)*s,ry*0.1+rz*0.5];
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();const W=r.width;
+  ctx.fillStyle='#0a0a14';ctx.fillRect(0,0,W,H);
+  const F=FNS[fn];
+  const [x0,x1,y0,y1]=F.domain;
+  const dx=(x1-x0)/N,dy=(y1-y0)/N;
+
+  // Collect all pillars with their back z-depth for painter sort
+  const pillars=[];
+  let riemannSum=0;
+  for(let i=0;i<N;i++){
+    for(let j=0;j<N;j++){
+      const xm=x0+(i+0.5)*dx;const ym=y0+(j+0.5)*dy;
+      const zv=F.f(xm,ym);
+      riemannSum+=zv*dx*dy;
+      const x_=x0+i*dx,x2_=x0+(i+1)*dx;
+      const y_=y0+j*dy,y2_=y0+(j+1)*dy;
+      // Sort by avg projected depth
+      const [,, dz1]=project3D(xm,ym,0,W);
+      pillars.push({i,j,x_,x2_,y_,y2_,z:zv,depth:dz1});
+    }
+  }
+  pillars.sort((a,b)=>a.depth-b.depth);
+
+  // Draw pillars
+  pillars.forEach(({x_,x2_,y_,y2_,z,i,j})=>{
+    if(Math.abs(z)<1e-6) return;
+    const corners_top=[[x_,y_,z],[x2_,y_,z],[x2_,y2_,z],[x_,y2_,z]];
+    const corners_bot=[[x_,y_,0],[x2_,y_,0],[x2_,y2_,0],[x_,y2_,0]];
+    const pt=corners_top.map(c=>project3D(c[0],c[1],c[2],W));
+    const pb=corners_bot.map(c=>project3D(c[0],c[1],c[2],W));
+
+    const t=(i+j)/(2*N);
+    const r2=Math.round(42+t*120);const g2=Math.round(92+t*80);const b2=Math.round(143+t*60);
+
+    // Top face
+    ctx.fillStyle=`rgba(${r2},${g2},${b2},0.85)`;
+    ctx.beginPath();ctx.moveTo(pt[0][0],pt[0][1]);ctx.lineTo(pt[1][0],pt[1][1]);ctx.lineTo(pt[2][0],pt[2][1]);ctx.lineTo(pt[3][0],pt[3][1]);ctx.closePath();ctx.fill();
+    ctx.strokeStyle=`rgba(${r2-20},${g2-20},${b2-20},0.5)`;ctx.lineWidth=0.5;ctx.stroke();
+
+    // Front face (depends on rotation)
+    ctx.fillStyle=`rgba(${r2-20},${g2-20},${b2-20},0.7)`;
+    ctx.beginPath();ctx.moveTo(pb[0][0],pb[0][1]);ctx.lineTo(pb[1][0],pb[1][1]);ctx.lineTo(pt[1][0],pt[1][1]);ctx.lineTo(pt[0][0],pt[0][1]);ctx.closePath();ctx.fill();ctx.stroke();
+
+    // Right face
+    ctx.fillStyle=`rgba(${r2-40},${g2-40},${b2-30},0.7)`;
+    ctx.beginPath();ctx.moveTo(pb[1][0],pb[1][1]);ctx.lineTo(pb[2][0],pb[2][1]);ctx.lineTo(pt[2][0],pt[2][1]);ctx.lineTo(pt[1][0],pt[1][1]);ctx.closePath();ctx.fill();ctx.stroke();
+  });
+
+  // Draw axes
+  const origin=project3D(x0,y0,0,W);
+  const axX=project3D(x1+0.2,y0,0,W);const axY=project3D(x0,y1+0.2,0,W);const axZ=project3D(x0,y0,1.5,W);
+  ctx.strokeStyle='#555';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(origin[0],origin[1]);ctx.lineTo(axX[0],axX[1]);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(origin[0],origin[1]);ctx.lineTo(axY[0],axY[1]);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(origin[0],origin[1]);ctx.lineTo(axZ[0],axZ[1]);ctx.stroke();
+  ctx.fillStyle='#888';ctx.font=`11px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center';ctx.fillText('x',axX[0]+5,axX[1]);
+  ctx.fillText('y',axY[0],axY[1]+5);
+  ctx.fillText('z',axZ[0]+5,axZ[1]);
+
+  const exact=F.exact;
+  const err=exact!==0?Math.abs(riemannSum-exact)/Math.abs(exact)*100:Math.abs(riemannSum-exact);
+  document.getElementById('resultBox').innerHTML=
+    `黎曼和 (N=${N}×${N}): ${riemannSum.toFixed(5)}\n精确值: ${isFinite(exact)?exact.toFixed(5):'—'}\n误差: ${isFinite(exact)?err.toFixed(2)+'%':'—'}\n公式: ∬_D f(x,y) dA ≈ Σ f(xᵢ,yⱼ)·Δx·Δy`;
+
+  document.getElementById('fb').innerHTML=
+    `<strong>二重积分 = 体积</strong>：将积分区域分成 N×N 个小矩形，每个小矩形上建一根柱体，柱体体积 = f(xᵢ,yⱼ)·Δx·Δy。<br>
+    所有柱体体积之和即为黎曼和，N→∞时趋向精确积分值。<br>
+    增大 N（滑杆）：柱体变细，逼近真实曲面下方体积。拖动旋转滑杆从不同角度观察三维结构。`;
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

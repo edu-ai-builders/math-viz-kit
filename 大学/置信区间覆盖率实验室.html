@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>置信区间覆盖率实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="统计推断">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="多次抽样可视化：每次画出95%置信区间，红色=未覆盖真实均值，覆盖率趋近95%">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .ctrl-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--blue);margin-bottom:4px;}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    .ctrl-row{display:flex;gap:8px;flex-wrap:wrap;}
+    .btn{padding:10px 18px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;font-family:'Noto Sans SC',sans-serif;font-weight:500;}
+    .btn-run1{background:var(--blue);color:#fff;}
+    .btn-run20{background:var(--teal);color:#fff;}
+    .btn-reset{background:var(--surface);border:2px solid var(--border);color:var(--ink2);}
+    .conf-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .conf-btn{padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;background:var(--surface);font-family:'JetBrains Mono',monospace;font-weight:700;transition:all .2s;}
+    .conf-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .stat-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;text-align:center;}
+    .stat-val{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;}
+    .stat-lbl{font-size:12px;color:var(--ink2);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 统计推断 · 认知动作：累积</div>
+  <h1>置信区间覆盖率实验室</h1>
+  <p class="sub">反复抽样，每次画出置信区间——红色未覆盖真值，蓝色覆盖，看覆盖率收敛到置信水平</p>
+</header>
+<main>
+  <div class="conf-row">
+    <button class="conf-btn" onclick="setConf(0.90,this)">90% 置信区间</button>
+    <button class="conf-btn active" onclick="setConf(0.95,this)">95% 置信区间</button>
+    <button class="conf-btn" onclick="setConf(0.99,this)">99% 置信区间</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="ctrl-grid">
+    <div class="ctrl-box">
+      <div class="ctrl-label">样本量 n</div>
+      <div class="ctrl-val" id="nVal">n = 30</div>
+      <input type="range" id="nSlider" min="5" max="100" step="5" value="30" oninput="update()">
+    </div>
+    <div class="ctrl-box">
+      <div class="ctrl-label">总体标准差 σ</div>
+      <div class="ctrl-val" id="sigmaVal">σ = 1.00</div>
+      <input type="range" id="sigmaSlider" min="0.5" max="3" step="0.1" value="1" oninput="update()">
+    </div>
+  </div>
+  <div class="ctrl-row">
+    <button class="btn btn-run1" onclick="runSamples(1)">抽1次样</button>
+    <button class="btn btn-run20" onclick="runSamples(20)">抽20次样</button>
+    <button class="btn btn-reset" onclick="resetSamples()">↺ 清零</button>
+  </div>
+  <div class="stats-row">
+    <div class="stat-box"><div class="stat-val" id="totalSamples" style="color:var(--blue)">0</div><div class="stat-lbl">总抽样次数</div></div>
+    <div class="stat-box"><div class="stat-val" id="coveredCount" style="color:var(--teal)">0</div><div class="stat-lbl">覆盖次数（蓝色）</div></div>
+    <div class="stat-box"><div class="stat-val" id="coverageRate" style="color:var(--amber)">—%</div><div class="stat-lbl">实际覆盖率</div></div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 置信区间只有大量实验才能体现"覆盖率收敛到置信水平"
+// PEDAGOGY V3 分步揭示: 一条条区间画出，红蓝颜色传递是否覆盖真值
+// PEDAGOGY V4 信号聚焦: 蓝=覆盖，红=未覆盖，绿竖线=真实均值
+// PEDAGOGY V7 单一认知动作: 累积（频率趋近概率——覆盖率趋近置信水平）
+// PEDAGOGY V8 概念反馈: "95%置信区间不是说μ有95%概率在这个区间，而是这种方法构造的区间有95%会包含μ"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 360;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  red:'#b91c1c',redL:'#fee2e2',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da'
+};
+
+const TRUE_MU = 50; // True population mean
+let confLevel = 0.95;
+let intervals = []; // {lo, hi, covered}
+
+function normInv095() { return 1.959964; }
+function normInvForConf(c) {
+  if (c === 0.90) return 1.644854;
+  if (c === 0.95) return 1.959964;
+  if (c === 0.99) return 2.575829;
+  return 1.959964;
+}
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setConf(c, btn) {
+  confLevel = c;
+  document.querySelectorAll('.conf-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  resetSamples();
+}
+
+function update() {
+  const n = parseInt(document.getElementById('nSlider').value);
+  const sigma = parseFloat(document.getElementById('sigmaSlider').value);
+  document.getElementById('nVal').textContent = `n = ${n}`;
+  document.getElementById('sigmaVal').textContent = `σ = ${sigma.toFixed(2)}`;
+  draw();
+}
+
+function resetSamples() {
+  intervals = [];
+  updateStats();
+  draw();
+}
+
+function randn() {
+  // Box-Muller
+  const u = 1 - Math.random(), v = Math.random();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+
+function runSamples(k) {
+  const n = parseInt(document.getElementById('nSlider').value);
+  const sigma = parseFloat(document.getElementById('sigmaSlider').value);
+  const z = normInvForConf(confLevel);
+  const se = sigma / Math.sqrt(n);
+  const halfWidth = z * se;
+
+  for (let i=0; i<k; i++) {
+    // Sample mean from N(mu, sigma^2/n)
+    let xbarSum = 0;
+    for (let j=0; j<n; j++) xbarSum += TRUE_MU + sigma * randn();
+    const xbar = xbarSum / n;
+    const lo = xbar - halfWidth, hi = xbar + halfWidth;
+    const covered = (lo <= TRUE_MU && hi >= TRUE_MU);
+    intervals.push({ lo, hi, xbar, covered });
+  }
+  updateStats();
+  draw();
+}
+
+function updateStats() {
+  const total = intervals.length;
+  const covered = intervals.filter(d => d.covered).length;
+  document.getElementById('totalSamples').textContent = total;
+  document.getElementById('coveredCount').textContent = covered;
+  document.getElementById('coverageRate').textContent = total > 0 ? `${(covered/total*100).toFixed(1)}%` : '—%';
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+
+  const pad = { l: 50, r: 20, t: 20, b: 30 };
+  const cw = W - pad.l - pad.r;
+  const ch = H - pad.t - pad.b;
+  const n = parseInt(document.getElementById('nSlider').value);
+  const sigma = parseFloat(document.getElementById('sigmaSlider').value);
+  const z = normInvForConf(confLevel);
+  const se = sigma / Math.sqrt(n);
+  const halfWidth = z * se;
+  const displayRange = Math.max(halfWidth * 4, sigma * 1.5);
+
+  const xMin = TRUE_MU - displayRange, xMax = TRUE_MU + displayRange;
+  function toX(v) { return pad.l + (v - xMin)/(xMax-xMin)*cw; }
+  const truePx = toX(TRUE_MU);
+
+  // Grid
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(truePx, pad.t); ctx.lineTo(truePx, pad.t+ch); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw intervals (show up to 50)
+  const maxShow = 50;
+  const start = Math.max(0, intervals.length - maxShow);
+  const showIntervals = intervals.slice(start);
+  const rowH = Math.min(12, ch / Math.max(showIntervals.length, 1));
+
+  showIntervals.forEach((iv, i) => {
+    const y = pad.t + i * (ch / Math.max(showIntervals.length, 1)) + rowH/2;
+    const lo = Math.max(xMin, iv.lo), hi = Math.min(xMax, iv.hi);
+    const x1 = toX(lo), x2 = toX(hi);
+    ctx.fillStyle = iv.covered ? C.blueL : C.redL;
+    ctx.fillRect(x1, y - rowH*0.4, x2-x1, rowH*0.8);
+    ctx.strokeStyle = iv.covered ? C.blue : C.red;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x1, y - rowH*0.4, x2-x1, rowH*0.8);
+    // Sample mean dot
+    const xm = toX(iv.xbar);
+    ctx.fillStyle = iv.covered ? C.blue : C.red;
+    ctx.beginPath(); ctx.arc(xm, y, rowH*0.35, 0, Math.PI*2); ctx.fill();
+  });
+
+  // True mu line (thick green)
+  ctx.strokeStyle = C.teal; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(truePx, pad.t-5); ctx.lineTo(truePx, pad.t+ch+5); ctx.stroke();
+  ctx.fillStyle = C.teal; ctx.font = `bold 12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(`μ = ${TRUE_MU}（真值）`, truePx, pad.t+ch+4);
+
+  // X-axis labels
+  [xMin, TRUE_MU, xMax].forEach(v => {
+    ctx.fillStyle = C.ink3; ctx.font = `10px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(v.toFixed(1), toX(v), pad.t+ch+4);
+  });
+
+  // Info
+  ctx.fillStyle = C.ink; ctx.font = `bold 12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`${(confLevel*100).toFixed(0)}% CI：x̄ ± ${z.toFixed(3)} × (σ/√n) = x̄ ± ${halfWidth.toFixed(3)}`, pad.l+4, 4);
+
+  if (intervals.length === 0) {
+    ctx.fillStyle = C.ink3; ctx.font = `13px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('点击"抽样"开始实验', W/2, H/2);
+  }
+
+  updateFeedback();
+}
+
+function updateFeedback() {
+  const total = intervals.length;
+  const covered = intervals.filter(d => d.covered).length;
+  const rate = total > 0 ? covered/total : null;
+  let msg;
+  if (total === 0) {
+    msg = '每次抽样：从总体 N(μ=50, σ²) 中抽 n 个样本，计算样本均值 x̄，构造置信区间 x̄ ± z*·(σ/√n)。';
+  } else {
+    const diff = rate - confLevel;
+    msg = `已抽 ${total} 次：蓝色 ${covered} 条（覆盖μ），红色 ${total-covered} 条（未覆盖）。<br>
+覆盖率 ${(rate*100).toFixed(1)}%，目标 ${(confLevel*100).toFixed(0)}%（差 ${(diff*100).toFixed(1)}%）。`;
+    if (total >= 100) msg += `<br><strong>大数定律：</strong>抽样次数越多，覆盖率越趋近 ${(confLevel*100).toFixed(0)}%。`;
+  }
+  msg += `<br><strong>⚠️ 正确理解置信区间</strong>：不是"μ有${(confLevel*100).toFixed(0)}%概率在此区间"，而是"用此方法重复100次，约有${(confLevel*100).toFixed(0)}条会覆盖真实μ"。μ是固定值，不是随机变量！`;
+  document.getElementById('fb').innerHTML = msg;
+}
+
+window.addEventListener('resize', () => { setup(); draw(); });
+setup(); update();
+</script>
+</body>
+</html>

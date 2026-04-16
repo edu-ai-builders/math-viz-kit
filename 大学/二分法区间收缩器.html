@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>二分法区间收缩器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="数值分析">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="二分法求方程根的区间逐步收缩动画，展示每次迭代的区间缩小过程和误差估计">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .fn-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .fn-btn{padding:6px 14px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);font-family:'JetBrains Mono',monospace;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .btn-row{display:flex;gap:8px;}
+    .btn{padding:8px 20px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-family:'Noto Sans SC',sans-serif;font-weight:700;}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-secondary{background:var(--surface);border:2px solid var(--border);color:var(--ink2);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .iter-table{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;max-height:180px;overflow-y:auto;}
+    .iter-table table{width:100%;border-collapse:collapse;font-size:12px;}
+    .iter-table th{background:var(--bg);padding:5px 8px;text-align:center;border-bottom:1px solid var(--border);font-weight:700;font-size:11px;position:sticky;top:0;}
+    .iter-table td{padding:5px 8px;text-align:center;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:11px;}
+    .iter-table tr.cur-row td{background:var(--blue-light);font-weight:700;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 数值分析 · 认知动作：累积</div>
+  <h1>二分法区间收缩器</h1>
+  <p class="sub">逐步展示区间对半缩小的过程，理解算法的收敛性</p>
+</header>
+<main>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn('cubic',this)">x³-x-2</button>
+    <button class="fn-btn" onclick="setFn('trig',this)">cos(x)-x</button>
+    <button class="fn-btn" onclick="setFn('exp',this)">eˣ-3</button>
+    <button class="fn-btn" onclick="setFn('quad',this)">x²-2</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="stepOnce()">下一步</button>
+    <button class="btn btn-primary" onclick="autoRun()">自动运行</button>
+    <button class="btn btn-secondary" onclick="resetBisect()">重置</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="iter-table"><table id="iterTable">
+    <thead><tr><th>n</th><th>a</th><th>b</th><th>中点 c</th><th>f(c)</th><th>区间长</th></tr></thead>
+    <tbody id="iterBody"></tbody>
+  </table></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V3 分步揭示: 每次点击只执行一步二分
+// PEDAGOGY V6 动作—数学一致: 每次迭代对应图上区间缩小
+// PEDAGOGY V8 概念反馈: 显示误差如何随迭代次数指数级减小
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=280;
+
+const FNS={
+  cubic:{fn:x=>x**3-x-2, a:1, b:2, label:'f(x)=x³-x-2', xRange:[0.5,2.5], yRange:[-3,4]},
+  trig:{fn:x=>Math.cos(x)-x, a:0, b:1, label:'f(x)=cos(x)-x', xRange:[-0.2,1.5], yRange:[-1,1.2]},
+  exp:{fn:x=>Math.exp(x)-3, a:1, b:1.5, label:'f(x)=eˣ-3', xRange:[0.5,2], yRange:[-2,3]},
+  quad:{fn:x=>x**2-2, a:1, b:2, label:'f(x)=x²-2', xRange:[0.5,2.5], yRange:[-1.5,3]},
+};
+
+let curFn='cubic';
+let a,b,steps,autoTimer;
+
+function setFn(k,btn){
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  curFn=k;
+  resetBisect();
+}
+
+function resetBisect(){
+  clearInterval(autoTimer);autoTimer=null;
+  const F=FNS[curFn];
+  a=F.a;b=F.b;steps=[];
+  document.getElementById('iterBody').innerHTML='';
+  draw();
+  document.getElementById('fb').innerHTML=`<strong>二分法</strong>：在区间[${a},${b}]内，f(a)×f(b)<0（两端符号相反），说明区间内有实根。每次取中点c，根据f(c)的符号保留含根的半区间，区间长度每次减半。<br>点击"下一步"执行一次迭代。`;
+}
+
+function stepOnce(){
+  const F=FNS[curFn];
+  const fa=F.fn(a),fc_val=F.fn((a+b)/2);
+  const c=(a+b)/2;
+  const fc=F.fn(c);
+  steps.push({n:steps.length+1,a,b,c,fc,len:b-a});
+  if(fa*fc<0) b=c; else a=c;
+  addRow(steps[steps.length-1]);
+  draw();
+  updateFb();
+}
+
+function autoRun(){
+  if(autoTimer) return;
+  autoTimer=setInterval(()=>{
+    if(b-a<1e-6||steps.length>20){clearInterval(autoTimer);autoTimer=null;return;}
+    stepOnce();
+  },600);
+}
+
+function addRow(s){
+  const tbody=document.getElementById('iterBody');
+  // Remove cur-row class from previous
+  tbody.querySelectorAll('.cur-row').forEach(r=>r.classList.remove('cur-row'));
+  const tr=document.createElement('tr');
+  tr.className='cur-row';
+  tr.innerHTML=`<td>${s.n}</td><td>${s.a.toFixed(6)}</td><td>${s.b.toFixed(6)}</td><td>${s.c.toFixed(6)}</td><td>${s.fc.toExponential(3)}</td><td>${s.len.toExponential(3)}</td>`;
+  tbody.appendChild(tr);
+  tbody.parentElement.scrollTop=tbody.scrollHeight;
+}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const F=FNS[curFn];
+  const [x0,x1]=F.xRange,[y0,y1]=F.yRange;
+  const pad={l:50,r:15,t:20,b:35};
+  const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+
+  function toX(x){return pad.l+(x-x0)/(x1-x0)*cw;}
+  function toY(y){return pad.t+ch-(y-y0)/(y1-y0)*ch;}
+
+  // Grid
+  ctx.strokeStyle='#e4e2da';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+  for(let x=Math.ceil(x0);x<=x1;x++){ctx.beginPath();ctx.moveTo(toX(x),pad.t);ctx.lineTo(toX(x),pad.t+ch);ctx.stroke();}
+  for(let y=Math.ceil(y0);y<=y1;y++){ctx.beginPath();ctx.moveTo(pad.l,toY(y));ctx.lineTo(W-pad.r,toY(y));ctx.stroke();}
+  ctx.setLineDash([]);
+
+  // x-axis
+  ctx.strokeStyle='#6b6860';ctx.lineWidth=1.5;
+  if(y0<0&&y1>0){ctx.beginPath();ctx.moveTo(pad.l,toY(0));ctx.lineTo(W-pad.r,toY(0));ctx.stroke();}
+  ctx.fillStyle='#a8a69f';ctx.font=`9px 'JetBrains Mono',monospace`;
+  for(let x=Math.ceil(x0);x<=x1;x++){
+    if(y0<0&&y1>0){ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(x,toX(x),toY(0)+3);}
+  }
+
+  // Function curve
+  ctx.strokeStyle='#1a1814';ctx.lineWidth=2;
+  ctx.beginPath();let first=true;
+  for(let i=0;i<=300;i++){
+    const x=x0+i/300*(x1-x0);
+    const y=F.fn(x);
+    if(!isFinite(y)||y<y0-1||y>y1+1){first=true;continue;}
+    if(first){ctx.moveTo(toX(x),toY(y));first=false;}
+    else ctx.lineTo(toX(x),toY(y));
+  }
+  ctx.stroke();
+
+  // Current interval highlight
+  ctx.fillStyle='#2a5c8f22';
+  ctx.fillRect(toX(a),pad.t,toX(b)-toX(a),ch);
+  ctx.strokeStyle='#2a5c8f';ctx.lineWidth=2;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(toX(a),pad.t);ctx.lineTo(toX(a),pad.t+ch);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(toX(b),pad.t);ctx.lineTo(toX(b),pad.t+ch);ctx.stroke();
+
+  // Midpoint
+  if(steps.length>0){
+    const last=steps[steps.length-1];
+    ctx.fillStyle='#dc2626';
+    ctx.beginPath();ctx.arc(toX(last.c),toY(F.fn(last.c)),5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#dc2626';ctx.font=`bold 11px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText('c='+last.c.toFixed(4),toX(last.c),pad.t+5);
+  }
+
+  // a, b markers
+  ctx.fillStyle='#2a5c8f';ctx.font=`bold 11px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText('a='+a.toFixed(4),toX(a),pad.t+2);
+  ctx.fillStyle='#0f6e56';
+  ctx.fillText('b='+b.toFixed(4),toX(b),pad.t+2);
+
+  // Title
+  ctx.fillStyle='#6b6860';ctx.font=`11px 'JetBrains Mono',monospace`;
+  ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText(F.label,pad.l+4,pad.t+ch-4);
+
+  // Step count + interval size
+  ctx.fillStyle='#2a5c8f';ctx.font=`bold 12px 'JetBrains Mono',monospace`;
+  ctx.textAlign='right';ctx.textBaseline='top';
+  ctx.fillText(`第${steps.length}步，区间长=${(b-a).toExponential(3)}`,W-pad.r,pad.t);
+}
+
+function updateFb(){
+  const n=steps.length;
+  const F=FNS[curFn];
+  const err=(b-a)/2;
+  const theory=(F.b-F.a)/Math.pow(2,n);
+  document.getElementById('fb').innerHTML=
+    `<strong>第${n}步</strong>：当前区间[${a.toFixed(6)},${b.toFixed(6)}]，中点估算误差≤${err.toExponential(3)}。<br>
+    <strong>收敛速度</strong>：每步误差减半，n步后误差≤(b-a)/2ⁿ = ${theory.toExponential(3)}。<br>
+    需要约${Math.ceil(Math.log2((F.b-F.a)/1e-6))}步可达到10⁻⁶精度。<br>
+    <strong>算法保证</strong>：只要f在区间上连续且端点异号，算法必然收敛（中间值定理）。`;
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();resetBisect();
+</script>
+</body>
+</html>

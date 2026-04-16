@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>平行四边形/三角形面积剪拼 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="面积">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="分解">
+  <meta name="desc" content="动画演示平行四边形剪拼成长方形、三角形剪拼成平行四边形，公式从几何变换中自然涌现">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f0f7ff;--surface:#fff;--ink:#1a2840;--ink2:#4a6080;--ink3:#8aa0b8;--border:#d0e0f0;--blue:#1a6eb5;--green:#0e7a56;--amber:#a05800;--radius:12px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:20px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:20px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:12px 20px 28px;display:flex;flex-direction:column;gap:10px;}
+    .tabs{display:flex;gap:6px;}
+    .tab{flex:1;padding:10px;border:2px solid var(--border);border-radius:var(--radius);font-size:14px;cursor:pointer;background:var(--surface);font-family:'Noto Sans SC',sans-serif;font-weight:500;transition:all .2s;}
+    .tab.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .ctrl-row{display:flex;gap:8px;align-items:center;}
+    .btn{padding:10px 20px;border:none;border-radius:var(--radius);cursor:pointer;font-size:14px;font-family:'Noto Sans SC',sans-serif;font-weight:500;}
+    .btn-play{background:var(--blue);color:#fff;}
+    .btn-reset{background:var(--surface);border:2px solid var(--border);color:var(--ink2);}
+    .fb{background:#e8f5ee;border-left:4px solid var(--green);border-radius:8px;padding:12px 16px;font-size:14px;line-height:1.7;}
+    .formula{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--blue);text-align:center;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 面积 · 认知动作：分解</div>
+  <h1>平行四边形/三角形面积剪拼</h1>
+  <p class="sub">通过剪拼变换，发现面积公式的来源</p>
+</header>
+<main>
+  <div class="tabs">
+    <button class="tab active" onclick="setMode('para',this)">平行四边形 → 长方形</button>
+    <button class="tab" onclick="setMode('tri',this)">三角形 → 平行四边形</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="formula" id="formula">面积 = 底 × 高</div>
+  <div class="ctrl-row">
+    <button class="btn btn-play" onclick="playAnim()">▶ 播放剪拼动画</button>
+    <button class="btn btn-reset" onclick="resetAnim()">↺ 重置</button>
+    <span id="stepLabel" style="font-size:13px;color:var(--ink2);margin-left:auto;"></span>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 剪拼过程只有动画才能让人信服"面积不变"
+// PEDAGOGY V3 分步揭示: 三阶段——原图形 → 切割 → 拼合为长方形
+// PEDAGOGY V5 操作先于符号: 先看动画，公式在最后揭示
+// PEDAGOGY V7 单一认知动作: 分解（切割后重组面积不变）
+// PEDAGOGY V8 概念反馈: "你剪了一个三角形，拼到另一侧，面积没有变"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 340;
+const C = {
+  blue:'#1a6eb5',blueL:'#cde4f8',green:'#0e7a56',greenL:'#ccede0',
+  amber:'#a05800',amberL:'#fde8c8',ink:'#1a2840',ink2:'#4a6080',ink3:'#8aa0b8',
+  surf:'#fff',border:'#d0e0f0'
+};
+
+let mode = 'para';
+let animT = 0; // 0-1
+let animDir = 0; // 0=stopped, 1=forward
+let raf = null;
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setMode(m, btn) {
+  mode = m;
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  resetAnim();
+}
+
+function playAnim() {
+  if (animDir === 1) return;
+  animDir = 1;
+  step();
+}
+
+function resetAnim() {
+  cancelAnimationFrame(raf);
+  animT = 0; animDir = 0;
+  draw();
+}
+
+function step() {
+  animT = Math.min(1, animT + 0.012);
+  draw();
+  if (animT < 1 && animDir === 1) raf = requestAnimationFrame(step);
+  else { animDir = 0; updateFeedback(); }
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+  if (mode === 'para') drawPara(W);
+  else drawTri(W);
+  document.getElementById('stepLabel').textContent = animT === 0 ? '第1步：观察原图形' : animT < 0.5 ? '第2步：剪切三角形' : '第3步：拼成长方形';
+}
+
+function drawPara(W) {
+  // PEDAGOGY V6 动作-数学一致: 三角形向右平移对应"底×高"
+  const cx = W / 2, cy = H / 2;
+  const base = Math.min(W * 0.36, 160);
+  const height = 90;
+  const slant = 40; // slant offset
+
+  // Parallelogram vertices: BL, BR, TR, TL
+  const BL = [cx - base/2 - slant/2, cy + height/2];
+  const BR = [cx + base/2 - slant/2, cy + height/2];
+  const TR = [cx + base/2 + slant/2, cy - height/2];
+  const TL = [cx - base/2 + slant/2, cy - height/2];
+
+  // Cut: the triangle to be moved is on the left side
+  // Triangle: BL, foot of perpendicular from TL, TL
+  const footX = TL[0] - slant; // align with BL x
+  const foot = [BL[0], cy - height/2]; // top-left of rectangle
+
+  // t is animT
+  const t = animT;
+  const moveX = t * (base); // triangle moves right by base
+
+  // Draw grid/lines for height and base
+  ctx.strokeStyle = C.ink3; ctx.lineWidth = 1; ctx.setLineDash([4,3]);
+  // height line
+  ctx.beginPath(); ctx.moveTo(BL[0], BL[1]); ctx.lineTo(BL[0], TL[1]); ctx.stroke();
+  // base extent
+  ctx.beginPath(); ctx.moveTo(BL[0], BL[1]+16); ctx.lineTo(BR[0], BR[1]+16); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Labels
+  ctx.fillStyle = C.ink2; ctx.font = `12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('底 (b)', (BL[0]+BR[0])/2, BL[1]+20);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  ctx.fillText('高 (h)', BL[0]-6, (BL[1]+TL[1])/2);
+
+  if (t < 0.5) {
+    // Phase 1: show parallelogram intact with cut line hint
+    const alpha = Math.min(1, t * 4);
+    // Full parallelogram
+    ctx.fillStyle = C.blueL;
+    ctx.beginPath(); ctx.moveTo(...BL); ctx.lineTo(...BR); ctx.lineTo(...TR); ctx.lineTo(...TL); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = C.blue; ctx.lineWidth = 2; ctx.setLineDash([]);
+    ctx.stroke();
+    // Cut line appears
+    ctx.strokeStyle = C.amber; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+    ctx.globalAlpha = alpha;
+    ctx.beginPath(); ctx.moveTo(BL[0], BL[1]); ctx.lineTo(TL[0], TL[1]); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.setLineDash([]);
+    // Arrow hint
+    if (alpha > 0.5) {
+      ctx.fillStyle = C.amber; ctx.font = `bold 14px 'JetBrains Mono',monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('✂', (BL[0]+TL[0])/2 - 12, (BL[1]+TL[1])/2);
+    }
+  } else {
+    // Phase 2: triangle moved right
+    const p2t = (t - 0.5) * 2; // 0-1
+    const dx = p2t * base;
+    // Remaining trapezoid/rectangle body
+    ctx.fillStyle = C.blueL;
+    ctx.beginPath();
+    ctx.moveTo(BL[0], BL[1]); ctx.lineTo(BR[0], BR[1]);
+    ctx.lineTo(TR[0], TR[1]); ctx.lineTo(TL[0], TL[1]);
+    ctx.closePath(); ctx.fill();
+    // Moved triangle (left-slant triangle now at right)
+    ctx.fillStyle = C.blueL;
+    ctx.beginPath();
+    ctx.moveTo(BL[0] + dx + base, BL[1]);
+    ctx.lineTo(TL[0] + dx + base, TL[1]);
+    ctx.lineTo(TR[0] + dx, TR[1]);
+    ctx.closePath(); ctx.fill();
+    // Borders
+    ctx.strokeStyle = C.blue; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(BL[0], BL[1]); ctx.lineTo(BR[0], BR[1]);
+    ctx.lineTo(TR[0], TR[1]); ctx.lineTo(TL[0], TL[1]);
+    ctx.closePath(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(BL[0] + dx + base, BL[1]);
+    ctx.lineTo(TL[0] + dx + base, TL[1]);
+    ctx.lineTo(TR[0] + dx, TR[1]);
+    ctx.closePath(); ctx.stroke();
+    // When fully assembled: draw green rectangle outline
+    if (p2t > 0.95) {
+      ctx.strokeStyle = C.green; ctx.lineWidth = 3; ctx.setLineDash([]);
+      const rL = BL[0], rR = BR[0] + base;
+      ctx.strokeRect(rL - base/2 - slant/2 + base/2 + slant/2, cy - height/2, base, height);
+      // Actually draw proper rectangle
+      ctx.beginPath();
+      ctx.moveTo(BL[0], BL[1]); ctx.lineTo(BL[0]+base, BL[1]);
+      ctx.lineTo(BL[0]+base, TL[1]); ctx.lineTo(BL[0], TL[1]);
+      ctx.closePath(); ctx.stroke();
+      document.getElementById('formula').textContent = 'S平行四边形 = 底 × 高 = b × h';
+    }
+    // Arrow showing movement
+    if (p2t < 0.9) {
+      ctx.fillStyle = C.amber; ctx.font = `bold 16px 'JetBrains Mono',monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('→', BL[0] + dx + base + slant, cy);
+    }
+  }
+  // Step label at top
+  ctx.fillStyle = C.ink; ctx.font = `bold 14px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  if (t === 0) ctx.fillText('平行四边形 — 剪掉左边三角形，拼到右边', W/2, 10);
+  else if (t < 0.5) ctx.fillText('沿高度线 ✂ 切开...', W/2, 10);
+  else ctx.fillText('将三角形向右平移，拼成长方形！', W/2, 10);
+}
+
+function drawTri(W) {
+  const cx = W / 2, cy = H / 2 + 10;
+  const base = Math.min(W * 0.36, 150);
+  const height = 80;
+  const t = animT;
+
+  // Triangle: A(left), B(right), C(top-mid)
+  const A = [cx - base/2, cy + height/2];
+  const B = [cx + base/2, cy + height/2];
+  const C_ = [cx + 20, cy - height/2]; // slightly off-center apex
+
+  // Midpoints
+  const MAC = [(A[0]+C_[0])/2, (A[1]+C_[1])/2];
+  const MBC = [(B[0]+C_[0])/2, (B[1]+C_[1])/2];
+
+  // Height line
+  ctx.strokeStyle = C.ink3; ctx.lineWidth = 1; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(C_[0], C_[1]); ctx.lineTo(C_[0], A[1]); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(A[0], A[1]+16); ctx.lineTo(B[0], B[1]+16); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = C.ink2; ctx.font = `12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('底 (b)', cx, A[1]+20);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  ctx.fillText('高 (h)', C_[0]-6, (C_[1]+A[1])/2);
+
+  if (t < 0.4) {
+    // Show original triangle + cut line along midpoints
+    const alpha = Math.min(1, t * 5);
+    ctx.fillStyle = C.blueL;
+    ctx.beginPath(); ctx.moveTo(...A); ctx.lineTo(...B); ctx.lineTo(...C_); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = C.blue; ctx.lineWidth = 2; ctx.stroke();
+    // Mid-line appears
+    ctx.strokeStyle = C.amber; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+    ctx.globalAlpha = alpha;
+    ctx.beginPath(); ctx.moveTo(...MAC); ctx.lineTo(...MBC); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.setLineDash([]);
+    if (alpha > 0.6) {
+      ctx.fillStyle = C.amber; ctx.font = `bold 13px 'JetBrains Mono',monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('✂ 沿中线切开', cx, (MAC[1]+MBC[1])/2 - 12);
+    }
+  } else {
+    // Top piece rotates 180° and flips
+    const p2t = Math.min(1, (t - 0.4) / 0.6);
+    // Bottom trapezoid stays
+    ctx.fillStyle = C.blueL;
+    ctx.beginPath();
+    ctx.moveTo(...A); ctx.lineTo(...B); ctx.lineTo(...MBC); ctx.lineTo(...MAC);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = C.blue; ctx.lineWidth = 2; ctx.stroke();
+
+    // Top small triangle rotated
+    const midX = (MAC[0]+MBC[0])/2;
+    const midY = (MAC[1]+MBC[1])/2;
+    // Rotate top triangle around midpoint of mid-line
+    ctx.save();
+    ctx.translate(midX + (MBC[0]-MAC[0])/2 + (MBC[0]-MAC[0]) * p2t, (MAC[1]+MBC[1])/2);
+    ctx.rotate(Math.PI * p2t);
+    ctx.fillStyle = C.greenL;
+    ctx.beginPath();
+    ctx.moveTo(MAC[0]-midX, MAC[1]-midY);
+    ctx.lineTo(MBC[0]-midX, MBC[1]-midY);
+    ctx.lineTo(C_[0]-midX, C_[1]-midY);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = C.green; ctx.lineWidth = 2; ctx.stroke();
+    ctx.restore();
+
+    if (p2t > 0.95) {
+      document.getElementById('formula').textContent = 'S三角形 = ½ × 底 × 高 = ½bh';
+      ctx.fillStyle = C.green; ctx.font = `bold 15px 'Noto Sans SC',sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText('两个相同三角形 = 一个平行四边形！', W/2, 12);
+    }
+  }
+
+  // Title
+  if (t === 0) {
+    ctx.fillStyle = C.ink; ctx.font = `bold 14px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('三角形 — 沿中线切开，翻转后拼成平行四边形', W/2, 10);
+  }
+}
+
+function updateFeedback() {
+  const el = document.getElementById('fb');
+  if (mode === 'para') {
+    el.innerHTML = `<strong>发现了什么？</strong><br>平行四边形被剪去左边的三角形，拼到右边，变成了一个<strong>长方形</strong>！<br>面积没有变化，所以：<strong>S = 底 × 高</strong>（跟长方形公式一样）<br>注意："高"是两条平行边之间的垂直距离，不是斜边！`;
+    document.getElementById('formula').textContent = 'S平行四边形 = 底 × 高 = b × h';
+  } else {
+    el.innerHTML = `<strong>发现了什么？</strong><br>把三角形沿中线剪开，上半部分翻转180°拼到右边，变成了<strong>平行四边形</strong>！<br>三角形面积 = 平行四边形面积的一半，所以：<strong>S = ½ × 底 × 高</strong><br>任意三角形都适用，无论是锐角、直角还是钝角三角形！`;
+    document.getElementById('formula').textContent = 'S三角形 = ½ × 底 × 高 = ½bh';
+  }
+}
+
+window.addEventListener('resize', () => { setup(); resetAnim(); });
+setup(); draw();
+</script>
+</body>
+</html>

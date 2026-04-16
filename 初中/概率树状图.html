@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>概率树状图 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="概率">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="交互式树图展示多步概率，路径相乘、末端相加，理解独立事件的概率计算">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:12px;color:var(--ink2);}
+    .sl-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .scenario-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .sc-btn{padding:7px 14px;border:2px solid var(--border);border-radius:20px;font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .sc-btn.active,.sc-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .result-list{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+    .result-list table{width:100%;border-collapse:collapse;}
+    .result-list th{background:var(--bg);padding:7px 12px;font-size:12px;color:var(--ink2);text-align:left;}
+    .result-list td{padding:8px 12px;font-size:13px;border-top:1px solid var(--border);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:560px){.controls{grid-template-columns:1fr 1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 概率 · 认知动作：累积</div>
+  <h1>概率树状图</h1>
+  <p class="sub">路径概率相乘，末端结果相加——独立事件概率的完整图景</p>
+</header>
+<main>
+  <div class="scenario-row">
+    <button class="sc-btn active" onclick="setScenario(0,this)">抛硬币两次</button>
+    <button class="sc-btn" onclick="setScenario(1,this)">掷骰子（奇/偶）</button>
+    <button class="sc-btn" onclick="setScenario(2,this)">天气预报</button>
+    <button class="sc-btn" onclick="setScenario(3,this)">自定义</button>
+  </div>
+  <div class="controls" id="customControls" style="display:none">
+    <div class="sl-row">
+      <div class="sl-lbl">第一次：事件A概率</div>
+      <div class="sl-val" id="p1v">0.5</div>
+      <input type="range" id="p1" min="0.1" max="0.9" step="0.1" value="0.5">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">第一次：事件B名称</div>
+      <div class="sl-val" style="font-size:14px;color:var(--teal)" id="p1comp">P(B₁)=0.5</div>
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">第二次：事件A概率</div>
+      <div class="sl-val" id="p2v">0.5</div>
+      <input type="range" id="p2" min="0.1" max="0.9" step="0.1" value="0.5">
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="result-list">
+    <table>
+      <thead><tr><th>路径</th><th>结果</th><th>计算</th><th>概率</th></tr></thead>
+      <tbody id="resultTable"></tbody>
+    </table>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 树图的路径展开只有动态才能清晰展示
+// PEDAGOGY V2 表征桥接: 树图 ↔ 路径文字 ↔ 概率数值
+// PEDAGOGY V3 分步揭示: 点击不同场景，树图自动展开
+// PEDAGOGY V5 操作先于符号: 先看树图，再理解乘法规则
+// PEDAGOGY V7 单一认知动作: 累积（路径概率的乘积累积）
+// PEDAGOGY V8 概念反馈: 揭示"路径相乘，同级相加=1"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 400;
+const C = {
+  blue:'#2a5c8f', blueL:'#e8f0f8', teal:'#0f6e56', tealL:'#e1f5ee',
+  amber:'#854f0b', amberL:'#faeeda',
+  ink:'#1a1814', ink2:'#6b6860', ink3:'#a8a69f', border:'#e4e2da', surf:'#fff',
+  colors: ['#2a5c8f','#0f6e56','#854f0b','#7b3f9e']
+};
+
+function setup(){
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr; ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+const SCENARIOS = [
+  {
+    name: '抛硬币两次',
+    events: [
+      {name:'第一次', branches:[{label:'正面H', p:0.5},{label:'反面T', p:0.5}]},
+      {name:'第二次', branches:[{label:'正面H', p:0.5},{label:'反面T', p:0.5}]}
+    ]
+  },
+  {
+    name: '掷骰子奇偶',
+    events: [
+      {name:'第一次', branches:[{label:'奇数', p:0.5},{label:'偶数', p:0.5}]},
+      {name:'第二次', branches:[{label:'奇数', p:0.5},{label:'偶数', p:0.5}]}
+    ]
+  },
+  {
+    name: '天气预报',
+    events: [
+      {name:'今天', branches:[{label:'晴☀', p:0.7},{label:'雨🌧', p:0.3}]},
+      {name:'明天（晴后）', branches:[{label:'晴☀', p:0.8},{label:'雨🌧', p:0.2}],parentLabel:'晴☀'},
+      {name:'明天（雨后）', branches:[{label:'晴☀', p:0.4},{label:'雨🌧', p:0.6}],parentLabel:'雨🌧'}
+    ],
+    customTree: true
+  }
+];
+
+let currentScenario = 0;
+let customP1 = 0.5, customP2 = 0.5;
+
+function setScenario(idx, btn){
+  currentScenario = idx;
+  document.querySelectorAll('.sc-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('customControls').style.display = idx===3?'grid':'none';
+  draw();
+}
+
+function getTree(){
+  if(currentScenario===3){
+    return {
+      events:[
+        {name:'第一次', branches:[{label:'事件A', p:customP1},{label:'事件B', p:1-customP1}]},
+        {name:'第二次', branches:[{label:'事件C', p:customP2},{label:'事件D', p:1-customP2}]}
+      ]
+    };
+  }
+  return SCENARIOS[currentScenario];
+}
+
+function buildPaths(scenario){
+  // For simple 2-level tree
+  if(scenario.customTree){
+    // Weather scenario: asymmetric branches
+    const paths = [];
+    const first = scenario.events[0].branches;
+    first.forEach((b1,i1)=>{
+      const secondEv = scenario.events.find(e=>e.parentLabel===b1.label) || scenario.events[1];
+      secondEv.branches.forEach((b2,i2)=>{
+        paths.push({
+          labels:[b1.label, b2.label],
+          probs:[b1.p, b2.p],
+          joint: b1.p * b2.p
+        });
+      });
+    });
+    return paths;
+  }
+  const ev = scenario.events;
+  const paths = [];
+  ev[0].branches.forEach(b1=>{
+    ev[1].branches.forEach(b2=>{
+      paths.push({
+        labels:[b1.label, b2.label],
+        probs:[b1.p, b2.p],
+        joint: b1.p * b2.p
+      });
+    });
+  });
+  return paths;
+}
+
+function draw(){
+  const W = cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const scenario = getTree();
+  const paths = buildPaths(scenario);
+  const margin = {left:60, right:80, top:40, bottom:40};
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+
+  const firstBranches = scenario.events[0].branches;
+  const nFirst = firstBranches.length;
+  const nSecond = scenario.events[1]?.branches.length || 2;
+  const nLeaves = nFirst * nSecond;
+
+  // Node positions
+  const rootX = margin.left;
+  const rootY = margin.top + plotH/2;
+  const midX = margin.left + plotW*0.45;
+  const leafX = margin.left + plotW;
+
+  const leafYs = [];
+  for(let i=0;i<nLeaves;i++){
+    leafYs.push(margin.top + plotH * (i+0.5)/nLeaves);
+  }
+  const midYs = [];
+  for(let i=0;i<nFirst;i++){
+    const startLeaf = i*nSecond;
+    const midLeaf = (leafYs[startLeaf] + leafYs[startLeaf+nSecond-1])/2;
+    midYs.push(midLeaf);
+  }
+
+  // Draw branches level 1
+  firstBranches.forEach((b,i)=>{
+    const color = C.colors[i%C.colors.length];
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(rootX, rootY); ctx.lineTo(midX, midYs[i]); ctx.stroke();
+    // Label on branch
+    const mx=(rootX+midX)/2, my=(rootY+midYs[i])/2;
+    const angle = Math.atan2(midYs[i]-rootY, midX-rootX);
+    ctx.save(); ctx.translate(mx,my); ctx.rotate(angle);
+    ctx.fillStyle = color; ctx.font = `bold 12px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(`${b.label} (${b.p})`, 0, -4);
+    ctx.restore();
+  });
+
+  // Draw branches level 2
+  let leafIdx = 0;
+  firstBranches.forEach((b1,i1)=>{
+    const sec = scenario.customTree ?
+      (scenario.events.find(e=>e.parentLabel===b1.label)||scenario.events[1]).branches :
+      scenario.events[1].branches;
+    sec.forEach((b2,i2)=>{
+      const color = C.colors[i1%C.colors.length];
+      ctx.strokeStyle = color+'aa'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(midX, midYs[i1]); ctx.lineTo(leafX, leafYs[leafIdx]); ctx.stroke();
+      const mx=(midX+leafX)/2, my=(midYs[i1]+leafYs[leafIdx])/2;
+      const angle = Math.atan2(leafYs[leafIdx]-midYs[i1], leafX-midX);
+      ctx.save(); ctx.translate(mx,my); ctx.rotate(angle);
+      ctx.fillStyle = color; ctx.font = `12px 'Noto Sans SC',sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText(`${b2.label} (${b2.p})`, 0, -3);
+      ctx.restore();
+      leafIdx++;
+    });
+  });
+
+  // Draw nodes
+  // Root
+  ctx.fillStyle = C.surf; ctx.strokeStyle = C.ink2; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(rootX, rootY, 14, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.ink2; ctx.font=`bold 11px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('开始', rootX, rootY);
+
+  // Mid nodes
+  firstBranches.forEach((b,i)=>{
+    const color = C.colors[i%C.colors.length];
+    ctx.fillStyle = C.surf; ctx.strokeStyle = color; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(midX, midYs[i], 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  });
+
+  // Leaf nodes with joint probability
+  leafIdx = 0;
+  firstBranches.forEach((b1,i1)=>{
+    const sec = scenario.customTree ?
+      (scenario.events.find(e=>e.parentLabel===b1.label)||scenario.events[1]).branches :
+      scenario.events[1].branches;
+    sec.forEach((b2,i2)=>{
+      const color = C.colors[i1%C.colors.length];
+      const joint = b1.p * b2.p;
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(leafX, leafYs[leafIdx], 8, 0, Math.PI*2); ctx.fill();
+      // Joint prob label
+      ctx.fillStyle = color; ctx.font=`bold 13px 'JetBrains Mono',monospace`; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText(`${joint.toFixed(3)}`, leafX+14, leafYs[leafIdx]);
+      leafIdx++;
+    });
+  });
+
+  // Column labels
+  ctx.fillStyle = C.ink2; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText(scenario.events[0].name, (rootX+midX)/2, margin.top-6);
+  if(scenario.events[1]) ctx.fillText(scenario.events[1].name||'第二次', (midX+leafX)/2, margin.top-6);
+  ctx.fillText('结果概率', leafX+40, margin.top-6);
+
+  // Update table
+  const tbody = document.getElementById('resultTable');
+  const colors = C.colors;
+  tbody.innerHTML = paths.map((p,i)=>`
+    <tr style="border-left:3px solid ${colors[Math.floor(i/nSecond)%colors.length]}">
+      <td>${p.labels.join(' → ')}</td>
+      <td style="font-family:monospace">${p.labels.join('')}</td>
+      <td style="font-family:monospace">${p.probs.join(' × ')}</td>
+      <td><strong>${p.joint.toFixed(4)}</strong></td>
+    </tr>
+  `).join('');
+
+  // PEDAGOGY V8
+  const totalCheck = paths.reduce((s,p)=>s+p.joint, 0);
+  document.getElementById('fb').innerHTML = `树图每条路径的概率 = 路径上各分支概率<strong>相乘</strong>。所有末端概率之和 = <strong>${totalCheck.toFixed(4)}</strong>（应等于1）。<br><strong>规律：独立事件同时发生的概率 = 各自概率的乘积。</strong>树图帮助我们不遗漏任何可能性！`;
+
+  // Update custom controls
+  if(currentScenario===3){
+    document.getElementById('p1v').textContent = customP1.toFixed(1);
+    document.getElementById('p2v').textContent = customP2.toFixed(1);
+    document.getElementById('p1comp').textContent = `P(B₁)=${(1-customP1).toFixed(1)}`;
+  }
+}
+
+document.getElementById('p1').addEventListener('input', e=>{ customP1=parseFloat(e.target.value); draw(); });
+document.getElementById('p2').addEventListener('input', e=>{ customP2=parseFloat(e.target.value); draw(); });
+window.addEventListener('resize',()=>{ setup(); draw(); });
+setup(); draw();
+</script>
+</body>
+</html>

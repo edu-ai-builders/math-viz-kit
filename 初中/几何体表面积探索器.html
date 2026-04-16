@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>几何体表面积探索器</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --ink: #1a1814;
+  --ink2: #6b6860;
+  --ink3: #a8a69f;
+  --accent: #2a5c8f;
+  --accent2: #0f6e56;
+  --accent3: #854f0b;
+  --border: #e4e2da;
+  --blue-light: #e8f0f8;
+  --teal-light: #e1f5ee;
+  --amber-light: #faeeda;
+  --blue-dark: #0c447c;
+  --teal-dark: #085041;
+  --amber-dark: #633806;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Noto Sans SC', sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── HEADER ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 32px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.logo {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.logo span { color: var(--accent); }
+.shape-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+}
+.shape-tab {
+  padding: 7px 20px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--ink2);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.shape-tab.active {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+}
+.mode-tab {
+  padding: 7px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink2);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mode-tab.active {
+  background: var(--ink);
+  color: white;
+  border-color: var(--ink);
+}
+
+/* ── MAIN LAYOUT ── */
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 220px 1fr 260px;
+  gap: 0;
+  overflow: hidden;
+  height: calc(100vh - 65px);
+}
+
+/* ── LEFT PANEL ── */
+.left-panel {
+  padding: 24px 20px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+.panel-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-bottom: 12px;
+}
+.slider-group { display: flex; flex-direction: column; gap: 16px; }
+.slider-row {}
+.slider-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.slider-name {
+  font-size: 13px;
+  color: var(--ink2);
+}
+.slider-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ink);
+}
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ink);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+.divider { height: 1px; background: var(--border); }
+
+/* ── CENTER ── */
+.center-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: var(--bg);
+  overflow: hidden;
+}
+#canvas3d {
+  display: block;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+#canvas3d:active { cursor: grabbing; }
+.drag-hint {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--ink3);
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  transition: opacity 0.5s;
+}
+#net-svg-wrap {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+#net-svg-wrap:active { cursor: grabbing; }
+#net-svg { overflow: visible; }
+
+/* ── RIGHT PANEL ── */
+.right-panel {
+  padding: 24px 20px;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+.formula-section {}
+.formula-title {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-bottom: 14px;
+}
+.formula-main {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.8;
+  margin-bottom: 16px;
+}
+.formula-parts { display: flex; flex-direction: column; gap: 8px; }
+.fpart {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+.fpart.blue { background: var(--blue-light); color: var(--blue-dark); }
+.fpart.teal { background: var(--teal-light); color: var(--teal-dark); }
+.fpart.amber { background: var(--amber-light); color: var(--amber-dark); }
+.fpart-label { font-weight: 500; }
+.fpart-val { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+.total-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 14px 12px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.total-label { font-size: 13px; color: var(--ink2); }
+.total-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+/* ── QUIZ ── */
+.quiz-section {}
+.quiz-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.quiz-title {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.quiz-refresh {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink3);
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+.quiz-refresh:hover { color: var(--ink); }
+.quiz-q {
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+.quiz-params {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.quiz-param {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--ink2);
+}
+.quiz-param strong {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  color: var(--ink);
+  font-weight: 500;
+}
+.quiz-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.quiz-input {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  background: var(--bg);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.quiz-input:focus { border-color: var(--ink); }
+.quiz-input.correct { border-color: #0f6e56; background: #e1f5ee; }
+.quiz-input.wrong { border-color: #a32d2d; background: #fcebeb; }
+.quiz-btn {
+  padding: 9px 16px;
+  background: var(--ink);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+.quiz-btn:hover { opacity: 0.8; }
+.quiz-feedback {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  min-height: 20px;
+  color: var(--ink2);
+}
+.quiz-feedback.ok { color: var(--teal-dark); }
+.quiz-feedback.no { color: #a32d2d; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">几何体<span>表面积</span>探索器</div>
+  <div class="shape-tabs">
+    <button class="shape-tab active" onclick="setShape('cuboid')">长方体</button>
+    <button class="shape-tab" onclick="setShape('cylinder')">圆柱体</button>
+    <button class="shape-tab" onclick="setShape('cone')">圆锥体</button>
+  </div>
+  <div class="mode-tabs">
+    <button class="mode-tab active" id="btn3d" onclick="setMode('3d')">立体图</button>
+    <button class="mode-tab" id="btnnet" onclick="setMode('net')">展开图</button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main>
+  <!-- LEFT -->
+  <div class="left-panel">
+    <div>
+      <div class="panel-label">参数调整</div>
+      <div class="slider-group" id="slider-group"></div>
+    </div>
+    <div class="divider"></div>
+    <div>
+      <div class="panel-label">提示</div>
+      <div style="font-size:12px;color:var(--ink2);line-height:1.8" id="hint-text">
+        拖动滑块改变几何体的尺寸，观察右侧公式如何变化。
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="center-panel" id="center-panel">
+    <canvas id="canvas3d" width="560" height="480"></canvas>
+    <div id="net-svg-wrap" style="display:none">
+      <svg id="net-svg" width="520" height="460" viewBox="0 0 520 460"></svg>
+    </div>
+    <div class="drag-hint" id="drag-hint">拖动旋转 · 滚轮缩放</div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right-panel">
+    <div class="formula-section">
+      <div class="formula-title">表面积公式</div>
+      <div class="formula-main" id="formula-main"></div>
+      <div class="formula-parts" id="formula-parts"></div>
+      <div class="total-row">
+        <span class="total-label">表面积 S =</span>
+        <span class="total-val" id="total-val">—</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="quiz-section">
+      <div class="quiz-header">
+        <span class="quiz-title">随堂测验</span>
+        <button class="quiz-refresh" onclick="newQuiz()" title="换一题">↻</button>
+      </div>
+      <div class="quiz-q" id="quiz-q"></div>
+      <div class="quiz-params" id="quiz-params"></div>
+      <div class="quiz-input-row">
+        <input type="number" class="quiz-input" id="quiz-input" placeholder="输入答案" onkeydown="if(event.key==='Enter')checkQuiz()">
+        <button class="quiz-btn" onclick="checkQuiz()">检查</button>
+      </div>
+      <div class="quiz-feedback" id="quiz-feedback"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ═══════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════ */
+let shape = 'cuboid';
+let mode = '3d';
+let params = { l:5, w:3, h:4, r:3, h2:6, rc:3, hc:4 };
+let rotX = 0.45, rotY = 0.6, scale3d = 1;
+let dragging = false, lastX = 0, lastY = 0;
+let netOffX = 0, netOffY = 0, netDragging = false, netLastX = 0, netLastY = 0, netScale = 1;
+let animProgress = 0, animating = false;
+let quizAnswer = 0, quizShape = 'cuboid', quizParams = {};
+
+const PI = Math.PI;
+
+/* ═══════════════════════════════════════════
+   SLIDERS
+═══════════════════════════════════════════ */
+const SLIDER_DEFS = {
+  cuboid:   [['l','长 l','1','10'], ['w','宽 w','1','10'], ['h','高 h','1','10']],
+  cylinder: [['r','半径 r','1','8'], ['h2','高 h','1','10']],
+  cone:     [['rc','底面半径 r','1','8'], ['hc','高 h','1','10']],
+};
+const HINTS = {
+  cuboid: '长方体有6个面：顶面、底面、前面、后面、左面、右面。每对相对的面面积相等。',
+  cylinder: '圆柱体侧面展开后是一个矩形，长 = 2πr（底面周长），宽 = h（高）。',
+  cone: '圆锥体侧面展开后是一个扇形，母线 l = √(r²+h²) 是扇形的半径。',
+};
+
+function buildSliders() {
+  const g = document.getElementById('slider-group');
+  g.innerHTML = '';
+  for (const [key, label, mn, mx] of SLIDER_DEFS[shape]) {
+    const val = params[key];
+    const row = document.createElement('div');
+    row.className = 'slider-row';
+    row.innerHTML = `
+      <div class="slider-top">
+        <span class="slider-name">${label}</span>
+        <span class="slider-val" id="sv-${key}">${val}</span>
+      </div>
+      <input type="range" min="${mn}" max="${mx}" value="${val}" step="1"
+        oninput="upd('${key}',this.value)">
+    `;
+    g.appendChild(row);
+  }
+  document.getElementById('hint-text').textContent = HINTS[shape];
+}
+
+function upd(key, val) {
+  params[key] = +val;
+  const el = document.getElementById('sv-' + key);
+  if (el) el.textContent = val;
+  render();
+  updateFormula();
+}
+
+/* ═══════════════════════════════════════════
+   MODE & SHAPE
+═══════════════════════════════════════════ */
+function setShape(s) {
+  shape = s;
+  document.querySelectorAll('.shape-tab').forEach((t,i) =>
+    t.classList.toggle('active', ['cuboid','cylinder','cone'][i] === s));
+  netOffX = 0; netOffY = 0; netScale = 1;
+  if (mode === 'net') { animProgress = 0; startNetAnim(); }
+  buildSliders();
+  render();
+  updateFormula();
+  newQuiz();
+}
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('btn3d').classList.toggle('active', m === '3d');
+  document.getElementById('btnnet').classList.toggle('active', m === 'net');
+  document.getElementById('canvas3d').style.display = m === '3d' ? 'block' : 'none';
+  document.getElementById('net-svg-wrap').style.display = m === 'net' ? 'flex' : 'none';
+  document.getElementById('drag-hint').textContent = m === '3d' ? '拖动旋转 · 滚轮缩放' : '拖动平移 · 滚轮缩放';
+  if (m === 'net') { animProgress = 0; startNetAnim(); }
+  else render();
+}
+
+/* ═══════════════════════════════════════════
+   3D RENDERER (canvas, simple projection)
+═══════════════════════════════════════════ */
+const canvas = document.getElementById('canvas3d');
+const ctx = canvas.getContext('2d');
+
+function project(p, cx, cy) {
+  const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+  const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+  let x = p[0], y = p[1], z = p[2];
+  let y2 = y*cosX - z*sinX, z2 = y*sinX + z*cosX;
+  let x3 = x*cosY + z2*sinY, z3 = -x*sinY + z2*cosY;
+  const persp = 1 + z3 * 0.002;
+  return [cx + x3 * scale3d / persp, cy - y2 * scale3d / persp, z3];
+}
+
+function drawFace(pts3d, fill, stroke, cx, cy) {
+  const proj = pts3d.map(p => project(p, cx, cy));
+  const ax = proj[1][0]-proj[0][0], ay = proj[1][1]-proj[0][1];
+  const bx = proj[2][0]-proj[0][0], by = proj[2][1]-proj[0][1];
+  if (ax*by - ay*bx > 0) return false;
+  ctx.beginPath();
+  ctx.moveTo(proj[0][0], proj[0][1]);
+  for (let i=1;i<proj.length;i++) ctx.lineTo(proj[i][0], proj[i][1]);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  return proj;
+}
+
+function labelFace(proj, text, sub, textColor) {
+  if (!proj) return;
+  const cx = proj.reduce((s,p)=>s+p[0],0)/proj.length;
+  const cy = proj.reduce((s,p)=>s+p[1],0)/proj.length;
+  ctx.fillStyle = textColor;
+  ctx.font = '500 11px "Noto Sans SC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, cx, cy - 7);
+  ctx.font = '10px "JetBrains Mono", monospace';
+  ctx.fillText(sub, cx, cy + 7);
+}
+
+function render() {
+  if (mode !== '3d') return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const cx = canvas.width/2, cy = canvas.height/2;
+  if (shape === 'cuboid') renderCuboid(cx, cy);
+  else if (shape === 'cylinder') renderCylinder(cx, cy);
+  else renderCone(cx, cy);
+}
+
+function renderCuboid(cx, cy) {
+  const {l,w,h} = params;
+  const S = 36;
+  const hl=l*S/2, hw=w*S/2, hh=h*S/2;
+  const corners = [
+    [-hl,-hh,-hw],[ hl,-hh,-hw],[ hl, hh,-hw],[-hl, hh,-hw],
+    [-hl,-hh, hw],[ hl,-hh, hw],[ hl, hh, hw],[-hl, hh, hw]
+  ];
+  const faces = [
+    { idx:[4,5,6,7], fill:'#E1F5EE', stroke:'#0F6E56', tc:'#085041', name:'前面', val:`${l}×${h}=${l*h}` },
+    { idx:[1,0,3,2], fill:'#E1F5EE', stroke:'#0F6E56', tc:'#085041', name:'后面', val:`${l}×${h}=${l*h}` },
+    { idx:[0,1,5,4], fill:'#FAEEDA', stroke:'#854F0B', tc:'#633806', name:'底面', val:`${l}×${w}=${l*w}` },
+    { idx:[3,7,6,2], fill:'#E6F1FB', stroke:'#185FA5', tc:'#0C447C', name:'顶面', val:`${l}×${w}=${l*w}` },
+    { idx:[0,4,7,3], fill:'#F5E8FB', stroke:'#7040A0', tc:'#4a2080', name:'左面', val:`${w}×${h}=${w*h}` },
+    { idx:[1,2,6,5], fill:'#F5E8FB', stroke:'#7040A0', tc:'#4a2080', name:'右面', val:`${w}×${h}=${w*h}` },
+  ];
+  const projs = faces.map(f => drawFace(f.idx.map(i=>corners[i]), f.fill, f.stroke, cx, cy));
+  faces.forEach((f,i) => labelFace(projs[i], f.name, f.val, f.tc));
+}
+
+function renderCylinder(cx, cy) {
+  const {r, h2} = params;
+  const R = r * 32, H = h2 * 28, ry = R * 0.35;
+  const top = -H/2, bot = H/2;
+  const segs = 48;
+  const pts = Array.from({length:segs}, (_,i) => {
+    const a = (i/segs)*2*PI;
+    return [Math.cos(a)*R, Math.sin(a)*ry];
+  });
+
+  function ellipsePts(yOff, flip) {
+    return pts.map(p => [p[0], yOff, (flip?-1:1)*p[1]]);
+  }
+
+  const topPts = ellipsePts(top, false);
+  const botPts = ellipsePts(bot, false);
+
+  const projBot = botPts.map(p => project(p, cx, cy));
+  ctx.beginPath();
+  projBot.forEach((p,i) => i===0 ? ctx.moveTo(p[0],p[1]) : ctx.lineTo(p[0],p[1]));
+  ctx.closePath();
+  ctx.fillStyle = '#FAEEDA'; ctx.fill();
+  ctx.strokeStyle = '#854F0B'; ctx.lineWidth=1; ctx.stroke();
+  const bcx = projBot.reduce((s,p)=>s+p[0],0)/projBot.length;
+  const bcy = projBot.reduce((s,p)=>s+p[1],0)/projBot.length;
+  ctx.fillStyle='#633806'; ctx.font='500 11px "Noto Sans SC",sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('底面', bcx, bcy-6);
+  ctx.font='10px "JetBrains Mono",monospace';
+  ctx.fillText(`πr²≈${(PI*r*r).toFixed(1)}`, bcx, bcy+7);
+
+  const leftPts3d  = [botPts[Math.round(segs*0.5)], topPts[Math.round(segs*0.5)]];
+  const rightPts3d = [botPts[0], topPts[0]];
+  const lBot = project(leftPts3d[0], cx, cy);
+  const lTop = project(leftPts3d[1], cx, cy);
+  const rBot = project(rightPts3d[0], cx, cy);
+  const rTop = project(rightPts3d[1], cx, cy);
+  ctx.beginPath();
+  ctx.moveTo(lBot[0], lBot[1]);
+  ctx.lineTo(lTop[0], lTop[1]);
+  ctx.lineTo(rTop[0], rTop[1]);
+  ctx.lineTo(rBot[0], rBot[1]);
+  ctx.closePath();
+  ctx.fillStyle='#E1F5EE'; ctx.fill();
+  ctx.strokeStyle='#0F6E56'; ctx.lineWidth=1; ctx.stroke();
+  const scx=(lBot[0]+lTop[0]+rTop[0]+rBot[0])/4;
+  const scy=(lBot[1]+lTop[1]+rTop[1]+rBot[1])/4;
+  ctx.fillStyle='#085041'; ctx.font='500 11px "Noto Sans SC",sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('侧面', scx, scy-6);
+  ctx.font='10px "JetBrains Mono",monospace';
+  ctx.fillText(`2πr·h≈${(2*PI*r*h2).toFixed(1)}`, scx, scy+7);
+
+  const projTop = topPts.map(p => project(p, cx, cy));
+  ctx.beginPath();
+  projTop.forEach((p,i) => i===0 ? ctx.moveTo(p[0],p[1]) : ctx.lineTo(p[0],p[1]));
+  ctx.closePath();
+  ctx.fillStyle='#E6F1FB'; ctx.fill();
+  ctx.strokeStyle='#185FA5'; ctx.lineWidth=1; ctx.stroke();
+  const tcx=projTop.reduce((s,p)=>s+p[0],0)/projTop.length;
+  const tcy=projTop.reduce((s,p)=>s+p[1],0)/projTop.length;
+  ctx.fillStyle='#0C447C'; ctx.font='500 11px "Noto Sans SC",sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('顶面', tcx, tcy-6);
+  ctx.font='10px "JetBrains Mono",monospace';
+  ctx.fillText(`πr²≈${(PI*r*r).toFixed(1)}`, tcx, tcy+7);
+}
+
+function renderCone(cx, cy) {
+  const {rc, hc} = params;
+  const R = rc*32, H = hc*28, ry = R*0.35;
+  const apex = [0, -H/2, 0];
+  const segs = 48;
+  const basePts = Array.from({length:segs}, (_,i) => {
+    const a = (i/segs)*2*PI;
+    return [Math.cos(a)*R, H/2, Math.sin(a)*ry];
+  });
+
+  const projBase = basePts.map(p => project(p, cx, cy));
+  ctx.beginPath();
+  projBase.forEach((p,i) => i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]));
+  ctx.closePath();
+  ctx.fillStyle='#FAEEDA'; ctx.fill();
+  ctx.strokeStyle='#854F0B'; ctx.lineWidth=1; ctx.stroke();
+  const bcx=projBase.reduce((s,p)=>s+p[0],0)/projBase.length;
+  const bcy=projBase.reduce((s,p)=>s+p[1],0)/projBase.length;
+  ctx.fillStyle='#633806'; ctx.font='500 11px "Noto Sans SC",sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('底面', bcx, bcy);
+  ctx.font='10px "JetBrains Mono",monospace';
+  ctx.fillText(`πr²≈${(PI*rc*rc).toFixed(1)}`, bcx, bcy+14);
+
+  const projApex = project(apex, cx, cy);
+  const leftIdx = Math.round(segs*0.5);
+  const rightIdx = 0;
+  const projL = project(basePts[leftIdx], cx, cy);
+  const projR = project(basePts[rightIdx], cx, cy);
+  ctx.beginPath();
+  ctx.moveTo(projApex[0],projApex[1]);
+  projBase.forEach(p=>ctx.lineTo(p[0],p[1]));
+  ctx.closePath();
+  ctx.fillStyle='#E1F5EE'; ctx.fill();
+  ctx.strokeStyle='#0F6E56'; ctx.lineWidth=1; ctx.stroke();
+  const l = Math.sqrt(rc*rc+hc*hc);
+  const scx=(projApex[0]+projL[0]+projR[0])/3;
+  const scy=(projApex[1]+projL[1]+projR[1])/3-10;
+  ctx.fillStyle='#085041'; ctx.font='500 11px "Noto Sans SC",sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('侧面', scx, scy);
+  ctx.font='10px "JetBrains Mono",monospace';
+  ctx.fillText(`πrl≈${(PI*rc*l).toFixed(1)}`, scx, scy+13);
+}
+
+/* ═══════════════════════════════════════════
+   NET (EXPAND ANIMATION)
+═══════════════════════════════════════════ */
+function startNetAnim() {
+  if (animating) return;
+  animating = true;
+  animProgress = 0;
+  const start = Date.now();
+  const dur = 800;
+  function frame() {
+    const t = Math.min((Date.now()-start)/dur, 1);
+    animProgress = t<0.5 ? 2*t*t : (4-2*t)*t-1;
+    drawNet(animProgress);
+    if (t < 1) requestAnimationFrame(frame);
+    else { animating = false; animProgress = 1; }
+  }
+  requestAnimationFrame(frame);
+}
+
+function drawNet(p) {
+  const svgEl = document.getElementById('net-svg');
+  while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('transform', `translate(${260+netOffX},${230+netOffY}) scale(${netScale})`);
+  svgEl.appendChild(g);
+  if (shape === 'cuboid') netCuboid(g, p);
+  else if (shape === 'cylinder') netCylinder(g, p);
+  else netCone(g, p);
+}
+
+function svgRect(parent, x, y, w, h, fill, stroke, rx=3) {
+  const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  r.setAttribute('x',x); r.setAttribute('y',y);
+  r.setAttribute('width',w); r.setAttribute('height',h);
+  r.setAttribute('fill',fill); r.setAttribute('stroke',stroke);
+  r.setAttribute('stroke-width','1'); r.setAttribute('rx',rx);
+  parent.appendChild(r);
+}
+function svgTxt(parent, x, y, text, fill, sz=11, fw=400) {
+  const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+  t.setAttribute('x',x); t.setAttribute('y',y);
+  t.setAttribute('text-anchor','middle'); t.setAttribute('dominant-baseline','central');
+  t.setAttribute('fill',fill); t.setAttribute('font-size',sz);
+  t.setAttribute('font-weight',fw); t.setAttribute('font-family','Noto Sans SC, sans-serif');
+  t.textContent = text; parent.appendChild(t);
+}
+function svgMonoTxt(parent, x, y, text, fill, sz=10) {
+  const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+  t.setAttribute('x',x); t.setAttribute('y',y);
+  t.setAttribute('text-anchor','middle'); t.setAttribute('dominant-baseline','central');
+  t.setAttribute('fill',fill); t.setAttribute('font-size',sz);
+  t.setAttribute('font-family','JetBrains Mono, monospace');
+  t.textContent = text; parent.appendChild(t);
+}
+
+function faceLabel(parent, cx, cy, name, dim, tc, opacity=1) {
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('opacity', opacity.toFixed(2));
+  svgTxt(g, cx, cy-7, name, tc, 11, 500);
+  svgMonoTxt(g, cx, cy+7, dim, tc, 10);
+  parent.appendChild(g);
+}
+
+function netCuboid(g, p) {
+  const {l,w,h} = params;
+  const S = 28, gap = 4*p;
+  const lS=l*S, wS=w*S, hS=h*S;
+  const ox=0, oy=0;
+  const op = p > 0.5 ? (p-0.5)*2 : 0;
+  const faces = [
+    {x:ox, y:oy-wS-gap, w:lS, h:wS, fill:'#E6F1FB', stroke:'#185FA5', tc:'#0C447C', name:'顶面', dim:`${l}×${w}=${l*w}`},
+    {x:ox, y:oy, w:lS, h:hS, fill:'#E1F5EE', stroke:'#0F6E56', tc:'#085041', name:'前面', dim:`${l}×${h}=${l*h}`},
+    {x:ox, y:oy+hS+gap, w:lS, h:wS, fill:'#FAEEDA', stroke:'#854F0B', tc:'#633806', name:'底面', dim:`${l}×${w}=${l*w}`},
+    {x:ox-wS-gap, y:oy, w:wS, h:hS, fill:'#F5E8FB', stroke:'#7040A0', tc:'#4a2080', name:'左面', dim:`${w}×${h}=${w*h}`},
+    {x:ox+lS+gap, y:oy, w:wS, h:hS, fill:'#F5E8FB', stroke:'#7040A0', tc:'#4a2080', name:'右面', dim:`${w}×${h}=${w*h}`},
+    {x:ox, y:oy+hS+wS+gap*2, w:lS, h:hS, fill:'#E1F5EE', stroke:'#0F6E56', tc:'#085041', name:'后面', dim:`${l}×${h}=${l*h}`},
+  ];
+  const centers = faces.map(f => ({cx:f.x+f.w/2, cy:f.y+f.h/2}));
+  const lerp = (a,b,t) => a+(b-a)*t;
+  for (let i=0;i<faces.length;i++) {
+    const f = faces[i];
+    const fc = centers[i];
+    const startCY = 0 + hS/2;
+    const fy = lerp(startCY - f.h/2, f.y, p);
+    svgRect(g, f.x, fy, f.w, f.h, f.fill, f.stroke);
+    faceLabel(g, fc.cx, fy+f.h/2, f.name, f.dim, f.tc, op);
+  }
+}
+
+function netCylinder(g, p) {
+  const {r, h2} = params;
+  const rw = r*20, rh = r*10;
+  const rectW = Math.round(2*PI*r*18), rectH = h2*20;
+  const gap = 5*p;
+  const op = p > 0.4 ? (p-0.4)/0.6 : 0;
+  const topY = -rh-rectH/2-gap;
+  const midY = -rectH/2;
+  const botY = rectH/2+gap;
+
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const topCurY = lerp(-rectH/2, topY+rh, p);
+  svgRect(g, -rectW/2, midY, rectW, rectH, '#E1F5EE', '#0F6E56');
+  const op2 = p > 0.3 ? (p-0.3)/0.7 : 0;
+  const sg = document.createElementNS('http://www.w3.org/2000/svg','g');
+  sg.setAttribute('opacity', op2.toFixed(2));
+  svgTxt(sg, 0, 0, '侧面（展开矩形）', '#085041', 11, 500);
+  svgMonoTxt(sg, 0, 14, `2πr×h≈${(2*PI*r*h2).toFixed(1)}`, '#085041', 10);
+  g.appendChild(sg);
+
+  const ellTop = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+  ellTop.setAttribute('cx',0); ellTop.setAttribute('cy',topCurY);
+  ellTop.setAttribute('rx',rw); ellTop.setAttribute('ry',rh);
+  ellTop.setAttribute('fill','#E6F1FB'); ellTop.setAttribute('stroke','#185FA5'); ellTop.setAttribute('stroke-width','1');
+  g.appendChild(ellTop);
+  const tg = document.createElementNS('http://www.w3.org/2000/svg','g');
+  tg.setAttribute('opacity', op.toFixed(2));
+  svgTxt(tg, 0, topCurY-6, '顶面', '#0C447C', 11, 500);
+  svgMonoTxt(tg, 0, topCurY+8, `πr²≈${(PI*r*r).toFixed(1)}`, '#0C447C', 10);
+  g.appendChild(tg);
+
+  const botCurY = lerp(rectH/2, botY+rh, p);
+  const ellBot = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+  ellBot.setAttribute('cx',0); ellBot.setAttribute('cy',botCurY);
+  ellBot.setAttribute('rx',rw); ellBot.setAttribute('ry',rh);
+  ellBot.setAttribute('fill','#FAEEDA'); ellBot.setAttribute('stroke','#854F0B'); ellBot.setAttribute('stroke-width','1');
+  g.appendChild(ellBot);
+  const bg = document.createElementNS('http://www.w3.org/2000/svg','g');
+  bg.setAttribute('opacity', op.toFixed(2));
+  svgTxt(bg, 0, botCurY-6, '底面', '#633806', 11, 500);
+  svgMonoTxt(bg, 0, botCurY+8, `πr²≈${(PI*r*r).toFixed(1)}`, '#633806', 10);
+  g.appendChild(bg);
+}
+
+function netCone(g, p) {
+  const {rc, hc} = params;
+  const slant = Math.sqrt(rc*rc+hc*hc);
+  const R = slant * 24;
+  const theta = rc/slant;
+  const sectorAngle = 2*PI*theta;
+  const startA = -PI/2 - sectorAngle/2;
+  const endA = -PI/2 + sectorAngle/2;
+  const large = sectorAngle > PI ? 1 : 0;
+  const spread = p * 70;
+  const scy = -spread/2;
+
+  const x1=R*Math.cos(startA), y1=R*Math.sin(startA)+scy;
+  const x2=R*Math.cos(endA),   y2=R*Math.sin(endA)+scy;
+  const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.setAttribute('d', `M0,${scy} L${x1},${y1} A${R},${R} 0 ${large},1 ${x2},${y2} Z`);
+  path.setAttribute('fill','#E1F5EE'); path.setAttribute('stroke','#0F6E56'); path.setAttribute('stroke-width','1');
+  g.appendChild(path);
+  const op = p > 0.4 ? (p-0.4)/0.6 : 0;
+  const pg = document.createElementNS('http://www.w3.org/2000/svg','g');
+  pg.setAttribute('opacity', op.toFixed(2));
+  svgTxt(pg, 0, scy+R*0.45, '侧面（扇形）', '#085041', 11, 500);
+  svgMonoTxt(pg, 0, scy+R*0.45+14, `πrl≈${(PI*rc*slant).toFixed(1)}`, '#085041', 10);
+  g.appendChild(pg);
+
+  const bRw = rc*22, bRh = rc*11;
+  const botCY = scy + R*0.85 + spread*0.3;
+  const ell = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+  ell.setAttribute('cx',0); ell.setAttribute('cy',botCY);
+  ell.setAttribute('rx',bRw); ell.setAttribute('ry',bRh);
+  ell.setAttribute('fill','#FAEEDA'); ell.setAttribute('stroke','#854F0B'); ell.setAttribute('stroke-width','1');
+  g.appendChild(ell);
+  const bg = document.createElementNS('http://www.w3.org/2000/svg','g');
+  bg.setAttribute('opacity', (p>0.5?(p-0.5)*2:0).toFixed(2));
+  svgTxt(bg, 0, botCY-6, '底面', '#633806', 11, 500);
+  svgMonoTxt(bg, 0, botCY+8, `πr²≈${(PI*rc*rc).toFixed(1)}`, '#633806', 10);
+  g.appendChild(bg);
+}
+
+/* ═══════════════════════════════════════════
+   FORMULA
+═══════════════════════════════════════════ */
+function updateFormula() {
+  const fm = document.getElementById('formula-main');
+  const fp = document.getElementById('formula-parts');
+  const tv = document.getElementById('total-val');
+  fp.innerHTML = '';
+
+  function part(label, val, cls) {
+    const d = document.createElement('div');
+    d.className = 'fpart '+cls;
+    d.innerHTML = `<span class="fpart-label">${label}</span><span class="fpart-val">${val}</span>`;
+    fp.appendChild(d);
+  }
+
+  if (shape === 'cuboid') {
+    const {l,w,h} = params;
+    const lw=l*w, lh=l*h, wh=w*h, total=2*(lw+lh+wh);
+    fm.textContent = 'S = 2(lw + lh + wh)';
+    part('顶面 + 底面', `2×${l}×${w} = ${2*lw}`, 'blue');
+    part('前面 + 后面', `2×${l}×${h} = ${2*lh}`, 'teal');
+    part('左面 + 右面', `2×${w}×${h} = ${2*wh}`, 'amber');
+    tv.textContent = total;
+  } else if (shape === 'cylinder') {
+    const {r,h2} = params;
+    const top2=(2*PI*r*r), side=(2*PI*r*h2), total=top2+side;
+    fm.textContent = 'S = 2πr² + 2πrh';
+    part('顶面 + 底面', `2π×${r}² ≈ ${top2.toFixed(1)}`, 'blue');
+    part('侧面（矩形）', `2π×${r}×${h2} ≈ ${side.toFixed(1)}`, 'teal');
+    tv.textContent = '≈ '+total.toFixed(1);
+  } else {
+    const {rc,hc} = params;
+    const l=Math.sqrt(rc*rc+hc*hc);
+    const base=PI*rc*rc, side=PI*rc*l, total=base+side;
+    fm.innerHTML = `S = πr² + πrl<br><small style="font-size:11px;color:var(--ink3)">母线 l = √(r²+h²) ≈ ${l.toFixed(2)}</small>`;
+    part('底面', `π×${rc}² ≈ ${base.toFixed(1)}`, 'blue');
+    part('侧面（扇形）', `π×${rc}×${l.toFixed(2)} ≈ ${side.toFixed(1)}`, 'teal');
+    tv.textContent = '≈ '+total.toFixed(1);
+  }
+}
+
+/* ═══════════════════════════════════════════
+   QUIZ
+═══════════════════════════════════════════ */
+const QUIZ_TYPES = {
+  cuboid: [
+    (p) => ({ q:`一个长方体，长${p.l}、宽${p.w}、高${p.h}，表面积是多少？`, a: 2*(p.l*p.w+p.l*p.h+p.w*p.h), params:[['长',p.l],['宽',p.w],['高',p.h]] }),
+    (p) => ({ q:`长方体前面和后面的面积之和是多少？`, a: 2*p.l*p.h, params:[['长',p.l],['高',p.h]] }),
+    (p) => ({ q:`长方体顶面和底面的面积之和是多少？`, a: 2*p.l*p.w, params:[['长',p.l],['宽',p.w]] }),
+  ],
+  cylinder: [
+    (p) => ({ q:`一个圆柱体，半径${p.r}、高${p.h2}，侧面展开面积是多少？（π≈3.14，答案保留1位小数）`, a: +(2*3.14*p.r*p.h2).toFixed(1), params:[['半径r',p.r],['高h',p.h2]] }),
+    (p) => ({ q:`圆柱体底面圆的面积是多少？（π≈3.14，保留1位小数）`, a: +(3.14*p.r*p.r).toFixed(1), params:[['半径r',p.r]] }),
+    (p) => { const s=(2*3.14*p.r*p.r+2*3.14*p.r*p.h2).toFixed(1); return { q:`圆柱体总表面积是多少？（π≈3.14，保留1位小数）`, a: +s, params:[['半径r',p.r],['高h',p.h2]] }; },
+  ],
+  cone: [
+    (p) => { const l=Math.sqrt(p.rc*p.rc+p.hc*p.hc); return { q:`圆锥体侧面积是多少？（π≈3.14，母线l=√(r²+h²)，保留1位小数）`, a: +(3.14*p.rc*l).toFixed(1), params:[['底面半径r',p.rc],['高h',p.hc],['母线l',l.toFixed(2)]] }; },
+    (p) => { const l=Math.sqrt(p.rc*p.rc+p.hc*p.hc); const s=(3.14*p.rc*p.rc+3.14*p.rc*l).toFixed(1); return { q:`圆锥体总表面积是多少？（π≈3.14，保留1位小数）`, a: +s, params:[['底面半径r',p.rc],['高h',p.hc],['母线l',l.toFixed(2)]] }; },
+    (p) => ({ q:`圆锥体底面圆的面积是多少？（π≈3.14，保留1位小数）`, a: +(3.14*p.rc*p.rc).toFixed(1), params:[['底面半径r',p.rc]] }),
+  ],
+};
+
+function randInt(a, b) { return Math.floor(Math.random()*(b-a+1))+a; }
+
+function newQuiz() {
+  const qShape = shape;
+  const qp = qShape==='cuboid'
+    ? {l:randInt(2,8),w:randInt(2,6),h:randInt(2,8)}
+    : qShape==='cylinder'
+    ? {r:randInt(2,6),h2:randInt(3,8)}
+    : {rc:randInt(2,5),hc:randInt(3,8)};
+  const pool = QUIZ_TYPES[qShape];
+  const chosen = pool[Math.floor(Math.random()*pool.length)](qp);
+  quizAnswer = chosen.a;
+  quizShape = qShape;
+  document.getElementById('quiz-q').textContent = chosen.q;
+  const pDiv = document.getElementById('quiz-params');
+  pDiv.innerHTML = chosen.params.map(([n,v])=>
+    `<div class="quiz-param"><span>${n}</span><strong>${v}</strong></div>`
+  ).join('');
+  const inp = document.getElementById('quiz-input');
+  inp.value = '';
+  inp.className = 'quiz-input';
+  document.getElementById('quiz-feedback').textContent = '';
+  document.getElementById('quiz-feedback').className = 'quiz-feedback';
+}
+
+function checkQuiz() {
+  const inp = document.getElementById('quiz-input');
+  const fb = document.getElementById('quiz-feedback');
+  const userVal = parseFloat(inp.value);
+  if (isNaN(userVal)) { fb.textContent = '请输入一个数字。'; fb.className='quiz-feedback'; return; }
+  const diff = Math.abs(userVal - quizAnswer);
+  const tol = Math.abs(quizAnswer) * 0.02 + 0.15;
+  if (diff <= tol) {
+    inp.className = 'quiz-input correct';
+    fb.textContent = '正确！换一题试试？点击右上角 ↻';
+    fb.className = 'quiz-feedback ok';
+  } else {
+    inp.className = 'quiz-input wrong';
+    fb.textContent = `还差一点，正确答案是 ${quizAnswer}。再想想公式？`;
+    fb.className = 'quiz-feedback no';
+  }
+}
+
+/* ═══════════════════════════════════════════
+   DRAG & ZOOM (3D)
+═══════════════════════════════════════════ */
+canvas.addEventListener('pointerdown', e => {
+  dragging=true; lastX=e.clientX; lastY=e.clientY; canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  rotY += dx*0.012; rotX += dy*0.012;
+  lastX=e.clientX; lastY=e.clientY;
+  render();
+});
+canvas.addEventListener('pointerup', () => dragging=false);
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  scale3d = Math.max(0.5, Math.min(2.5, scale3d - e.deltaY*0.001));
+  render();
+}, {passive:false});
+
+/* NET DRAG & ZOOM */
+const netWrap = document.getElementById('net-svg-wrap');
+netWrap.addEventListener('pointerdown', e => {
+  netDragging=true; netLastX=e.clientX; netLastY=e.clientY; netWrap.setPointerCapture(e.pointerId);
+});
+netWrap.addEventListener('pointermove', e => {
+  if (!netDragging) return;
+  netOffX += e.clientX-netLastX;
+  netOffY += e.clientY-netLastY;
+  netLastX=e.clientX; netLastY=e.clientY;
+  drawNet(animProgress);
+});
+netWrap.addEventListener('pointerup', () => netDragging=false);
+netWrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  netScale = Math.max(0.4, Math.min(3, netScale - e.deltaY*0.001));
+  drawNet(animProgress);
+}, {passive:false});
+
+/* ═══════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════ */
+buildSliders();
+render();
+updateFormula();
+newQuiz();
+</script>
+</body>
+</html>

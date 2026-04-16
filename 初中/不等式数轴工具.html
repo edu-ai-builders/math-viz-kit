@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>不等式数轴工具 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="不等式">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="用数轴高亮区间展示不等式解集，理解解集与数轴的对应">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:700px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:700px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .ineq-input{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;}
+    .ineq-title{font-size:13px;color:var(--ink2);margin-bottom:10px;}
+    .ineq-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .coeff-input,.num-input{width:60px;height:40px;text-align:center;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;background:var(--surface);}
+    .coeff-input:focus,.num-input:focus{border-color:var(--blue);outline:none;}
+    .op-sign{font-size:22px;color:var(--ink2);}
+    .ineq-sel{height:40px;padding:0 10px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-family:'JetBrains Mono',monospace;background:var(--surface);cursor:pointer;}
+    .ineq-sel:focus{border-color:var(--blue);outline:none;}
+    .solve-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+    .btn{padding:10px;border:none;border-radius:var(--radius-sm);font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;transition:all .2s;}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-primary:hover{background:var(--blue-dark);}
+    .btn-secondary{background:var(--surface);color:var(--blue);border:2px solid var(--blue);}
+    .btn-secondary:hover{background:var(--blue-light);}
+    .solution{background:var(--blue-light);border:2px solid var(--blue);border-radius:var(--radius);padding:12px 18px;font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    canvas{width:100%;height:120px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .step-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;opacity:0;transition:opacity .4s;}
+    .step-box.show{opacity:1;}
+    .step-item{font-size:14px;padding:4px 0;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace;}
+    .step-item:last-child{border-bottom:none;}
+    .step-note{font-family:'Noto Sans SC',sans-serif;font-size:12px;color:var(--teal);margin-left:8px;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;opacity:0;transition:opacity .5s;}
+    .fb.show{opacity:1;}
+    @media(max-width:500px){.ineq-row{gap:6px;}.solve-row{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 不等式 · 认知动作：比较</div>
+  <h1>不等式数轴工具</h1>
+  <p class="sub">输入不等式，逐步求解，数轴高亮显示解集区间</p>
+</header>
+<main>
+  <div class="ineq-input">
+    <div class="ineq-title">输入一元一次不等式：</div>
+    <div class="ineq-row">
+      <input type="number" class="coeff-input" id="coeffInput" value="2" step="1">
+      <span class="op-sign">x</span>
+      <select class="ineq-sel" id="addSign">
+        <option value="+">+</option>
+        <option value="-">−</option>
+      </select>
+      <input type="number" class="num-input" id="addInput" value="3" step="1" min="0">
+      <select class="ineq-sel" id="ineqSign">
+        <option value="<">&lt;</option>
+        <option value=">">&gt;</option>
+        <option value="<=">&le;</option>
+        <option value=">=">&ge;</option>
+      </select>
+      <input type="number" class="num-input" id="rhsInput" value="11" step="1">
+    </div>
+    <div class="solve-row">
+      <button class="btn btn-primary" onclick="solve()">求解不等式</button>
+      <button class="btn btn-secondary" onclick="resetAll()">重置</button>
+    </div>
+  </div>
+  <div class="solution" id="solution">解集：等待输入</div>
+  <canvas id="cvs"></canvas>
+  <div class="step-box" id="stepBox"><strong>解题步骤：</strong><div id="steps"></div></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：比较
+// V1 动态跃迁：求解后数轴区间立即高亮，解集的"范围"可见
+// V2 表征桥接：不等式符号 + 解题步骤 + 数轴三联动
+// V3 分步揭示：先显示解，再显示步骤，再显示数轴
+// V5 操作先于符号：先看数轴上的区间，再理解符号含义
+// V7 单一认知动作：比较（什么范围内的x满足条件）
+// V8 概念反馈：揭示"解集是满足不等式的所有x的集合"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let solution=null; // {val, sign, isInclusive}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=120*dpr; ctx.scale(dpr,dpr); cvs.style.height='120px';
+}
+
+function drawAxis(){
+  const W=cvs.getBoundingClientRect().width, H=120;
+  ctx.clearRect(0,0,W,H);
+  if(!solution) return;
+
+  const {val,sign,isInclusive}=solution;
+  const margin=40, axisY=60;
+  const range=[-10,10];
+  const axisW=W-2*margin;
+  function toX(v){return margin+(v-range[0])/(range[1]-range[0])*axisW;}
+
+  // Shade region
+  const shadeRight=(sign==='>'||sign==='>=');
+  const shadeX=toX(val);
+  ctx.fillStyle=C.blue+'33';
+  if(shadeRight) ctx.fillRect(shadeX,axisY-18,W-margin-shadeX,36);
+  else ctx.fillRect(margin,axisY-18,shadeX-margin,36);
+
+  // Axis
+  ctx.strokeStyle=C.ink2; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(margin,axisY); ctx.lineTo(W-margin,axisY); ctx.stroke();
+  // Arrows
+  ctx.fillStyle=C.ink2;
+  ctx.beginPath(); ctx.moveTo(W-margin,axisY); ctx.lineTo(W-margin-8,axisY-5); ctx.lineTo(W-margin-8,axisY+5); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(margin,axisY); ctx.lineTo(margin+8,axisY-5); ctx.lineTo(margin+8,axisY+5); ctx.closePath(); ctx.fill();
+
+  // Ticks
+  for(let v=range[0];v<=range[1];v++){
+    const x=toX(v);
+    ctx.strokeStyle=v===0?C.ink:C.ink3; ctx.lineWidth=v===0?2:1;
+    ctx.beginPath(); ctx.moveTo(x,axisY-7); ctx.lineTo(x,axisY+7); ctx.stroke();
+    ctx.fillStyle=C.ink2; ctx.font=`11px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+    if(v%2===0||Math.abs(v)<=3) ctx.fillText(v,x,axisY+10);
+  }
+
+  // Solution point
+  const px=toX(val);
+  ctx.strokeStyle=C.blue; ctx.lineWidth=3;
+  ctx.beginPath();
+  if(isInclusive){
+    ctx.fillStyle=C.blue;
+    ctx.beginPath(); ctx.arc(px,axisY,7,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(px,axisY,2,0,Math.PI*2); ctx.fill();
+  } else {
+    ctx.strokeStyle=C.blue; ctx.fillStyle=C.surf; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(px,axisY,7,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  }
+
+  // Arrow on shade direction
+  const arrowX=shadeRight?(W-margin-16):(margin+16);
+  ctx.strokeStyle=C.blue; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(shadeRight?px+10:px-10,axisY);
+  ctx.lineTo(arrowX,axisY); ctx.stroke();
+  ctx.fillStyle=C.blue;
+  ctx.beginPath();
+  if(shadeRight){ctx.moveTo(arrowX+8,axisY);ctx.lineTo(arrowX-2,axisY-5);ctx.lineTo(arrowX-2,axisY+5);}
+  else{ctx.moveTo(arrowX-8,axisY);ctx.lineTo(arrowX+2,axisY-5);ctx.lineTo(arrowX+2,axisY+5);}
+  ctx.closePath(); ctx.fill();
+
+  // Label on value
+  ctx.fillStyle=C.blue; ctx.font=`bold 13px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText(`x${sign}${val}`,px,axisY-22);
+  ctx.font=`11px 'Noto Sans SC',sans-serif`;
+  ctx.fillText(isInclusive?'（包含）':'（不包含）',px,axisY-10);
+}
+
+function solve(){
+  const a=parseFloat(document.getElementById('coeffInput').value)||1;
+  const addSgn=document.getElementById('addSign').value;
+  const b=parseFloat(document.getElementById('addInput').value)||0;
+  const bVal=addSgn==='+'?b:-b;
+  const ineq=document.getElementById('ineqSign').value;
+  const rhs=parseFloat(document.getElementById('rhsInput').value)||0;
+
+  // ax + bVal [ineq] rhs
+  // Step 1: ax [ineq] rhs - bVal
+  const step1rhs=rhs-bVal;
+  // Step 2: x [ineq'] step1rhs/a (if a<0, flip ineq)
+  let finalIneq=ineq;
+  let xVal;
+
+  if(a===0){
+    document.getElementById('solution').textContent=bVal<=rhs?'解集：所有实数':' 无解';
+    drawAxis(); return;
+  }
+  if(a<0){
+    // Flip inequality
+    const flips={'<':'>','>':'<','<=':'>=','>=':'<='};
+    finalIneq=flips[ineq];
+  }
+  xVal=step1rhs/a;
+
+  solution={val:Math.round(xVal*100)/100,sign:finalIneq,isInclusive:finalIneq.includes('=')};
+
+  // Display solution
+  const solEl=document.getElementById('solution');
+  solEl.textContent=`解集：x ${finalIneq} ${solution.val}`;
+
+  // Steps
+  const bStr=Math.abs(bVal)>0?`${bVal>0?' + '+bVal:' - '+Math.abs(bVal)}`:'';
+  const steps=document.getElementById('steps');
+  const ineqStr=ineq.replace('<=','≤').replace('>=','≥');
+  const finalStr=finalIneq.replace('<=','≤').replace('>=','≥');
+  steps.innerHTML=`
+    <div class="step-item">${a}x${bStr} ${ineqStr} ${rhs} <span class="step-note">原不等式</span></div>
+    <div class="step-item">${a}x ${ineqStr} ${rhs} − ${bVal>0?bVal:`(${bVal})`} = ${step1rhs} <span class="step-note">两边减去 ${bVal}</span></div>
+    <div class="step-item">x ${finalStr} ${step1rhs} ÷ ${a} = <strong>${solution.val}</strong> <span class="step-note">${a<0?'两边除以负数，不等号方向改变':'两边除以 '+a}</span></div>`;
+  document.getElementById('stepBox').classList.add('show');
+
+  // Feedback V8
+  const fb=document.getElementById('fb');
+  const setDesc=finalIneq==='<'?`小于 ${solution.val} 的所有实数`:finalIneq==='>'?`大于 ${solution.val} 的所有实数`:finalIneq==='<='?`不超过 ${solution.val} 的所有实数`:`不小于 ${solution.val} 的所有实数`;
+  fb.innerHTML=`解集是：<strong>${setDesc}</strong>，即数轴上 <strong>x ${finalIneq} ${solution.val}</strong> 的区间（${solution.isInclusive?'包含端点，用实心圆点':'不包含端点，用空心圆点'}）。${a<0?'<br>⚠️ 注意：两边除以<strong>负数</strong>时，不等号方向必须<strong>改变</strong>！':''}`;
+  fb.classList.add('show');
+  setup(); drawAxis();
+}
+
+function resetAll(){
+  solution=null;
+  document.getElementById('solution').textContent='解集：等待输入';
+  document.getElementById('stepBox').classList.remove('show');
+  document.getElementById('fb').classList.remove('show');
+  setup(); drawAxis();
+}
+
+window.addEventListener('resize',()=>{setup();drawAxis();});
+setup();
+</script>
+</body>
+</html>

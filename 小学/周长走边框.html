@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>周长走边框 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="周长">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="小虫沿矩形边行走，逐段累加边长，直观理解周长的含义">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;
+      --blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;
+      --teal:#0f6e56;--teal-light:#e1f5ee;
+      --amber:#854f0b;--amber-light:#faeeda;
+      --radius:12px;--radius-sm:8px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:680px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:680px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .sliders{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:6px;}
+    .sl-label{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .progress-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 18px;}
+    .progress-label{font-size:13px;color:var(--ink2);margin-bottom:6px;}
+    .track{height:12px;background:var(--bg);border-radius:6px;overflow:hidden;}
+    .fill{height:100%;background:var(--blue);border-radius:6px;transition:width .1s linear;}
+    .seg-labels{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;}
+    .seg-tag{font-size:12px;padding:3px 8px;border-radius:10px;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;height:300px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .btn{padding:12px;border:none;border-radius:var(--radius);font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;transition:all .2s;}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-primary:hover{background:var(--blue-dark);}
+    .btn-secondary{background:var(--surface);color:var(--blue);border:2px solid var(--blue);}
+    .btn-secondary:hover{background:var(--blue-light);}
+    .result{background:var(--blue-light);border:2px solid var(--blue);border-radius:var(--radius);padding:14px 18px;text-align:center;font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);opacity:0;transition:opacity .5s;}
+    .result.show{opacity:1;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;opacity:0;transition:opacity .5s;}
+    .fb.show{opacity:1;}
+    @media(max-width:500px){.sliders{grid-template-columns:1fr;}.btns{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 周长 · 认知动作：累积</div>
+  <h1>周长走边框</h1>
+  <p class="sub">小虫绕着矩形爬一圈，每段边的长度加起来就是周长</p>
+</header>
+<main>
+  <div class="sliders">
+    <div class="sl-row">
+      <div class="sl-label">长度</div>
+      <div class="sl-val" id="lenVal" style="color:var(--blue)">6</div>
+      <input type="range" id="lenSl" min="2" max="10" value="6">
+    </div>
+    <div class="sl-row">
+      <div class="sl-label">宽度</div>
+      <div class="sl-val" id="widVal" style="color:var(--teal)">4</div>
+      <input type="range" id="widSl" min="1" max="8" value="4">
+    </div>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-label">行走进度：<span id="progressText">等待出发</span></div>
+    <div class="track"><div class="fill" id="progFill" style="width:0%"></div></div>
+    <div class="seg-labels" id="segLabels"></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="btns">
+    <button class="btn btn-primary" id="walkBtn" onclick="startWalk()">🐛 出发！</button>
+    <button class="btn btn-secondary" onclick="resetWalk()">重置</button>
+  </div>
+  <div class="result" id="result"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：累积
+// V1 动态跃迁：小虫沿边爬行，路径逐段高亮，周长逐步累积
+// V3 分步揭示：先行走，走完才显示周长公式
+// V5 操作先于符号：先看爬行，再看"(长+宽)×2"
+// V6 动作-数学一致：爬过一段边 = 计数增加该段长度
+// V7 单一认知动作：累积（逐段相加）
+// V8 概念反馈：揭示"周长=绕一圈走的总路程"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',amberL:'#faeeda',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let len=6,wid=4,animId=null,walkT=0,isWalking=false;
+const segColors=[C.blue,C.teal,C.amber,'#7b3fa0'];
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=300*dpr; ctx.scale(dpr,dpr); cvs.style.height='300px';
+}
+
+// Rectangle corners: top-left → top-right → bottom-right → bottom-left → top-left
+// Segments: top(len), right(wid), bottom(len), left(wid)
+function getSegments(cx,cy,rw,rh){
+  return [
+    {x0:cx,y0:cy,x1:cx+rw,y1:cy,length:len,label:`上边: ${len}`,color:segColors[0]},
+    {x0:cx+rw,y0:cy,x1:cx+rw,y1:cy+rh,length:wid,label:`右边: ${wid}`,color:segColors[1]},
+    {x0:cx+rw,y0:cy+rh,x1:cx,y1:cy+rh,length:len,label:`下边: ${len}`,color:segColors[2]},
+    {x0:cx,y0:cy+rh,x1:cx,y1:cy,length:wid,label:`左边: ${wid}`,color:segColors[3]},
+  ];
+}
+
+function getRectParams(W,H){
+  const scale=Math.min((W-80)/len,(H-80)/wid,40);
+  const rw=len*scale, rh=wid*scale;
+  const cx=(W-rw)/2, cy=(H-rh)/2;
+  return {cx,cy,rw,rh,scale};
+}
+
+function totalPerim(){return 2*(len+wid);}
+
+function walkProgress(){
+  // walkT: 0..1 = full perimeter
+  const perim=totalPerim();
+  const segs=[len,wid,len,wid];
+  let cum=0;
+  for(let i=0;i<4;i++){
+    const segFrac=segs[i]/perim;
+    if(walkT<=(cum+segFrac)){
+      const local=(walkT-cum)/segFrac;
+      return {seg:i,local,cum};
+    }
+    cum+=segFrac;
+  }
+  return {seg:3,local:1,cum:1};
+}
+
+function bugPos(W,H){
+  const {cx,cy,rw,rh}=getRectParams(W,H);
+  const {seg,local}=walkProgress();
+  const segs=getSegments(cx,cy,rw,rh);
+  const s=segs[seg];
+  return {x:s.x0+(s.x1-s.x0)*local, y:s.y0+(s.y1-s.y0)*local};
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=300;
+  ctx.clearRect(0,0,W,H);
+  const {cx,cy,rw,rh,scale}=getRectParams(W,H);
+  const segs=getSegments(cx,cy,rw,rh);
+  const perim=totalPerim();
+
+  // Draw walked path highlight
+  const {seg,local}=walkProgress();
+  for(let i=0;i<4;i++){
+    const s=segs[i];
+    ctx.strokeStyle=C.bg; ctx.lineWidth=8;
+    ctx.beginPath(); ctx.moveTo(s.x0,s.y0); ctx.lineTo(s.x1,s.y1); ctx.stroke();
+  }
+  for(let i=0;i<seg;i++){
+    const s=segs[i];
+    ctx.strokeStyle=s.color; ctx.lineWidth=6; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(s.x0,s.y0); ctx.lineTo(s.x1,s.y1); ctx.stroke();
+  }
+  if(seg<4){
+    const s=segs[seg];
+    ctx.strokeStyle=s.color; ctx.lineWidth=6; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(s.x0,s.y0); ctx.lineTo(s.x0+(s.x1-s.x0)*local,s.y0+(s.y1-s.y0)*local); ctx.stroke();
+  }
+
+  // Draw rectangle outline
+  ctx.strokeStyle=C.border; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+  ctx.strokeRect(cx,cy,rw,rh); ctx.setLineDash([]);
+
+  // Dimension labels
+  ctx.fillStyle=C.blue; ctx.font=`bold 13px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText(`长 = ${len}`,cx+rw/2,cy-6);
+  ctx.fillStyle=C.teal; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(`宽 = ${wid}`,cx+rw+8,cy+rh/2);
+
+  // Bug
+  if(walkT>0){
+    const bp=bugPos(W,H);
+    ctx.font=`22px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('🐛',bp.x,bp.y);
+  } else {
+    // Starting position
+    ctx.font=`22px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('🐛',cx-4,cy-4);
+  }
+
+  // Segment labels on sides
+  if(walkT===0){
+    segs.forEach(s=>{
+      const mx=(s.x0+s.x1)/2, my=(s.y0+s.y1)/2;
+      const offset=s.y0===s.y1?-18:20;
+      ctx.fillStyle=s.color; ctx.font=`bold 14px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(s.length,mx,my+(s.y0===s.y1?offset:0));
+      if(s.x0===s.x1){ctx.fillText(s.length,mx+offset,my);}
+    });
+  }
+
+  // Walked distance display
+  const walked=Math.round(walkT*perim*10)/10;
+  if(walkT>0){
+    ctx.fillStyle=C.ink; ctx.font=`bold 16px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(`已走 ${walked} 步`,W/2,H-8);
+  }
+}
+
+function startWalk(){
+  if(isWalking){return;}
+  if(walkT>=1){resetWalk();return;}
+  isWalking=true;
+  document.getElementById('walkBtn').textContent='爬行中…';
+  document.getElementById('walkBtn').disabled=true;
+  const dur=3000+totalPerim()*100, st=performance.now();
+  function tick(now){
+    walkT=Math.min(1,(now-st)/dur);
+    draw();
+    updateProgress();
+    if(walkT<1) animId=requestAnimationFrame(tick);
+    else { walkT=1; isWalking=false; onComplete(); }
+  }
+  animId=requestAnimationFrame(tick);
+}
+
+function updateProgress(){
+  const perim=totalPerim();
+  const walked=walkT*perim;
+  const pct=Math.round(walkT*100);
+  document.getElementById('progFill').style.width=`${pct}%`;
+  document.getElementById('progressText').textContent=`已走 ${Math.round(walked*10)/10} / ${perim} 步（${pct}%）`;
+
+  // Segment tags
+  const segs=[len,wid,len,wid];
+  const segNames=['上边','右边','下边','左边'];
+  let cum=0, html='';
+  for(let i=0;i<4;i++){
+    const done=walkT>=cum+segs[i]/perim;
+    const inProg=!done&&walkT>cum;
+    html+=`<span class="seg-tag" style="background:${done?segColors[i]+'33':inProg?segColors[i]+'11':'var(--bg)'};color:${segColors[i]};border:1px solid ${segColors[i]}${done?'':'44'}">${segNames[i]}:${segs[i]}${done?'✓':inProg?'…':''}</span>`;
+    cum+=segs[i]/perim;
+  }
+  document.getElementById('segLabels').innerHTML=html;
+}
+
+function onComplete(){
+  // PEDAGOGY V5+V8
+  const perim=totalPerim();
+  const r=document.getElementById('result'), fb=document.getElementById('fb');
+  r.textContent=`周长 = ${len} + ${wid} + ${len} + ${wid} = (${len}+${wid})×2 = ${perim}`;
+  r.classList.add('show');
+  fb.innerHTML=`小虫绕矩形爬了一圈，一共走了 <strong>${perim}</strong> 步。<br>分解：上边 <strong>${len}</strong> + 右边 <strong>${wid}</strong> + 下边 <strong>${len}</strong> + 左边 <strong>${wid}</strong> = ${perim}。<br>因为上下相等、左右相等，可以简写：<strong>(${len} + ${wid}) × 2 = ${perim}</strong>。<br>这就是周长——绕图形一圈的总长度。`;
+  fb.classList.add('show');
+  document.getElementById('walkBtn').textContent='重新出发';
+  document.getElementById('walkBtn').disabled=false;
+}
+
+function resetWalk(){
+  if(animId){cancelAnimationFrame(animId);animId=null;}
+  walkT=0; isWalking=false;
+  document.getElementById('result').classList.remove('show');
+  document.getElementById('fb').classList.remove('show');
+  document.getElementById('walkBtn').textContent='🐛 出发！';
+  document.getElementById('walkBtn').disabled=false;
+  document.getElementById('progFill').style.width='0%';
+  document.getElementById('progressText').textContent='等待出发';
+  document.getElementById('segLabels').innerHTML='';
+  draw();
+}
+
+function updateDims(){
+  len=parseInt(document.getElementById('lenSl').value);
+  wid=parseInt(document.getElementById('widSl').value);
+  document.getElementById('lenVal').textContent=len;
+  document.getElementById('widVal').textContent=wid;
+  resetWalk();
+}
+
+document.getElementById('lenSl').addEventListener('input',updateDims);
+document.getElementById('widSl').addEventListener('input',updateDims);
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); draw();
+</script>
+</body>
+</html>

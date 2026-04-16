@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>排列组合树状生成器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="排列组合">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="分解">
+  <meta name="desc" content="分步展开树图计数，可视化排列vs组合的区别，选多少步乘多少个分支">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:10px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .ctrl-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--blue);margin-bottom:4px;}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    .mode-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+    .mode-btn{padding:10px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;cursor:pointer;background:var(--surface);font-family:'Noto Sans SC',sans-serif;font-weight:500;transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .formula{background:var(--surface);border:2px solid var(--blue);border-radius:var(--radius-sm);padding:10px 16px;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--blue);text-align:center;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 排列组合 · 认知动作：分解</div>
+  <h1>排列组合树状生成器</h1>
+  <p class="sub">分步展开，每一步乘以可选数量，看清计数原理</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('perm',this)">排列 Aₙᵐ（顺序有关）</button>
+    <button class="mode-btn" onclick="setMode('comb',this)">组合 Cₙᵐ（顺序无关）</button>
+  </div>
+  <div class="ctrl-grid">
+    <div class="ctrl-box">
+      <div class="ctrl-label">总数 n（从几个中选）</div>
+      <div class="ctrl-val" id="nVal">n = 4</div>
+      <input type="range" id="nSlider" min="2" max="6" step="1" value="4" oninput="update()">
+    </div>
+    <div class="ctrl-box">
+      <div class="ctrl-label">选取数 m（选几个）</div>
+      <div class="ctrl-val" id="mVal">m = 2</div>
+      <input type="range" id="mSlider" min="1" max="4" step="1" value="2" oninput="update()">
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="formula" id="formula">A₄² = 4×3 = 12</div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 树图分支结构只有动态才能让人感受"每步乘以剩余选项"
+// PEDAGOGY V3 分步揭示: 树从根向叶逐层展开
+// PEDAGOGY V5 操作先于符号: 先看树，再给出公式
+// PEDAGOGY V7 单一认知动作: 分解（分步计数，每步独立选择）
+// PEDAGOGY V8 概念反馈: 揭示排列vs组合的区别
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 360;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da'
+};
+const LETTERS = ['A','B','C','D','E','F'];
+const COLORS = [C.blue, C.teal, C.amber, '#7c3aed', '#b91c1c', '#0369a1'];
+
+let mode = 'perm';
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setMode(m, btn) {
+  mode = m;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  update();
+}
+
+function update() {
+  let n = parseInt(document.getElementById('nSlider').value);
+  let m = parseInt(document.getElementById('mSlider').value);
+  if (m > n) { m = n; document.getElementById('mSlider').value = m; }
+  document.getElementById('nVal').textContent = `n = ${n}`;
+  document.getElementById('mVal').textContent = `m = ${m}`;
+  draw(n, m);
+  updateFormula(n, m);
+  updateFeedback(n, m);
+}
+
+function factorial(n) { let f = 1; for (let i = 2; i <= n; i++) f *= i; return f; }
+function perm(n, m) { let r = 1; for (let i = 0; i < m; i++) r *= (n - i); return r; }
+function comb(n, m) { return perm(n, m) / factorial(m); }
+
+function draw(n, m) {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+
+  // Build tree for permutation (limit display)
+  const maxDisplay = n > 4 ? Math.min(3, m) : m;
+  const treeDepth = Math.min(m, 3); // max 3 levels for clarity
+  const nodeR = 14;
+
+  // Generate leaves at each level
+  // For permutation: each level has one fewer choice
+  // For combination: we only show subset structure
+  const rootX = 40, rootY = H / 2;
+  const levelW = (W - rootX - 20) / (treeDepth + 1);
+
+  function getChoicesAtLevel(level, usedSet) {
+    if (mode === 'perm') {
+      return LETTERS.slice(0, n).filter(l => !usedSet.has(l));
+    } else {
+      // Combination: only pick letters after the last used
+      const lastUsedIdx = usedSet.size === 0 ? -1 : Math.max(...[...usedSet].map(l => LETTERS.indexOf(l)));
+      return LETTERS.slice(0, n).filter((l, i) => i > lastUsedIdx);
+    }
+  }
+
+  // BFS to build nodes
+  let nodes = [{ x: rootX, y: rootY, label: 'START', level: 0, used: new Set(), path: [] }];
+  let allNodes = [...nodes];
+  let edges = [];
+
+  for (let lev = 0; lev < treeDepth; lev++) {
+    const parents = allNodes.filter(nd => nd.level === lev);
+    const choices = parents.map(nd => getChoicesAtLevel(lev, nd.used));
+    const maxBranches = Math.max(...choices.map(c => c.length));
+
+    // Only expand if total nodes won't explode
+    const totalChildren = choices.reduce((s, c) => s + c.length, 0);
+    if (totalChildren > 30) {
+      // Just show first parent's branches for clarity
+      const firstParent = parents[0];
+      const fc = getChoicesAtLevel(lev, firstParent.used);
+      const spread = Math.min(H - 40, fc.length * 40);
+      fc.slice(0, 6).forEach((ch, i) => {
+        const ny = firstParent.y - spread/2 + i * (spread / (fc.length - 1 || 1));
+        const nx = firstParent.x + levelW;
+        const newUsed = new Set(firstParent.used); newUsed.add(ch);
+        const nd = { x: nx, y: ny, label: ch, level: lev+1, used: newUsed, path: [...firstParent.path, ch] };
+        allNodes.push(nd);
+        edges.push({ from: firstParent, to: nd, label: ch });
+      });
+      // Indicate more nodes with ellipsis
+      break;
+    }
+
+    parents.forEach(parent => {
+      const fc = getChoicesAtLevel(lev, parent.used);
+      const spread = Math.min((H - 40) / parents.length, fc.length * 36);
+      fc.forEach((ch, i) => {
+        const ny = parent.y - spread/2 + (fc.length > 1 ? i * spread / (fc.length - 1) : 0);
+        const nx = parent.x + levelW;
+        const newUsed = new Set(parent.used); newUsed.add(ch);
+        const nd = { x: nx, y: ny, label: ch, level: lev+1, used: newUsed, path: [...parent.path, ch] };
+        allNodes.push(nd);
+        edges.push({ from: parent, to: nd, label: ch });
+      });
+    });
+  }
+
+  // Draw edges
+  edges.forEach(e => {
+    ctx.strokeStyle = COLORS[LETTERS.indexOf(e.label) % COLORS.length] + '80';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(e.from.x, e.from.y); ctx.lineTo(e.to.x, e.to.y); ctx.stroke();
+    // Edge label (the selected letter)
+    const mx = (e.from.x + e.to.x) / 2, my = (e.from.y + e.to.y) / 2;
+    ctx.fillStyle = COLORS[LETTERS.indexOf(e.label) % COLORS.length];
+    ctx.font = `bold 11px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(e.label, mx, my);
+  });
+
+  // Draw nodes
+  allNodes.forEach(nd => {
+    if (nd.level === 0) {
+      ctx.fillStyle = C.ink2;
+      ctx.beginPath(); ctx.arc(nd.x, nd.y, nodeR, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = `bold 10px 'Noto Sans SC',sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('开始', nd.x, nd.y);
+    } else {
+      const col = COLORS[LETTERS.indexOf(nd.label) % COLORS.length];
+      ctx.fillStyle = nd.level === treeDepth ? col : col + 'cc';
+      ctx.beginPath(); ctx.arc(nd.x, nd.y, nodeR, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = `bold 13px 'JetBrains Mono',monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(nd.label, nd.x, nd.y);
+      // Path label at leaves
+      if (nd.level === treeDepth && nd.path.length > 0) {
+        ctx.fillStyle = C.ink2; ctx.font = `10px 'JetBrains Mono',monospace`;
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(nd.path.join(''), nd.x + nodeR + 3, nd.y);
+      }
+    }
+  });
+
+  // Level labels at top
+  for (let lev = 1; lev <= treeDepth; lev++) {
+    const x = rootX + lev * levelW;
+    ctx.fillStyle = C.ink3; ctx.font = `11px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const remaining = mode === 'perm' ? n - lev + 1 : n - lev;
+    ctx.fillText(`第${lev}步：${remaining}种选法`, x, 4);
+  }
+
+  // Count annotation
+  const total = mode === 'perm' ? perm(n, m) : comb(n, m);
+  const leaves = allNodes.filter(nd => nd.level === treeDepth).length;
+  ctx.fillStyle = C.blue; ctx.font = `bold 13px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  ctx.fillText(`共 ${total} 种结果（${treeDepth < m ? '仅展示前'+treeDepth+'步' : '已完整展示'}）`, W - 6, 4);
+}
+
+function updateFormula(n, m) {
+  const el = document.getElementById('formula');
+  if (mode === 'perm') {
+    const terms = [];
+    for (let i = 0; i < m; i++) terms.push(n - i);
+    const result = perm(n, m);
+    const sub = `${n}`.replace(/(\d)/g, c => '₀₁₂₃₄₅₆₇₈₉'[c]);
+    const sup = `${m}`.replace(/(\d)/g, c => '⁰¹²³⁴⁵⁶⁷⁸⁹'[c]);
+    el.textContent = `A${sub}${sup} = ${terms.join(' × ')} = ${result}`;
+  } else {
+    const p = perm(n, m), f = factorial(m);
+    const result = comb(n, m);
+    const sub = `${n}`.replace(/(\d)/g, c => '₀₁₂₃₄₅₆₇₈₉'[c]);
+    const sup = `${m}`.replace(/(\d)/g, c => '⁰¹²³⁴⁵⁶⁷⁸⁹'[c]);
+    el.textContent = `C${sub}${sup} = A${sub}${sup} / m! = ${p} / ${f} = ${result}`;
+  }
+}
+
+function updateFeedback(n, m) {
+  const el = document.getElementById('fb');
+  const pa = perm(n, m), fa = factorial(m), ca = comb(n, m);
+  if (mode === 'perm') {
+    el.innerHTML = `<strong>排列</strong>：从 ${n} 个元素中取出 ${m} 个，<strong>顺序有关</strong>。<br>
+第1步选 ${n} 种，第2步选 ${n-1} 种...第${m}步选 ${n-m+1} 种（每步少一个，因为已用过）。<br>
+乘法原理：A₍${n}₎${m} = ${Array.from({length:m},(_,i)=>n-i).join(' × ')} = ${pa}`;
+  } else {
+    el.innerHTML = `<strong>组合</strong>：从 ${n} 个元素中取出 ${m} 个，<strong>顺序无关</strong>。<br>
+先按排列计算 ${pa} 种，再除以 ${m} 个元素的排列数 ${m}! = ${fa}（消除顺序重复）。<br>
+C₍${n}₎${m} = ${pa} ÷ ${fa} = <strong>${ca}</strong>（排列数是组合数的 ${m}! = ${fa} 倍）`;
+  }
+}
+
+window.addEventListener('resize', () => { setup(); update(); });
+setup(); update();
+</script>
+</body>
+</html>

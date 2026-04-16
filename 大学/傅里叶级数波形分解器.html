@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>傅里叶级数波形分解器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="数学分析">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="方波/锯齿波/三角波的傅里叶展开，逐项叠加正弦分量，实时观察波形逼近过程和吉布斯现象">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .wave-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .wave-btn{padding:7px 16px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);font-weight:700;}
+    .wave-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .ctrl-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+    .ctrl-label{font-size:13px;color:var(--ink2);}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--blue);min-width:30px;}
+    input[type=range]{accent-color:var(--blue);width:160px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .formula-row{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--blue);line-height:1.8;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 数学分析 · 认知动作：累积</div>
+  <h1>傅里叶级数波形分解器</h1>
+  <p class="sub">逐项叠加谐波，观察傅里叶展开的收敛过程</p>
+</header>
+<main>
+  <div class="wave-row">
+    <button class="wave-btn active" onclick="setWave('square',this)">方波</button>
+    <button class="wave-btn" onclick="setWave('sawtooth',this)">锯齿波</button>
+    <button class="wave-btn" onclick="setWave('triangle',this)">三角波</button>
+    <button class="wave-btn" onclick="setWave('halfsin',this)">半正弦波</button>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctrl-label">谐波阶数 N =</span>
+    <input type="range" id="slN" min="1" max="50" step="1" value="5" oninput="updateN()">
+    <span class="ctrl-val" id="nLbl">5</span>
+    <span class="ctrl-label" style="margin-left:8px;">显示各分量</span>
+    <input type="checkbox" id="showComps" checked onchange="draw()">
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="formula-row" id="formulaRow"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V3 分步揭示: 滑杆控制叠加阶数，从N=1到N=50逐渐逼近
+// PEDAGOGY V4 信号聚焦: 目标波形灰色，各谐波彩色，合成波蓝色加粗
+// PEDAGOGY V8 概念反馈: 解释吉布斯现象，说明收敛率
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=300;
+let wave='square', N=5;
+
+const WAVES={
+  square:{
+    label:'方波',
+    fn:x=>{const t=((x%(2*Math.PI))+2*Math.PI)%(2*Math.PI);return t<Math.PI?1:-1;},
+    coeff:n=>n%2===1?4/(Math.PI*n):0,
+    cos_coeff:()=>0,
+    formula:'f(x) = (4/π)Σ[sin((2k-1)x)/(2k-1)], k=1,2,3,...',
+    desc:'方波含所有奇次谐波，偶次系数为零。吉布斯现象：在不连续点处出现约9%的过冲，即使N→∞也不消失。'
+  },
+  sawtooth:{
+    label:'锯齿波',
+    fn:x=>{const t=((x%(2*Math.PI))+2*Math.PI)%(2*Math.PI);return t/Math.PI-1;},
+    coeff:n=>n>0?-2/(Math.PI*n)*Math.pow(-1,n):0,
+    cos_coeff:()=>0,
+    formula:'f(x) = -（2/π）Σ[(-1)ⁿ sin(nx)/n], n=1,2,3,...',
+    desc:'锯齿波含所有谐波（奇偶均有），系数以1/n速率衰减。不连续点处也出现吉布斯现象。'
+  },
+  triangle:{
+    label:'三角波',
+    fn:x=>{const t=((x%(2*Math.PI))+2*Math.PI)%(2*Math.PI);return t<Math.PI?2*t/Math.PI-1:3-2*t/Math.PI;},
+    coeff:n=>n%2===1?-8/(Math.PI*Math.PI*n*n)*Math.pow(-1,(n-1)/2):0,
+    cos_coeff:()=>0,
+    formula:'f(x) = (8/π²)Σ[(-1)^(k+1) sin((2k-1)x)/(2k-1)²], k=1,2,3,...',
+    desc:'三角波是连续函数，系数以1/n²速率衰减（比方波更快收敛），无吉布斯现象。'
+  },
+  halfsin:{
+    label:'半正弦波',
+    fn:x=>{const t=((x%(2*Math.PI))+2*Math.PI)%(2*Math.PI);return t<Math.PI?Math.sin(t):0;},
+    coeff:n=>{if(n===1)return 0.5;return n%2===0?-2/(Math.PI*(n*n-1)):0;},
+    cos_coeff:n=>n===0?1/Math.PI:0,
+    formula:'f(x) = 1/π + sin(x)/2 - (2/π)Σ[cos(2kx)/(4k²-1)], k=1,2,...',
+    desc:'半正弦波（整流后波形），含常数项和余弦项，系数以1/n²衰减，是整流电路中的基本波形。'
+  }
+};
+
+const COLORS=['#b84040','#0f6e56','#854f0b','#7b3f9e','#c06000','#1a5cb5','#d97706'];
+
+function setWave(w,btn){
+  wave=w;
+  document.querySelectorAll('.wave-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function updateN(){
+  N=parseInt(document.getElementById('slN').value);
+  document.getElementById('nLbl').textContent=N;
+  draw();
+}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function fourierSum(x,n){
+  const W=WAVES[wave];
+  let s=W.cos_coeff(0); // DC offset
+  for(let k=1;k<=n;k++){
+    s+=W.coeff(k)*Math.sin(k*x);
+    // For waves with cosine terms
+    if(W===WAVES.halfsin&&k<=n){
+      s+=(-2/(Math.PI*(4*k*k-1)))*Math.cos(2*k*x);
+    }
+  }
+  return s;
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W_=r.width;
+  ctx.clearRect(0,0,W_,H);
+  const W=WAVES[wave];
+  const pad={l:15,r:15,t:20,b:30};
+  const cw=W_-pad.l-pad.r,ch=H-pad.t-pad.b;
+  const xRange=[0,4*Math.PI];
+  const yRange=[-1.6,1.6];
+
+  function toX(x){return pad.l+(x-xRange[0])/(xRange[1]-xRange[0])*cw;}
+  function toY(y){return pad.t+ch-(y-yRange[0])/(yRange[1]-yRange[0])*ch;}
+
+  // Grid
+  ctx.strokeStyle='#e4e2da';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+  for(let i=0;i<=4;i++){const x=i*Math.PI;ctx.beginPath();ctx.moveTo(toX(x),pad.t);ctx.lineTo(toX(x),pad.t+ch);ctx.stroke();}
+  [-1,0,1].forEach(y=>{ctx.beginPath();ctx.moveTo(pad.l,toY(y));ctx.lineTo(W_-pad.r,toY(y));ctx.stroke();});
+  ctx.setLineDash([]);
+
+  // x-axis labels
+  ctx.fillStyle='#a8a69f';ctx.font=`9px 'JetBrains Mono',monospace`;
+  ['0','π','2π','3π','4π'].forEach((lbl,i)=>{
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(lbl,toX(i*Math.PI),pad.t+ch+4);
+  });
+
+  // Target wave (gray)
+  ctx.strokeStyle='#c8c5be';ctx.lineWidth=1.5;
+  ctx.beginPath();let first=true;
+  for(let i=0;i<=600;i++){
+    const x=xRange[0]+i/600*(xRange[1]-xRange[0]);
+    const y=W.fn(x);
+    if(first){ctx.moveTo(toX(x),toY(y));first=false;}
+    else ctx.lineTo(toX(x),toY(y));
+  }
+  ctx.stroke();
+
+  // Individual components (if checked)
+  const showComps=document.getElementById('showComps').checked;
+  if(showComps){
+    for(let k=1;k<=Math.min(N,7);k++){
+      const coeff=WAVES[wave].coeff(k);
+      if(Math.abs(coeff)<1e-10) continue;
+      ctx.strokeStyle=COLORS[(k-1)%COLORS.length]+'80';
+      ctx.lineWidth=1;
+      ctx.beginPath();first=true;
+      for(let i=0;i<=400;i++){
+        const x=xRange[0]+i/400*(xRange[1]-xRange[0]);
+        const y=coeff*Math.sin(k*x);
+        if(first){ctx.moveTo(toX(x),toY(y));first=false;}
+        else ctx.lineTo(toX(x),toY(y));
+      }
+      ctx.stroke();
+    }
+  }
+
+  // Fourier sum (blue, thick)
+  ctx.strokeStyle='#2a5c8f';ctx.lineWidth=2.5;
+  ctx.beginPath();first=true;
+  for(let i=0;i<=600;i++){
+    const x=xRange[0]+i/600*(xRange[1]-xRange[0]);
+    const y=fourierSum(x,N);
+    if(y<yRange[0]-0.2||y>yRange[1]+0.2){first=true;continue;}
+    if(first){ctx.moveTo(toX(x),toY(y));first=false;}
+    else ctx.lineTo(toX(x),toY(y));
+  }
+  ctx.stroke();
+
+  // Labels
+  ctx.fillStyle='#c8c5be';ctx.font=`10px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='right';ctx.textBaseline='top';
+  ctx.fillText('目标波形',toX(xRange[1])-4,pad.t+2);
+  ctx.fillStyle='#2a5c8f';
+  ctx.fillText(`傅里叶近似 (N=${N})`,toX(xRange[1])-4,pad.t+16);
+
+  // Formula
+  document.getElementById('formulaRow').textContent=W.formula;
+  document.getElementById('fb').innerHTML=
+    `<strong>${W.label}的傅里叶展开</strong>：N=${N}阶近似，包含前${N}个非零谐波。<br>
+    ${W.desc}<br>
+    <strong>收敛性</strong>：${wave==='square'||wave==='sawtooth'?'系数以1/n衰减（慢），不连续点有吉布斯现象（过冲≈9%）':'系数以1/n²衰减（快），无吉布斯现象'}。`;
+}
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

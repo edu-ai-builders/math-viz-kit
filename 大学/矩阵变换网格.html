@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>矩阵变换网格 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="线性代数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="2×2矩阵作用于平面网格，直观理解线性变换的几何含义">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .matrix-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+    .matrix-display{display:flex;align-items:center;gap:4px;}
+    .bracket{font-size:48px;font-weight:100;color:var(--ink2);}
+    .matrix-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+    .mat-input{width:64px;height:40px;text-align:center;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;background:var(--surface);}
+    .mat-input:focus{border-color:var(--blue);outline:none;}
+    .mat-info{display:flex;flex-direction:column;gap:4px;margin-left:8px;}
+    .mat-stat{font-size:13px;color:var(--ink2);}
+    .mat-stat strong{font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    canvas{width:100%;height:340px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .preset-btns{display:flex;gap:6px;flex-wrap:wrap;}
+    .pre-btn{padding:7px 12px;border:1px solid var(--border);border-radius:20px;font-size:12px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;color:var(--ink2);}
+    .pre-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .btns{display:flex;gap:8px;}
+    .btn{flex:1;padding:11px;border:none;border-radius:var(--radius);font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;transition:all .2s;}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-primary:hover{background:var(--blue-dark);}
+    .btn-secondary{background:var(--surface);color:var(--blue);border:2px solid var(--blue);}
+    .btn-secondary:hover{background:var(--blue-light);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.matrix-panel{gap:12px;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 线性代数 · 认知动作：变换</div>
+  <h1>矩阵变换网格</h1>
+  <p class="sub">输入 2×2 矩阵，看平面网格如何被拉伸、旋转、剪切</p>
+</header>
+<main>
+  <div class="matrix-panel">
+    <div style="font-size:15px;font-weight:600;">变换矩阵 A =</div>
+    <div class="matrix-display">
+      <span class="bracket">[</span>
+      <div class="matrix-grid">
+        <input class="mat-input" id="m00" type="number" value="2" step="0.1">
+        <input class="mat-input" id="m01" type="number" value="0" step="0.1">
+        <input class="mat-input" id="m10" type="number" value="0" step="0.1">
+        <input class="mat-input" id="m11" type="number" value="1" step="0.1">
+      </div>
+      <span class="bracket">]</span>
+    </div>
+    <div class="mat-info">
+      <div class="mat-stat">行列式 det(A) = <strong id="detVal">2.00</strong></div>
+      <div class="mat-stat">意义：面积缩放比</div>
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div style="font-size:13px;color:var(--ink2);margin-bottom:4px;">常见变换：</div>
+  <div class="preset-btns">
+    <button class="pre-btn" onclick="setMatrix(2,0,0,2)">缩放 2x</button>
+    <button class="pre-btn" onclick="setMatrix(0,-1,1,0)">旋转 90°</button>
+    <button class="pre-btn" onclick="setMatrix(1,1,0,1)">水平剪切</button>
+    <button class="pre-btn" onclick="setMatrix(-1,0,0,1)">水平翻转</button>
+    <button class="pre-btn" onclick="setMatrix(0.707,-0.707,0.707,0.707)">旋转 45°</button>
+    <button class="pre-btn" onclick="setMatrix(1,0,0,0)">投影到x轴</button>
+    <button class="pre-btn" onclick="setMatrix(1,0,0,-1)">垂直翻转</button>
+    <button class="pre-btn" onclick="setMatrix(1,0,0,1)">单位矩阵</button>
+  </div>
+  <div class="btns">
+    <button class="btn btn-primary" id="animBtn" onclick="startAnim()">▶ 动画变换</button>
+    <button class="btn btn-secondary" onclick="setMatrix(1,0,0,1)">重置</button>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：变换
+// V1 动态跃迁：网格实时扭曲，线性变换的几何效果可见
+// V2 表征桥接：矩阵元素 + 行列式 + 网格图三联动
+// V3 分步揭示：先看变换后状态，点"动画"才看中间过程
+// V4 信号聚焦：蓝=变换前基向量，橙=变换后基向量
+// V6 动作-数学一致：修改矩阵元素=网格立即按对应方式变形
+// V7 单一认知动作：变换
+// V8 概念反馈：揭示行列式=面积缩放，矩阵列=基向量目标
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let M=[[2,0],[0,1]], animT=1, animId=null;
+
+function getMatrix(){
+  return [[parseFloat(document.getElementById('m00').value)||0,parseFloat(document.getElementById('m01').value)||0],[parseFloat(document.getElementById('m10').value)||0,parseFloat(document.getElementById('m11').value)||0]];
+}
+function det(m){return m[0][0]*m[1][1]-m[0][1]*m[1][0];}
+function transform(m,x,y){return[m[0][0]*x+m[0][1]*y,m[1][0]*x+m[1][1]*y];}
+function lerpM(t){return[[1+(M[0][0]-1)*t,M[0][1]*t],[M[1][0]*t,1+(M[1][1]-1)*t]];}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=340*dpr; ctx.scale(dpr,dpr); cvs.style.height='340px';
+}
+
+function draw(t=1){
+  const W=cvs.getBoundingClientRect().width, H=340;
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2, cy=H/2, scale=40;
+  const m=t===1?M:lerpM(t);
+
+  const toP=(x,y)=>{const [tx,ty]=transform(m,x,y);return[cx+tx*scale,cy-ty*scale];};
+
+  // Original grid (faint)
+  ctx.strokeStyle=C.border; ctx.lineWidth=0.8;
+  for(let gx=-6;gx<=6;gx++){
+    ctx.beginPath(); ctx.moveTo(cx+gx*scale,0); ctx.lineTo(cx+gx*scale,H); ctx.stroke();
+  }
+  for(let gy=-5;gy<=5;gy++){
+    ctx.beginPath(); ctx.moveTo(0,cy-gy*scale); ctx.lineTo(W,cy-gy*scale); ctx.stroke();
+  }
+
+  // Transformed grid
+  ctx.strokeStyle=C.blue+'55'; ctx.lineWidth=1;
+  for(let gx=-5;gx<=5;gx++){
+    ctx.beginPath();
+    const [p0x,p0y]=toP(gx,-5); ctx.moveTo(p0x,p0y);
+    const [p1x,p1y]=toP(gx,5); ctx.lineTo(p1x,p1y);
+    ctx.stroke();
+  }
+  for(let gy=-5;gy<=5;gy++){
+    ctx.beginPath();
+    const [p0x,p0y]=toP(-5,gy); ctx.moveTo(p0x,p0y);
+    const [p1x,p1y]=toP(5,gy); ctx.lineTo(p1x,p1y);
+    ctx.stroke();
+  }
+
+  // Highlight unit cell
+  ctx.fillStyle=C.blue+'22'; ctx.strokeStyle=C.blue; ctx.lineWidth=1.5;
+  ctx.beginPath();
+  const pts=[[0,0],[1,0],[1,1],[0,1]].map(([x,y])=>toP(x,y));
+  ctx.moveTo(...pts[0]);pts.forEach(p=>ctx.lineTo(...p));ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // Axes
+  ctx.strokeStyle=C.ink2; ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();
+
+  // Original basis vectors (gray)
+  const drawVec=(x,y,color,label)=>{
+    const [px,py]=toP(x,y);
+    ctx.strokeStyle=color; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(px,py); ctx.stroke();
+    const angle=Math.atan2(py-cy,px-cx);
+    ctx.fillStyle=color;
+    ctx.beginPath(); ctx.moveTo(px,py);ctx.lineTo(px-10*Math.cos(angle-0.4),py-10*Math.sin(angle-0.4));ctx.lineTo(px-10*Math.cos(angle+0.4),py-10*Math.sin(angle+0.4));ctx.closePath();ctx.fill();
+    ctx.fillStyle=color; ctx.font=`bold 14px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(label,px,py-6);
+  };
+  drawVec(1,0,C.blue,"e₁'");
+  drawVec(0,1,C.amber,"e₂'");
+
+  // Axis labels
+  ctx.fillStyle=C.ink2; ctx.font=`bold 12px 'Noto Sans SC',sans-serif`; ctx.textAlign='right'; ctx.textBaseline='bottom';
+  ctx.fillText('x',W-4,cy-4);
+  ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillText('y',cx+4,4);
+
+  // Scale marks
+  ctx.fillStyle=C.ink3; ctx.font=`10px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let gx=-4;gx<=4;gx++){if(gx!==0)ctx.fillText(gx,cx+gx*scale,cy+3);}
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(let gy=-4;gy<=4;gy++){if(gy!==0)ctx.fillText(gy,cx-3,cy-gy*scale);}
+
+  // Det = area of parallelogram
+  const d=det(m);
+  ctx.fillStyle=Math.abs(d)>0.01?C.teal:C.amber; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText(`det = ${d.toFixed(2)} → 面积缩放 ${Math.abs(d).toFixed(2)}x`,8,8);
+}
+
+function updateInfo(){
+  M=getMatrix();
+  document.getElementById('detVal').textContent=det(M).toFixed(3);
+  animT=1;
+  draw();
+  updateFeedback();
+}
+
+function updateFeedback(){
+  const m=M, d=det(m);
+  const fb=document.getElementById('fb');
+  let msg='';
+  // Column vectors = images of basis vectors
+  msg+=`第一列 [${m[0][0]}, ${m[1][0]}]：这是标准基向量 e₁=[1,0] 被变换后的位置（蓝色箭头）。<br>`;
+  msg+=`第二列 [${m[0][1]}, ${m[1][1]}]：这是 e₂=[0,1] 被变换后的位置（橙色箭头）。<br>`;
+  if(Math.abs(d)<0.001) msg+='<strong>行列式=0：变换把平面"压扁"成直线或点，不可逆！</strong>';
+  else if(d<0) msg+=`行列式 <strong>${d.toFixed(2)} < 0</strong>：变换翻转了平面方向。面积缩放 ${Math.abs(d).toFixed(2)} 倍。`;
+  else msg+=`行列式 = <strong>${d.toFixed(3)}</strong>：变换后面积变为原来的 <strong>${d.toFixed(2)} 倍</strong>。`;
+  fb.innerHTML=msg;
+}
+
+function setMatrix(a,b,c,d){
+  document.getElementById('m00').value=a;document.getElementById('m01').value=b;
+  document.getElementById('m10').value=c;document.getElementById('m11').value=d;
+  updateInfo();
+}
+
+function startAnim(){
+  if(animId){cancelAnimationFrame(animId);animId=null;document.getElementById('animBtn').textContent='▶ 动画变换';return;}
+  M=getMatrix(); animT=0;
+  const dur=1200, st=performance.now();
+  function tick(now){
+    animT=Math.min(1,(now-st)/dur);
+    const ease=1-Math.pow(1-animT,3);
+    draw(ease);
+    if(animT<1)animId=requestAnimationFrame(tick);
+    else{animId=null;document.getElementById('animBtn').textContent='▶ 动画变换';}
+  }
+  document.getElementById('animBtn').textContent='⏸ 停止';
+  animId=requestAnimationFrame(tick);
+}
+
+['m00','m01','m10','m11'].forEach(id=>document.getElementById(id).addEventListener('input',updateInfo));
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); updateInfo();
+</script>
+</body>
+</html>

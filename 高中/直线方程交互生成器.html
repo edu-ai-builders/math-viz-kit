@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>直线方程交互生成器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="解析几何">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="点斜式/两点式/截距式三种直线方程形式联动，拖拽关键点实时更新方程">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:13px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:grab;}
+    .mode-row{display:flex;gap:6px;}
+    .mode-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .eq-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:14px;text-align:center;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 解析几何 · 认知动作：变换</div>
+  <h1>直线方程交互生成器</h1>
+  <p class="sub">拖动点——点斜式、截距式、一般式三种表示法实时联动</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('slope-point',this)">点斜式（拖点P和斜率）</button>
+    <button class="mode-btn" onclick="setMode('two-point',this)">两点式（拖A、B两点）</button>
+    <button class="mode-btn" onclick="setMode('intercept',this)">截距式（拖截距点）</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">斜率 k</div><div class="stat-val" id="slopeV" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">y轴截距 b</div><div class="stat-val" id="yintV" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">x轴截距</div><div class="stat-val" id="xintV" style="color:var(--amber)">—</div></div>
+  </div>
+  <div class="eq-box" id="eqBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 三种方程形式的同一性只有联动才能理解
+// PEDAGOGY V2 表征桥接: 点/斜率 ↔ 方程 ↔ 图像 ↔ 关键数值
+// PEDAGOGY V6 动作-数学一致: 拖拽点=改变方程参数
+// PEDAGOGY V7 单一认知动作: 变换（同一条直线的不同表示）
+// PEDAGOGY V8 概念反馈: 揭示"三种形式等价，截距/斜率/点都是确定直线的充分条件"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=380;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+const RANGE=5;
+
+let mode='slope-point';
+// Points for each mode
+let pts={
+  P:{x:1,y:2},    // slope-point mode
+  k:1.5,           // slope
+  A:{x:-2,y:1},   // two-point
+  B:{x:2,y:3},
+  xInt:{x:2,y:0}, // intercept
+  yInt:{x:0,y:2},
+};
+let dragging=null;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setMode(m,btn){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function xToP(x,W){
+  const margin=44;
+  const plotW=W-margin-20;
+  return margin+(x+RANGE)/(2*RANGE)*plotW;
+}
+function yToP(y){
+  const margin=16;
+  const plotH=H-margin-36;
+  return margin+(RANGE-y)/(2*RANGE)*plotH;
+}
+function pToXY(px,py,W){
+  const margin=44;
+  const plotW=W-margin-20;
+  const plotH=H-16-36;
+  const x=(px-margin)/plotW*(2*RANGE)-RANGE;
+  const y=RANGE-(py-16)/plotH*(2*RANGE);
+  return {x:Math.round(x*2)/2, y:Math.round(y*2)/2};
+}
+
+function getLine(){
+  if(mode==='slope-point'){
+    const {P,k}=pts;
+    return {k, b:P.y-k*P.x};
+  } else if(mode==='two-point'){
+    const {A,B}=pts;
+    if(Math.abs(B.x-A.x)<0.01) return {k:Infinity,b:A.x}; // vertical
+    const k=(B.y-A.y)/(B.x-A.x);
+    return {k, b:A.y-k*A.x};
+  } else {
+    const {xInt,yInt}=pts;
+    const a=xInt.x,b=yInt.y;
+    if(Math.abs(a)<0.01) return {k:Infinity,b:0};
+    const k=-b/a;
+    return {k, b};
+  }
+}
+
+function drawPoint(x,y,W,color,label,labelPos='top'){
+  const px=xToP(x,W),py=yToP(y);
+  ctx.fillStyle=color;ctx.beginPath();ctx.arc(px,py,7,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px,py,7,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle=color;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='center';
+  ctx.textBaseline=labelPos==='top'?'bottom':'top';
+  ctx.fillText(label,px,labelPos==='top'?py-10:py+10);
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const margin=44;
+  const plotW=W-margin-20;
+  const plotH=H-16-36;
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let i=-RANGE;i<=RANGE;i++){
+    ctx.beginPath();ctx.moveTo(xToP(i,W),16);ctx.lineTo(xToP(i,W),16+plotH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(margin,yToP(i));ctx.lineTo(margin+plotW,yToP(i));ctx.stroke();
+  }
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin,yToP(0));ctx.lineTo(margin+plotW,yToP(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(0,W),16);ctx.lineTo(xToP(0,W),16+plotH);ctx.stroke();
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+  for(let i=-RANGE;i<=RANGE;i++) if(i!==0) ctx.fillText(String(i),xToP(i,W),yToP(0)+3);
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let i=-RANGE;i<=RANGE;i++) if(i!==0) ctx.fillText(String(i),margin-3,yToP(i));
+
+  const line=getLine();
+  const isVert=!isFinite(line.k);
+
+  // Draw line
+  ctx.strokeStyle=C.blue;ctx.lineWidth=2.5;ctx.setLineDash([]);
+  if(isVert){
+    const lx=xToP(line.b,W);
+    ctx.beginPath();ctx.moveTo(lx,16);ctx.lineTo(lx,16+plotH);ctx.stroke();
+  } else {
+    const x1=-RANGE,x2=RANGE;
+    ctx.beginPath();ctx.moveTo(xToP(x1,W),yToP(line.k*x1+line.b));ctx.lineTo(xToP(x2,W),yToP(line.k*x2+line.b));ctx.stroke();
+  }
+
+  // Draw mode-specific points
+  if(mode==='slope-point'){
+    const {P,k}=pts;
+    // Slope angle indicator
+    const px=xToP(P.x,W),py=yToP(P.y);
+    const dx=40,dy=k*40*(H-52)/plotH/(2*RANGE/plotW)*(-1);
+    ctx.strokeStyle=C.amber+'88';ctx.lineWidth=1;ctx.setLineDash([3,2]);
+    ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px+dx,py);ctx.lineTo(px+dx,py+dy);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.amberD;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillText(`k=${k.toFixed(1)}`,px+dx+4,py+dy/2);
+    drawPoint(P.x,P.y,W,C.amberD,`P(${P.x},${P.y})`);
+  } else if(mode==='two-point'){
+    const {A,B}=pts;
+    drawPoint(A.x,A.y,W,C.amberD,`A(${A.x},${A.y})`,'top');
+    drawPoint(B.x,B.y,W,C.teal,`B(${B.x},${B.y})`,'bottom');
+  } else {
+    const {xInt,yInt}=pts;
+    drawPoint(xInt.x,0,W,C.amberD,`a=${xInt.x}`,'bottom');
+    drawPoint(0,yInt.y,W,C.teal,`b=${yInt.y}`,'top');
+  }
+
+  // Intercept dots
+  if(!isVert){
+    const k=line.k,b=line.b;
+    const xi=-b/k,yi=b;
+    if(Math.abs(xi)<=RANGE&&mode!=='intercept'){
+      ctx.fillStyle=C.amberD;ctx.beginPath();ctx.arc(xToP(xi,W),yToP(0),5,0,Math.PI*2);ctx.fill();
+    }
+    if(Math.abs(yi)<=RANGE&&mode!=='intercept'){
+      ctx.fillStyle=C.teal;ctx.beginPath();ctx.arc(xToP(0,W),yToP(yi),5,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  // Equations box
+  let eqText='';
+  let fbText='';
+  if(isVert){
+    eqText=`x = ${line.b}（竖线）`;
+    fbText='竖线斜率不存在，方程为 x = 常数，不能用斜截式表示。';
+    document.getElementById('slopeV').textContent='无穷大';
+    document.getElementById('yintV').textContent='—';
+    document.getElementById('xintV').textContent=line.b.toFixed(2);
+  } else {
+    const k=line.k,b=line.b;
+    const xi=Math.abs(k)>1e-9?-b/k:Infinity;
+    const kStr=k.toFixed(3),bStr=b>=0?`+${b.toFixed(3)}`:b.toFixed(3);
+    const xi_str=isFinite(xi)?xi.toFixed(3):'∞';
+    eqText=`斜截式: y = ${kStr}x ${bStr}\n`;
+    if(Math.abs(xi)>1e-9&&isFinite(xi)) eqText+=`截距式: x/${xi_str} + y/${b.toFixed(3)} = 1\n`;
+    eqText+=`一般式: ${kStr}x - y ${bStr} = 0`;
+    document.getElementById('slopeV').textContent=k.toFixed(3);
+    document.getElementById('yintV').textContent=b.toFixed(3);
+    document.getElementById('xintV').textContent=xi_str;
+    fbText=mode==='slope-point'?
+      `<strong>点斜式</strong>：y - y₀ = k(x - x₀)，知道一个点和斜率即可确定直线。<br>斜率 k = ${k.toFixed(3)}（每向右1，向上${k.toFixed(3)}），过点 P(${pts.P.x},${pts.P.y})。`:
+    mode==='two-point'?
+      `<strong>两点式</strong>：(y-y₁)/(y₂-y₁) = (x-x₁)/(x₂-x₁)，两个不重合点确定直线。<br>斜率 = (${pts.B.y}-${pts.A.y})/(${pts.B.x}-${pts.A.x}) = ${k.toFixed(3)}。`:
+      `<strong>截距式</strong>：x/a + y/b = 1（a=x轴截距，b=y轴截距），当直线不过原点时可用。<br>x截距 a=${pts.xInt.x}，y截距 b=${pts.yInt.y}，斜率 = -b/a = ${k.toFixed(3)}。`;
+  }
+  document.getElementById('eqBox').textContent=eqText;
+  document.getElementById('fb').innerHTML=fbText+'<br><strong>三种表达式描述同一条直线</strong>，选用哪种取决于已知条件。';
+}
+
+function getCoords(e){
+  const rect=cvs.getBoundingClientRect();
+  return {px:e.clientX-rect.left,py:e.clientY-rect.top,W:rect.width};
+}
+
+cvs.addEventListener('pointerdown',e=>{
+  const {px,py,W}=getCoords(e);
+  const xy=pToXY(px,py,W);
+  const checkPt=(name,pt)=>{
+    const d=Math.hypot(xToP(pt.x,W)-px,yToP(pt.y)-py);
+    return d<20?name:null;
+  };
+  let hit=null;
+  if(mode==='slope-point') hit=checkPt('P',pts.P);
+  else if(mode==='two-point'){hit=checkPt('A',pts.A)||checkPt('B',pts.B);}
+  else{hit=checkPt('xInt',pts.xInt)||checkPt('yInt',pts.yInt);}
+  if(hit){dragging=hit;cvs.setPointerCapture(e.pointerId);}
+});
+cvs.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const {px,py,W}=getCoords(e);
+  const {x,y}=pToXY(px,py,W);
+  const cx=Math.max(-RANGE,Math.min(RANGE,x));
+  const cy=Math.max(-RANGE,Math.min(RANGE,y));
+  if(dragging==='P') pts.P={x:cx,y:cy};
+  else if(dragging==='A') pts.A={x:cx,y:cy};
+  else if(dragging==='B') pts.B={x:cx,y:cy};
+  else if(dragging==='xInt') pts.xInt={x:cx,y:0};
+  else if(dragging==='yInt') pts.yInt={x:0,y:cy};
+  draw();
+});
+cvs.addEventListener('pointerup',()=>{dragging=null;});
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

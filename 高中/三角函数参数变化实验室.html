@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三角函数参数变化实验室 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="三角函数">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="A·sin(ωx+φ)+b的振幅、周期、相位三参数对波形的独立影响，滑杆实时观察">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:17px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .show-ref{display:flex;align-items:center;gap:8px;font-size:13px;}
+    .show-ref input{cursor:pointer;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.controls{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 三角函数 · 认知动作：变换</div>
+  <h1>三角函数参数变化实验室</h1>
+  <p class="sub">y = A·sin(ωx + φ) + b：振幅、周期、相位、中线——每个参数只改变一件事</p>
+</header>
+<main>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">振幅 A</div><div class="stat-val" id="sA" style="color:var(--blue)">2</div></div>
+    <div class="stat"><div class="stat-lbl">周期 T</div><div class="stat-val" id="sT" style="color:var(--teal)">2π</div></div>
+    <div class="stat"><div class="stat-lbl">初相 φ</div><div class="stat-val" id="sPhi" style="color:var(--amber)">0</div></div>
+    <div class="stat"><div class="stat-lbl">中线 b</div><div class="stat-val" id="sB" style="color:var(--ink2)">0</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">A 振幅（波峰高度）</div>
+      <div class="sl-val" id="aLabel" style="color:var(--blue)">2.0</div>
+      <input type="range" id="aSl" min="0.5" max="3" step="0.5" value="2">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">ω 角频率（影响周期）</div>
+      <div class="sl-val" id="wLabel" style="color:var(--teal)">1.0</div>
+      <input type="range" id="wSl" min="0.5" max="3" step="0.5" value="1">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">φ 初相（水平移动）</div>
+      <div class="sl-val" id="phiLabel" style="color:var(--amber)">0</div>
+      <input type="range" id="phiSl" min="-3" max="3" step="1" value="0">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">b 中线（上下平移）</div>
+      <div class="sl-val" id="bLabel" style="color:var(--ink2)">0.0</div>
+      <input type="range" id="bSl" min="-2" max="2" step="0.5" value="0">
+    </div>
+  </div>
+  <div style="display:flex;gap:16px;align-items:center;padding:4px 0;">
+    <label class="show-ref"><input type="checkbox" id="showRef" checked> 显示参考 sin(x)</label>
+    <label class="show-ref"><input type="checkbox" id="showGrid" checked> 显示网格</label>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 参数变化对波形的影响只有实时联动才能理解
+// PEDAGOGY V2 表征桥接: 函数表达式 ↔ 图像 ↔ 关键数值
+// PEDAGOGY V4 信号聚焦: 蓝=主波形，灰虚=参考sin(x)，特征线用颜色区分
+// PEDAGOGY V5 操作先于符号: 先看波形变化，再理解公式含义
+// PEDAGOGY V7 单一认知动作: 变换（每个参数独立变换波形的一个属性）
+// PEDAGOGY V8 概念反馈: 揭示A/T/φ/b各自独立改变一个属性
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=320;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const A=parseFloat(document.getElementById('aSl').value);
+  const omega=parseFloat(document.getElementById('wSl').value);
+  const phiSteps=parseInt(document.getElementById('phiSl').value);
+  const b=parseFloat(document.getElementById('bSl').value);
+  const phi=phiSteps*(Math.PI/2);
+  const showRef=document.getElementById('showRef').checked;
+  const showGrid=document.getElementById('showGrid').checked;
+
+  const margin={left:44,right:20,top:16,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const xRange=2*Math.PI*2;
+  const yRange=3.5;
+  const xToP=x=>margin.left+(x+xRange/2)/xRange*plotW;
+  const yToP=y=>margin.top+(yRange-y)/(2*yRange)*plotH;
+
+  // Grid
+  if(showGrid){
+    ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+    for(let k=-4;k<=4;k++){
+      const y=yToP(k);
+      ctx.beginPath();ctx.moveTo(margin.left,y);ctx.lineTo(margin.left+plotW,y);ctx.stroke();
+    }
+    // π marks
+    for(let k=-2;k<=2;k++){
+      const x=xToP(k*Math.PI);
+      ctx.beginPath();ctx.moveTo(x,margin.top);ctx.lineTo(x,margin.top+plotH);ctx.stroke();
+      ctx.fillStyle=C.ink3;ctx.font=`10px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+      ctx.fillText(k===0?'0':k===1?'π':k===-1?'-π':k+'π',x,margin.top+plotH+2);
+    }
+  }
+
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(0));ctx.lineTo(margin.left+plotW,yToP(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(0),margin.top);ctx.lineTo(xToP(0),margin.top+plotH);ctx.stroke();
+  // y axis labels
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let k=-3;k<=3;k++){
+    if(k!==0) ctx.fillText(String(k),margin.left-3,yToP(k));
+  }
+
+  // Reference curve: sin(x)
+  if(showRef){
+    ctx.strokeStyle=C.ink3;ctx.lineWidth=1;ctx.setLineDash([4,3]);
+    ctx.beginPath();let fst=true;
+    for(let px=0;px<=plotW;px+=2){
+      const x=(px/plotW)*xRange-xRange/2;
+      const y=Math.sin(x);
+      if(Math.abs(y)>yRange*1.5){fst=true;continue;}
+      fst?(ctx.moveTo(margin.left+px,yToP(y)),fst=false):ctx.lineTo(margin.left+px,yToP(y));
+    }
+    ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=C.ink3;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+    ctx.fillText('sin(x)',xToP(-xRange/2+0.1),yToP(1)-2);
+  }
+
+  // Middle line b
+  if(b!==0){
+    ctx.strokeStyle=C.ink2;ctx.lineWidth=1;ctx.setLineDash([6,4]);
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(b));ctx.lineTo(margin.left+plotW,yToP(b));ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(`b=${b}`,margin.left-3,yToP(b));
+  }
+
+  // Amplitude markers
+  ctx.strokeStyle=C.blue+'66';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(b+A));ctx.lineTo(margin.left+plotW,yToP(b+A));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(b-A));ctx.lineTo(margin.left+plotW,yToP(b-A));ctx.stroke();
+  ctx.setLineDash([]);
+  // A bracket on left
+  const pMax=yToP(b+A),pMin=yToP(b-A),pMid=yToP(b);
+  ctx.strokeStyle=C.blue;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(margin.left+4,pMax);ctx.lineTo(margin.left+10,pMax);ctx.lineTo(margin.left+10,pMin);ctx.lineTo(margin.left+4,pMin);ctx.stroke();
+  ctx.fillStyle=C.blue;ctx.font=`bold 11px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText(`A=${A}`,margin.left+12,pMid);
+
+  // Main curve
+  ctx.strokeStyle=C.blue;ctx.lineWidth=2.5;ctx.setLineDash([]);
+  ctx.beginPath();let first=true;
+  for(let px=0;px<=plotW;px+=2){
+    const x=(px/plotW)*xRange-xRange/2;
+    const y=A*Math.sin(omega*x+phi)+b;
+    if(Math.abs(y)>yRange*1.5){first=true;continue;}
+    first?(ctx.moveTo(margin.left+px,yToP(y)),first=false):ctx.lineTo(margin.left+px,yToP(y));
+  }
+  ctx.stroke();
+
+  // Period marker
+  const T=2*Math.PI/omega;
+  const x1=(-phi)/omega;
+  const x2=x1+T;
+  if(Math.abs(x1)<xRange/2 && Math.abs(x2)<xRange/2){
+    ctx.strokeStyle=C.teal;ctx.lineWidth=2;
+    const px1=xToP(x1),px2=xToP(x2);
+    const arY=yToP(b)-14;
+    ctx.beginPath();ctx.moveTo(px1,arY);ctx.lineTo(px2,arY);ctx.stroke();
+    ctx.fillStyle=C.teal;
+    ctx.beginPath();ctx.moveTo(px1,arY);ctx.lineTo(px1+6,arY-3);ctx.lineTo(px1+6,arY+3);ctx.fill();
+    ctx.beginPath();ctx.moveTo(px2,arY);ctx.lineTo(px2-6,arY-3);ctx.lineTo(px2-6,arY+3);ctx.fill();
+    ctx.fillStyle=C.teal;ctx.font=`bold 11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText(`T=${T.toFixed(2)}`,(px1+px2)/2,arY-1);
+  }
+
+  // Update stats
+  const phiStr=phiSteps===0?'0':phiSteps===1?'π/2':phiSteps===-1?'-π/2':phiSteps===2?'π':phiSteps===-2?'-π':phiSteps===3?'3π/2':'-3π/2';
+  document.getElementById('sA').textContent=A.toFixed(1);
+  document.getElementById('sT').textContent=T<0.1?'≈0':(T/Math.PI).toFixed(2)+'π';
+  document.getElementById('sPhi').textContent=phiStr;
+  document.getElementById('sB').textContent=b.toFixed(1);
+  document.getElementById('aLabel').textContent=A.toFixed(1);
+  document.getElementById('wLabel').textContent=omega.toFixed(1);
+  document.getElementById('phiLabel').textContent=phiStr;
+  document.getElementById('bLabel').textContent=b.toFixed(1);
+
+  // Formula display
+  ctx.fillStyle=C.blue;ctx.font=`bold 13px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  const omStr=omega===1?'':omega.toFixed(1);
+  const phiSign=phiSteps>0?'+':phiSteps<0?'':' ';
+  const bSign=b>0?'+':b<0?'':' ';
+  ctx.fillText(`y = ${A}·sin(${omStr}x${phiSteps!==0?phiSign+phiStr:''})${b!==0?bSign+b:''}`,margin.left+4,margin.top+4);
+
+  // PEDAGOGY V8
+  document.getElementById('fb').innerHTML=
+    `<strong>A = ${A}</strong>：振幅，波峰到中线的距离（越大波越高）。<br>` +
+    `<strong>ω = ${omega}</strong>：角频率，周期 T = 2π/ω = <strong>${T.toFixed(3)}</strong>（越大波越密）。<br>` +
+    `<strong>φ = ${phiStr}</strong>：初相，图像向左平移 φ/ω（φ>0 左移，φ<0 右移）。<br>` +
+    `<strong>b = ${b}</strong>：中线，整体上下平移。四个参数相互独立，各司其职。`;
+}
+
+['aSl','wSl','phiSl','bSl'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+document.getElementById('showRef').addEventListener('change',draw);
+document.getElementById('showGrid').addEventListener('change',draw);
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

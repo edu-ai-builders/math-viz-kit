@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PCA几何直观实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="线性代数/统计">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="二维散点，拖动主成分方向，实时显示投影后方差，找到最大方差方向即PC1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:pointer;}
+    .ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .ctrl-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--blue);margin-bottom:4px;}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    .ctrl-row{display:flex;gap:8px;}
+    .btn{padding:10px 18px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;font-family:'Noto Sans SC',sans-serif;font-weight:500;}
+    .btn-regen{background:var(--blue);color:#fff;}
+    .btn-find{background:var(--teal);color:#fff;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 线性代数/统计 · 认知动作：变换</div>
+  <h1>PCA几何直观实验室</h1>
+  <p class="sub">旋转主方向，找到使投影方差最大的轴——这就是第一主成分 PC1</p>
+</header>
+<main>
+  <canvas id="cvs"></canvas>
+  <div class="ctrl-grid">
+    <div class="ctrl-box">
+      <div class="ctrl-label">主方向角度 θ</div>
+      <div class="ctrl-val" id="thetaVal">θ = 0°</div>
+      <input type="range" id="thetaSlider" min="0" max="180" step="1" value="0" oninput="update()">
+    </div>
+    <div class="ctrl-box">
+      <div class="ctrl-label">数据相关性（正相关）</div>
+      <div class="ctrl-val" id="corrVal">r ≈ 0.80</div>
+      <input type="range" id="corrSlider" min="0" max="0.99" step="0.01" value="0.8" oninput="regen()">
+    </div>
+  </div>
+  <div class="ctrl-row">
+    <button class="btn btn-regen" onclick="regen()">重新生成数据</button>
+    <button class="btn btn-find" onclick="findPC1()">✦ 自动找 PC1</button>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 投影方差随角度变化只有动态旋转才能感受
+// PEDAGOGY V5 操作先于符号: 先手动旋转找最大方差角度，再揭示特征值/特征向量
+// PEDAGOGY V6 动作-数学一致: 滑杆左右 = 主方向旋转
+// PEDAGOGY V7 单一认知动作: 变换（旋转坐标系找最大方差方向）
+// PEDAGOGY V8 概念反馈: "PC1是数据方差最大的方向，对应协方差矩阵最大特征值的特征向量"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 360;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+let data = [];
+let animating = false;
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function randn() {
+  const u = 1-Math.random(), v = Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+function regen() {
+  const corr = parseFloat(document.getElementById('corrSlider').value);
+  document.getElementById('corrVal').textContent = `r ≈ ${corr.toFixed(2)}`;
+  const N = 60;
+  data = [];
+  for (let i=0; i<N; i++) {
+    const x = randn();
+    const y = corr*x + Math.sqrt(1-corr*corr)*randn();
+    data.push([x*1.5, y]);
+  }
+  update();
+}
+
+function getCenter() {
+  const mx = data.reduce((s,d)=>s+d[0],0)/data.length;
+  const my = data.reduce((s,d)=>s+d[1],0)/data.length;
+  return [mx, my];
+}
+
+function getCovMatrix() {
+  const [mx, my] = getCenter();
+  let sxx=0, syy=0, sxy=0;
+  data.forEach(([x,y]) => {
+    sxx += (x-mx)*(x-mx);
+    syy += (y-my)*(y-my);
+    sxy += (x-mx)*(y-my);
+  });
+  const n = data.length-1;
+  return { sxx:sxx/n, syy:syy/n, sxy:sxy/n };
+}
+
+function getPC1Angle() {
+  const { sxx, syy, sxy } = getCovMatrix();
+  // Eigenvalues of [[sxx,sxy],[sxy,syy]]
+  const tr = sxx+syy, det = sxx*syy-sxy*sxy;
+  const disc = Math.sqrt(Math.max(0, tr*tr/4-det));
+  const l1 = tr/2+disc, l2 = tr/2-disc;
+  // PC1 direction: eigenvector for l1
+  // If sxy != 0: direction = [l1-syy, sxy] (unnormalized)
+  let angle;
+  if (Math.abs(sxy) > 1e-9) {
+    angle = Math.atan2(l1-syy, sxy);
+  } else {
+    angle = sxx >= syy ? 0 : Math.PI/2;
+  }
+  return { angle: angle*180/Math.PI, l1, l2, total: l1+l2 };
+}
+
+function projectedVariance(theta) {
+  const rad = theta * Math.PI/180;
+  const dx = Math.cos(rad), dy = Math.sin(rad);
+  const [mx, my] = getCenter();
+  const projs = data.map(([x,y]) => (x-mx)*dx + (y-my)*dy);
+  const pmean = projs.reduce((s,p)=>s+p,0)/projs.length;
+  const pvar = projs.reduce((s,p)=>s+(p-pmean)*(p-pmean),0)/(projs.length-1);
+  return pvar;
+}
+
+function update() {
+  const theta = parseFloat(document.getElementById('thetaSlider').value);
+  document.getElementById('thetaVal').textContent = `θ = ${theta}°`;
+  draw(theta);
+}
+
+function draw(theta) {
+  if (data.length === 0) return;
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+
+  const pad = { l:50, r:20, t:20, b:20 };
+  const mainW = W * 0.65;
+  const chartW = mainW - pad.l - pad.r;
+  const chartH = H - pad.t - pad.b;
+
+  // Data bounds
+  const xs = data.map(d=>d[0]), ys = data.map(d=>d[1]);
+  const xMin = Math.min(...xs)-0.5, xMax = Math.max(...xs)+0.5;
+  const yMin = Math.min(...ys)-0.5, yMax = Math.max(...ys)+0.5;
+  const scale = Math.min(chartW/(xMax-xMin), chartH/(yMax-yMin));
+  const [mx, my] = getCenter();
+  const cx0 = pad.l + (mx-xMin)*scale + (chartW-(xMax-xMin)*scale)/2;
+  const cy0 = pad.t + chartH - (my-yMin)*scale - (chartH-(yMax-yMin)*scale)/2;
+
+  function toX(x) { return cx0 + (x-mx)*scale; }
+  function toY(y) { return cy0 - (y-my)*scale; }
+
+  // Draw data points
+  const rad = theta * Math.PI/180;
+  const dx = Math.cos(rad), dy = Math.sin(rad);
+
+  data.forEach(([x,y]) => {
+    const proj = (x-mx)*dx + (y-my)*dy;
+    const px = toX(mx + proj*dx), py = toY(my + proj*dy);
+    // Residual line
+    ctx.strokeStyle = C.ink3+'50'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(toX(x), toY(y)); ctx.lineTo(px, py); ctx.stroke();
+  });
+
+  // PC direction line
+  const lineLen = Math.min(chartW, chartH) * 0.5;
+  const pc1 = getPC1Angle();
+  const pc1Rad = pc1.angle * Math.PI/180;
+  // Show true PC1 as dashed
+  ctx.strokeStyle = C.teal; ctx.lineWidth = 1.5; ctx.setLineDash([5,3]);
+  ctx.beginPath();
+  ctx.moveTo(toX(mx - Math.cos(pc1Rad)*4), toY(my - Math.sin(pc1Rad)*4));
+  ctx.lineTo(toX(mx + Math.cos(pc1Rad)*4), toY(my + Math.sin(pc1Rad)*4));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Current direction
+  ctx.strokeStyle = C.blue; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(toX(mx - dx*4), toY(my - dy*4));
+  ctx.lineTo(toX(mx + dx*4), toY(my + dy*4));
+  ctx.stroke();
+
+  // Data points
+  data.forEach(([x,y]) => {
+    ctx.fillStyle = C.blue + 'aa';
+    ctx.beginPath(); ctx.arc(toX(x), toY(y), 4, 0, Math.PI*2); ctx.fill();
+  });
+
+  // Projections on line
+  data.forEach(([x,y]) => {
+    const proj = (x-mx)*dx + (y-my)*dy;
+    const px = toX(mx + proj*dx), py = toY(my + proj*dy);
+    ctx.fillStyle = C.amber + 'cc';
+    ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI*2); ctx.fill();
+  });
+
+  // Labels
+  ctx.fillStyle = C.blue; ctx.font = `bold 12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('蓝线 = 当前方向', pad.l+4, 4);
+  ctx.fillStyle = C.teal;
+  ctx.fillText('绿线 = 真正PC1方向', pad.l+4, 18);
+
+  // Right panel: variance bar chart
+  const barX = mainW + 10;
+  const barW = W - barX - 10;
+  const varCur = projectedVariance(theta);
+  const varPC1 = projectedVariance(pc1.angle);
+  const varMax = varPC1 * 1.1;
+
+  ctx.fillStyle = C.ink2; ctx.font = `bold 12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('投影方差', barX + barW/2, pad.t);
+
+  // Variance vs angle mini-chart
+  const miniH = H * 0.6;
+  const miniY = pad.t + 20;
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1;
+  ctx.strokeRect(barX, miniY, barW, miniH);
+
+  ctx.strokeStyle = C.blue; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let t=0; t<=180; t+=2) {
+    const v = projectedVariance(t);
+    const xx = barX + t/180*barW;
+    const yy = miniY + miniH - v/varMax*miniH;
+    if (t===0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
+  }
+  ctx.stroke();
+
+  // Current theta marker
+  const curX = barX + theta/180*barW;
+  ctx.strokeStyle = C.amber; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(curX, miniY); ctx.lineTo(curX, miniY+miniH); ctx.stroke();
+  ctx.fillStyle = C.amber; ctx.font = `bold 11px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(`${varCur.toFixed(2)}`, curX, miniY+miniH+2);
+
+  // PC1 marker
+  const pc1X = barX + (((pc1.angle % 180)+180)%180)/180*barW;
+  ctx.strokeStyle = C.teal; ctx.lineWidth = 1.5; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(pc1X, miniY); ctx.lineTo(pc1X, miniY+miniH); ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = C.ink3; ctx.font = `10px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('θ', barX+barW/2, miniY+miniH+2);
+
+  // Stats
+  ctx.fillStyle = C.ink; ctx.font = `bold 12px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  const yStats = miniY + miniH + 20;
+  ctx.fillText(`当前方差: ${varCur.toFixed(3)}`, barX, yStats);
+  ctx.fillStyle = C.teal;
+  ctx.fillText(`PC1方差: ${varPC1.toFixed(3)}`, barX, yStats+16);
+  ctx.fillStyle = C.ink2; ctx.font = `11px 'JetBrains Mono',monospace`;
+  ctx.fillText(`PC1角度: ${((pc1.angle%180)+180)%180|0}°`, barX, yStats+32);
+  ctx.fillText(`解释比: ${(varPC1/(pc1.l1+pc1.l2)*100).toFixed(1)}%`, barX, yStats+48);
+
+  updateFeedback(theta, varCur, varPC1, pc1);
+}
+
+function updateFeedback(theta, varCur, varPC1, pc1) {
+  const diff = Math.abs(varPC1 - varCur) / varPC1;
+  let msg;
+  if (diff < 0.02) {
+    msg = `<strong>找到PC1！</strong>当前角度 ${theta}° 已非常接近最大方差方向。`;
+  } else {
+    msg = `当前投影方差 ${varCur.toFixed(3)}，最大可达 ${varPC1.toFixed(3)}（PC1 方向 ${((pc1.angle%180)+180)%180|0}°），差 ${(diff*100).toFixed(1)}%。`;
+  }
+  const explainRatio = pc1.l1/(pc1.l1+pc1.l2);
+  document.getElementById('fb').innerHTML =
+    `<strong>PCA主成分分析</strong>：${msg}<br>` +
+    `PC1（第一主成分）= 数据投影后<strong>方差最大</strong>的方向，即协方差矩阵<strong>最大特征值</strong>对应的特征向量。<br>` +
+    `PC1解释了总方差的 <strong>${(explainRatio*100).toFixed(1)}%</strong>（λ₁=${pc1.l1.toFixed(3)}，λ₂=${pc1.l2.toFixed(3)}，总=λ₁+λ₂）。<br>` +
+    `PC2⊥PC1，解释剩余 ${((1-explainRatio)*100).toFixed(1)}% 的方差，方向图中绿线。`;
+}
+
+function findPC1() {
+  const pc1 = getPC1Angle();
+  let targetAngle = ((pc1.angle % 180) + 180) % 180;
+  const currentAngle = parseFloat(document.getElementById('thetaSlider').value);
+  let cur = currentAngle;
+  const step = (targetAngle - cur + 360) % 360 <= 180 ? 2 : -2;
+  const interval = setInterval(() => {
+    cur = (cur + step + 360) % 360;
+    if (Math.abs(cur - targetAngle) < 3) { cur = targetAngle; clearInterval(interval); }
+    document.getElementById('thetaSlider').value = cur;
+    update();
+  }, 30);
+}
+
+window.addEventListener('resize', () => { setup(); draw(parseFloat(document.getElementById('thetaSlider').value)); });
+setup(); regen();
+</script>
+</body>
+</html>

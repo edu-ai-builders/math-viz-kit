@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>时间与钟表 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="时间">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="拖动时针分针设置时刻，数字时间与表盘实时联动，整点/半点/一刻概念可视化">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#fff8f0;--surface:#fff;--ink:#2a1a00;--ink2:#7a5a30;--border:#f0d8b0;--teal:#0a7a50;--teal-light:#d0f0e0;--amber:#c06000;--amber-light:#fff0d0;--blue:#1a5cb5;--blue-light:#e0ecff;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:540px;padding:20px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:20px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:540px;padding:14px 20px 28px;display:flex;flex-direction:column;gap:10px;}
+    .clock-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px;}
+    canvas{display:block;cursor:pointer;}
+    .time-display{font-size:52px;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--blue);letter-spacing:4px;}
+    .time-label{font-size:16px;color:var(--ink2);text-align:center;}
+    .quiz-row{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+    .quiz-title{font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:8px;}
+    .quiz-btns{display:flex;gap:6px;flex-wrap:wrap;}
+    .qbtn{padding:8px 14px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;transition:all .2s;}
+    .qbtn:hover{background:var(--amber-light);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 时间 · 认知动作：变换</div>
+  <h1>时间与钟表</h1>
+  <p class="sub">点击表盘设置时刻，数字时间与表盘同步显示</p>
+</header>
+<main>
+  <div class="clock-wrap">
+    <canvas id="cvs" width="240" height="240"></canvas>
+    <div class="time-display" id="timeDisplay">08:00</div>
+    <div class="time-label" id="timeLabel">八点整</div>
+  </div>
+  <div class="quiz-row">
+    <div class="quiz-title">快速设置时刻（练习）：</div>
+    <div class="quiz-btns">
+      <button class="qbtn" onclick="setTime(6,0)">6:00</button>
+      <button class="qbtn" onclick="setTime(6,30)">6:30</button>
+      <button class="qbtn" onclick="setTime(7,15)">7:15</button>
+      <button class="qbtn" onclick="setTime(8,45)">8:45</button>
+      <button class="qbtn" onclick="setTime(12,0)">12:00</button>
+      <button class="qbtn" onclick="setTime(3,30)">3:30</button>
+    </div>
+  </div>
+  <div class="fb" id="fb">点击表盘上的位置设置时间，或使用上方按钮快速跳转到常见时刻。</div>
+</main>
+<script>
+// PEDAGOGY V2 表征桥接: 表盘（模拟）与数字时间（数字）双向联动
+// PEDAGOGY V6 动作—数学一致: 点击表盘位置=旋转指针到对应角度
+// PEDAGOGY V8 概念反馈: 整点/一刻/半点/三刻的语言描述
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const R = 110, CX = 120, CY = 120;
+const dpr = window.devicePixelRatio || 1;
+cvs.width = 240*dpr; cvs.height = 240*dpr;
+ctx.scale(dpr,dpr);
+cvs.style.width='240px'; cvs.style.height='240px';
+
+let hour = 8, minute = 0;
+let dragging = null; // 'hour' or 'minute'
+
+const HOUR_WORDS = ['十二','一','二','三','四','五','六','七','八','九','十','十一','十二'];
+const MINUTE_WORDS = {0:'整',15:'一刻',30:'半',45:'三刻'};
+
+function setTime(h, m) {
+  hour = ((h-1+12)%12)+1;
+  minute = m;
+  draw();
+  updateInfo();
+}
+
+function draw() {
+  ctx.clearRect(0,0,240,240);
+
+  // Clock face
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#1a5cb5'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2); ctx.stroke();
+
+  // Hour marks and numbers
+  for(let i=1;i<=12;i++){
+    const ang = (i/12)*Math.PI*2 - Math.PI/2;
+    const mx = CX+Math.cos(ang)*(R-14);
+    const my = CY+Math.sin(ang)*(R-14);
+    ctx.fillStyle='#2a1a00'; ctx.font=`bold 13px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(i, mx, my);
+    // tick
+    const tx1=CX+Math.cos(ang)*(R-4), ty1=CY+Math.sin(ang)*(R-4);
+    const tx2=CX+Math.cos(ang)*(R-28), ty2=CY+Math.sin(ang)*(R-28);
+    ctx.strokeStyle='#c06000'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(tx1,ty1); ctx.lineTo(tx2,ty2); ctx.stroke();
+  }
+  // Minute ticks
+  for(let i=0;i<60;i++){
+    if(i%5===0) continue;
+    const ang = (i/60)*Math.PI*2 - Math.PI/2;
+    const tx1=CX+Math.cos(ang)*(R-4), ty1=CY+Math.sin(ang)*(R-4);
+    const tx2=CX+Math.cos(ang)*(R-12), ty2=CY+Math.sin(ang)*(R-12);
+    ctx.strokeStyle='#d0cac0'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(tx1,ty1); ctx.lineTo(tx2,ty2); ctx.stroke();
+  }
+
+  // Minute hand
+  const mAng = (minute/60)*Math.PI*2 - Math.PI/2;
+  ctx.strokeStyle='#1a5cb5'; ctx.lineWidth=3; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(CX+Math.cos(mAng)*78,CY+Math.sin(mAng)*78); ctx.stroke();
+
+  // Hour hand
+  const hAng = ((hour%12 + minute/60)/12)*Math.PI*2 - Math.PI/2;
+  ctx.strokeStyle='#2a1a00'; ctx.lineWidth=5; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(CX+Math.cos(hAng)*52,CY+Math.sin(hAng)*52); ctx.stroke();
+
+  // Center dot
+  ctx.fillStyle='#2a1a00';
+  ctx.beginPath(); ctx.arc(CX,CY,6,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(CX,CY,3,0,Math.PI*2); ctx.fill();
+}
+
+function updateInfo() {
+  const hStr = hour.toString().padStart(2,'0');
+  const mStr = minute.toString().padStart(2,'0');
+  document.getElementById('timeDisplay').textContent = `${hStr}:${mStr}`;
+
+  const hw = HOUR_WORDS[hour%12];
+  let label;
+  if(minute===0) label=`${hw}点整`;
+  else if(minute===15) label=`${hw}点一刻（${hw}点15分）`;
+  else if(minute===30) label=`${hw}点半（${hw}点30分）`;
+  else if(minute===45) label=`${hw}点三刻（${hw}点45分）`;
+  else label=`${hw}点${minute}分`;
+  document.getElementById('timeLabel').textContent=label;
+
+  let tip='';
+  if(minute===0) tip='<strong>整点</strong>：分针指向12，时针指向数字'+hw+'。';
+  else if(minute===15) tip='<strong>一刻钟</strong>：分针走了15分钟，转了四分之一圈，指向3。';
+  else if(minute===30) tip='<strong>半小时</strong>：分针走了30分钟，转了半圈，指向6。';
+  else if(minute===45) tip='<strong>三刻钟</strong>：分针走了45分钟，转了四分之三圈，指向9。';
+  else tip=`分针走了 <strong>${minute}</strong> 分钟，时针介于 <strong>${HOUR_WORDS[hour%12]}</strong> 和 <strong>${HOUR_WORDS[(hour)%12+1]||'十二'}</strong> 之间。`;
+  document.getElementById('fb').innerHTML = tip+'<br>时针走一圈=12小时；分针走一圈=60分钟=1小时。';
+}
+
+// Click to set minute hand
+cvs.addEventListener('click', e=>{
+  const rect = cvs.getBoundingClientRect();
+  const x=(e.clientX-rect.left)-CX, y=(e.clientY-rect.top)-CY;
+  const ang = Math.atan2(y,x) + Math.PI/2;
+  const frac = ((ang/(Math.PI*2))%1+1)%1;
+  // Snap to nearest 5 minutes
+  const m = Math.round(frac*60/5)*5%60;
+  minute=m;
+  draw(); updateInfo();
+});
+
+draw(); updateInfo();
+</script>
+</body>
+</html>

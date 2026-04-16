@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>圆周角与切线 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="圆">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="拖动圆周上的点，实时验证圆周角=圆心角/2，并展示切线与半径的垂直关系">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto Sans SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:grab;}
+    .mode-row{display:flex;gap:6px;}
+    .mode-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 圆 · 认知动作：比较</div>
+  <h1>圆周角与切线定理</h1>
+  <p class="sub">拖动 P 点沿圆周移动，验证圆周角始终等于圆心角的一半</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('inscribed',this)">圆周角定理</button>
+    <button class="mode-btn" onclick="setMode('tangent',this)">切线定理</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">圆心角 ∠AOB</div><div class="stat-val" id="centralVal" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">圆周角 ∠APB</div><div class="stat-val" id="inscribedVal" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">比值 ∠AOB/∠APB</div><div class="stat-val" id="ratioVal" style="color:var(--teal)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="fb" id="fb">拖动蓝色的 P 点，观察圆周角的变化。</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 圆周角定理只有拖动P才能"亲自验证"
+// PEDAGOGY V5 操作先于符号: 先看角度不变，再理解定理
+// PEDAGOGY V6 动作-数学一致: 拖P绕圆=圆周角改变但比值恒定
+// PEDAGOGY V7 单一认知动作: 比较（圆心角与圆周角的比较）
+// PEDAGOGY V8 概念反馈: 揭示"圆周角=圆心角/2"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=380;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+let mode='inscribed';
+// Fixed points A, B on circle (in angles)
+let angA=-Math.PI/3, angB=Math.PI/4+Math.PI;
+// Moving point P
+let angP=Math.PI/2;
+let dragging=false;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setMode(m,btn){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function getCenter(W){ return {cx:W/2, cy:H/2, R:Math.min(W,H)*0.35}; }
+
+function ptOnCircle(ang,cx,cy,R){ return {x:cx+R*Math.cos(ang), y:cy+R*Math.sin(ang)}; }
+
+function angleBetween(vAx,vAy,vBx,vBy){
+  const dot=vAx*vBx+vAy*vBy;
+  const cross=vAx*vBy-vAy*vBx;
+  return Math.abs(Math.atan2(Math.abs(cross),dot))*180/Math.PI;
+}
+
+function drawAngleArc(px,py,angle1,angle2,R2,color,label){
+  ctx.fillStyle=color+'33';
+  ctx.beginPath();ctx.moveTo(px,py);
+  let a1=angle1,a2=angle2;
+  // make sure we draw the smaller arc
+  ctx.arc(px,py,R2,a1,a2,false);
+  ctx.closePath();ctx.fill();
+  ctx.strokeStyle=color;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.arc(px,py,R2,a1,a2,false);ctx.stroke();
+  const mid=(a1+a2)/2;
+  ctx.fillStyle=color;ctx.font=`bold 12px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(label,px+R2*0.65*Math.cos(mid),py+R2*0.65*Math.sin(mid));
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const {cx,cy,R}=getCenter(W);
+
+  // Grid dots (subtle)
+  ctx.fillStyle=C.border;
+  for(let x=0;x<W;x+=40) for(let y=0;y<H;y+=40){ ctx.beginPath();ctx.arc(x,y,1,0,Math.PI*2);ctx.fill(); }
+
+  const A=ptOnCircle(angA,cx,cy,R);
+  const B=ptOnCircle(angB,cx,cy,R);
+  const P=ptOnCircle(angP,cx,cy,R);
+  const O={x:cx,y:cy};
+
+  if(mode==='inscribed'){
+    // Draw circle
+    ctx.strokeStyle=C.ink;ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle=C.blueL+'33';
+    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fill();
+
+    // Arc AB (shorter)
+    ctx.strokeStyle=C.teal;ctx.lineWidth=4;
+    const arcStart=angA,arcEnd=angB;
+    ctx.beginPath();ctx.arc(cx,cy,R,arcStart,arcEnd,false);ctx.stroke();
+
+    // Chords OA, OB (radii)
+    ctx.strokeStyle=C.blue+'66';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(A.x,A.y);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(B.x,B.y);ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Chords PA, PB
+    ctx.strokeStyle=C.amber;ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(P.x,P.y);ctx.lineTo(A.x,A.y);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(P.x,P.y);ctx.lineTo(B.x,B.y);ctx.stroke();
+
+    // Central angle
+    const vOAx=A.x-cx,vOAy=A.y-cy,vOBx=B.x-cx,vOBy=B.y-cy;
+    const centralDeg=angleBetween(vOAx,vOAy,vOBx,vOBy);
+    // Inscribed angle
+    const vPAx=A.x-P.x,vPAy=A.y-P.y,vPBx=B.x-P.x,vPBy=B.y-P.y;
+    const inscribedDeg=angleBetween(vPAx,vPAy,vPBx,vPBy);
+    const ratio=inscribedDeg>0.1?centralDeg/inscribedDeg:0;
+
+    // Draw angle arcs
+    drawAngleArc(cx,cy,angA,angB,R*0.2,C.blue,`${centralDeg.toFixed(0)}°`);
+    const paAngle=Math.atan2(vPAy,vPAx);
+    const pbAngle=Math.atan2(vPBy,vPBx);
+    drawAngleArc(P.x,P.y,Math.min(paAngle,pbAngle),Math.max(paAngle,pbAngle),R*0.15,C.amber,`${inscribedDeg.toFixed(0)}°`);
+
+    // Points
+    [{p:A,l:'A',c:C.teal},{p:B,l:'B',c:C.teal},{p:O,l:'O',c:C.blue},{p:P,l:'P',c:C.amber}].forEach(({p,l,c})=>{
+      ctx.fillStyle=c;ctx.beginPath();ctx.arc(p.x,p.y,7,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#fff';ctx.font=`bold 10px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(l,p.x,p.y);
+    });
+
+    document.getElementById('centralVal').textContent=centralDeg.toFixed(1)+'°';
+    document.getElementById('inscribedVal').textContent=inscribedDeg.toFixed(1)+'°';
+    document.getElementById('ratioVal').textContent=ratio.toFixed(2);
+
+    // PEDAGOGY V8
+    document.getElementById('fb').innerHTML=
+      `圆心角 ∠AOB = <strong>${centralDeg.toFixed(1)}°</strong>，圆周角 ∠APB = <strong>${inscribedDeg.toFixed(1)}°</strong>。<br>` +
+      `无论 P 在弧 AB 的哪个位置，比值始终等于 <strong>2</strong>（圆周角 = 圆心角 / 2）。<br>` +
+      `<strong>圆周角定理：同弧上所有圆周角相等，且等于圆心角的一半。</strong>`;
+
+  } else { // tangent mode
+    // Show circle
+    ctx.strokeStyle=C.ink;ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
+
+    // Tangent point is P
+    const T=ptOnCircle(angP,cx,cy,R);
+    // Radius OT
+    ctx.strokeStyle=C.blue;ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(T.x,T.y);ctx.stroke();
+    // Tangent line at T (perpendicular to radius)
+    const radAngle=angP;
+    const tanAngle=radAngle+Math.PI/2;
+    const tanLen=160;
+    ctx.strokeStyle=C.teal;ctx.lineWidth=2.5;
+    ctx.beginPath();
+    ctx.moveTo(T.x-tanLen*Math.cos(tanAngle),T.y-tanLen*Math.sin(tanAngle));
+    ctx.lineTo(T.x+tanLen*Math.cos(tanAngle),T.y+tanLen*Math.sin(tanAngle));
+    ctx.stroke();
+    // Right angle marker
+    const sq=12;
+    const rx=Math.cos(radAngle),ry=Math.sin(radAngle);
+    const tx=Math.cos(tanAngle),ty=Math.sin(tanAngle);
+    ctx.strokeStyle=C.blue;ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.moveTo(T.x-sq*rx,T.y-sq*ry);
+    ctx.lineTo(T.x-sq*rx+sq*tx,T.y-sq*ry+sq*ty);
+    ctx.lineTo(T.x+sq*tx,T.y+sq*ty);
+    ctx.stroke();
+    // Points
+    [{p:{x:cx,y:cy},l:'O',c:C.blue},{p:T,l:'T',c:C.amber}].forEach(({p,l,c})=>{
+      ctx.fillStyle=c;ctx.beginPath();ctx.arc(p.x,p.y,7,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#fff';ctx.font=`bold 10px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(l,p.x,p.y);
+    });
+    // Label
+    ctx.fillStyle=C.teal;ctx.font=`bold 13px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText('切线',T.x+tanLen*0.7*Math.cos(tanAngle),T.y+tanLen*0.7*Math.sin(tanAngle)-6);
+
+    document.getElementById('centralVal').textContent='—';
+    document.getElementById('inscribedVal').textContent='90°';
+    document.getElementById('ratioVal').textContent='—';
+
+    document.getElementById('fb').innerHTML=
+      `切线 ⊥ 半径：切线在切点 T 处与半径 OT <strong>垂直</strong>（夹角 = 90°）。<br>` +
+      `拖动 P（切点）绕圆移动，切线方向也随之改变，但始终与半径垂直。<br>` +
+      `<strong>切线定理：切线与过切点的半径垂直。</strong>`;
+  }
+}
+
+cvs.addEventListener('pointerdown',e=>{
+  const rect=cvs.getBoundingClientRect();
+  const px=e.clientX-rect.left,py=e.clientY-rect.top;
+  const {cx,cy,R}=getCenter(cvs.getBoundingClientRect().width);
+  const P=ptOnCircle(angP,cx,cy,R);
+  if(Math.hypot(px-P.x,py-P.y)<20){ dragging=true; cvs.setPointerCapture(e.pointerId); cvs.style.cursor='grabbing'; }
+});
+
+cvs.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const rect=cvs.getBoundingClientRect();
+  const px=e.clientX-rect.left,py=e.clientY-rect.top;
+  const {cx,cy}=getCenter(cvs.getBoundingClientRect().width);
+  angP=Math.atan2(py-cy,px-cx);
+  draw();
+});
+
+cvs.addEventListener('pointerup',()=>{ dragging=false; cvs.style.cursor='grab'; });
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

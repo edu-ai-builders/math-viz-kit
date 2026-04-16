@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>原函数—导函数联动器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="微积分">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="上图原函数F(x)，下图导函数f(x)，拖动x₀处的切线实时联动两图，体验FTC">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:ew-resize;}
+    .fn-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .fn-btn{padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:11px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);transition:all .2s;text-align:center;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 微积分 · 认知动作：变换</div>
+  <h1>原函数—导函数联动器</h1>
+  <p class="sub">上图 F(x) 的切线斜率 = 下图 f(x) 的高度——微积分基本定理的几何语言</p>
+</header>
+<main>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn(0,this)">F(x)=sin(x)</button>
+    <button class="fn-btn" onclick="setFn(1,this)">F(x)=x³/3</button>
+    <button class="fn-btn" onclick="setFn(2,this)">F(x)=e^x</button>
+    <button class="fn-btn" onclick="setFn(3,this)">F(x)=x²/2</button>
+    <button class="fn-btn" onclick="setFn(4,this)">F(x)=ln|x|</button>
+    <button class="fn-btn" onclick="setFn(5,this)">F(x)=x·sin(x)</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">x₀</div><div class="stat-val" id="sx0" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">F(x₀)</div><div class="stat-val" id="sFx" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">F'(x₀)=f(x₀)</div><div class="stat-val" id="sDeriv" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">切线角度</div><div class="stat-val" id="sAngle" style="color:var(--ink)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: F'(x)=f(x)的关系只有双图联动才能体感
+// PEDAGOGY V2 表征桥接: 上图切线斜率 ↔ 下图函数值
+// PEDAGOGY V3 分步揭示: 先看F(x)形态，拖动感受斜率变化，再看f(x)
+// PEDAGOGY V6 动作-数学一致: 左右拖动=改变x₀
+// PEDAGOGY V7 单一认知动作: 变换（x₀位置↔切线斜率↔导函数值）
+// PEDAGOGY V8 概念反馈: 揭示FTC: F'(x)=f(x)，极大值处导数=0
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=520;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+const FNS=[
+  {name:'sin(x)',  F:x=>Math.sin(x),  f:x=>Math.cos(x),  label:'F(x)=sin(x)，f(x)=cos(x)'},
+  {name:'x³/3',   F:x=>x**3/3,        f:x=>x**2,         label:'F(x)=x³/3，f(x)=x²'},
+  {name:'e^x',    F:x=>Math.exp(x),   f:x=>Math.exp(x),  label:'F(x)=e^x，f(x)=e^x（自身的导数）'},
+  {name:'x²/2',   F:x=>x**2/2,        f:x=>x,            label:'F(x)=x²/2，f(x)=x'},
+  {name:'ln|x|',  F:x=>Math.abs(x)>0.1?Math.log(Math.abs(x)):NaN, f:x=>1/x, label:'F(x)=ln|x|，f(x)=1/x'},
+  {name:'x·sin(x)',F:x=>x*Math.sin(x), f:x=>Math.sin(x)+x*Math.cos(x), label:'F(x)=x·sin(x)，f(x)=sin(x)+x·cos(x)'},
+];
+
+let fnIdx=0;
+let x0=1;
+let dragging=false;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setFn(i,btn){
+  fnIdx=i;
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function drawPanel(F,label,color,yRng,baseY,plotH,W,x0,showTangent,showArea){
+  const xRange=4;
+  const margin={left:44,right:20};
+  const plotW=W-margin.left-margin.right;
+  const xToP=x=>margin.left+(x+xRange)/(2*xRange)*plotW;
+  const yToP=y=>baseY+(yRng-y)/(2*yRng)*plotH;
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let i=-xRange;i<=xRange;i++){
+    ctx.beginPath();ctx.moveTo(xToP(i),baseY);ctx.lineTo(xToP(i),baseY+plotH);ctx.stroke();
+  }
+  for(let j=-4;j<=4;j++){
+    const y=j*(yRng/4);
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(y));ctx.lineTo(margin.left+plotW,yToP(y));ctx.stroke();
+  }
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(0));ctx.lineTo(margin.left+plotW,yToP(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(0),baseY);ctx.lineTo(xToP(0),baseY+plotH);ctx.stroke();
+  ctx.fillStyle=C.ink2;ctx.font=`10px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+  for(let i=-xRange;i<=xRange;i++) if(i!==0) ctx.fillText(String(i),xToP(i),yToP(0)+2);
+
+  // Area shading under curve to x0
+  if(showArea){
+    ctx.fillStyle=color+'22';
+    ctx.beginPath();ctx.moveTo(xToP(-xRange),yToP(0));
+    for(let px=0;px<=plotW;px+=2){
+      const x=(px/plotW)*(2*xRange)-xRange;
+      if(x>x0) break;
+      const y=F(x);
+      if(isFinite(y)) ctx.lineTo(xToP(x),yToP(y));
+    }
+    ctx.lineTo(xToP(Math.min(x0,xRange)),yToP(0));ctx.closePath();ctx.fill();
+  }
+
+  // Curve
+  ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.setLineDash([]);
+  ctx.beginPath();let first=true;
+  for(let px=0;px<=plotW;px+=2){
+    const x=(px/plotW)*(2*xRange)-xRange;
+    const y=F(x);
+    if(!isFinite(y)||Math.abs(y)>yRng*1.5){first=true;continue;}
+    first?(ctx.moveTo(xToP(x),yToP(y)),first=false):ctx.lineTo(xToP(x),yToP(y));
+  }
+  ctx.stroke();
+
+  // Tangent line at x0
+  if(showTangent){
+    const fn=FNS[fnIdx];
+    const Fx0=fn.F(x0);
+    const deriv=fn.f(x0);
+    if(isFinite(Fx0)&&isFinite(deriv)){
+      const tanLen=2;
+      ctx.strokeStyle=C.amberD;ctx.lineWidth=2;ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(xToP(x0-tanLen),yToP(Fx0-deriv*tanLen));
+      ctx.lineTo(xToP(x0+tanLen),yToP(Fx0+deriv*tanLen));
+      ctx.stroke();
+      // Point
+      ctx.fillStyle=C.amberD;ctx.beginPath();ctx.arc(xToP(x0),yToP(Fx0),6,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  // x0 vertical line
+  ctx.strokeStyle=C.amberD;ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(xToP(x0),baseY);ctx.lineTo(xToP(x0),baseY+plotH);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Label
+  ctx.fillStyle=color;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(label,margin.left+4,baseY+4);
+
+  return {xToP,yToP};
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const fn=FNS[fnIdx];
+  const halfH=H/2-8;
+
+  // Top: F(x)
+  drawPanel(fn.F,`F(x)=${fn.name}（原函数）`,C.blue,4,0,halfH,W,x0,true,true);
+  // Divider
+  ctx.strokeStyle=C.border;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(44,H/2);ctx.lineTo(W-20,H/2);ctx.stroke();
+  // Bottom: f(x)
+  const {xToP,yToP}=drawPanel(fn.f,`f(x)=F'(x)（导函数）`,C.teal,4,H/2+8,halfH-8,W,x0,false,false);
+
+  // f(x0) highlighted on bottom
+  const Fx0=fn.F(x0);
+  const deriv=fn.f(x0);
+  if(isFinite(deriv)&&Math.abs(deriv)<=4*1.3){
+    ctx.fillStyle=C.amberD;ctx.beginPath();ctx.arc(xToP(x0),yToP(deriv),6,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle=C.amberD;ctx.lineWidth=1.5;ctx.setLineDash([3,2]);
+    ctx.beginPath();ctx.moveTo(xToP(0),yToP(deriv));ctx.lineTo(xToP(x0),yToP(deriv));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(xToP(x0),yToP(0));ctx.lineTo(xToP(x0),yToP(deriv));ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.amberD;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='bottom';
+    ctx.fillText(`f(x₀)=${deriv.toFixed(3)}`,xToP(x0)+4,yToP(deriv)-2);
+  }
+
+  // Stats
+  document.getElementById('sx0').textContent=x0.toFixed(3);
+  document.getElementById('sFx').textContent=isFinite(Fx0)?Fx0.toFixed(3):'未定义';
+  document.getElementById('sDeriv').textContent=isFinite(deriv)?deriv.toFixed(3):'未定义';
+  document.getElementById('sAngle').textContent=isFinite(deriv)?(Math.atan(deriv)*180/Math.PI).toFixed(1)+'°':'—';
+
+  // PEDAGOGY V8
+  document.getElementById('fb').innerHTML=
+    `${fn.label}。<br>` +
+    `在 x₀=${x0.toFixed(3)} 处：F(x₀)=${isFinite(Fx0)?Fx0.toFixed(4):'未定义'}，<strong>切线斜率 F'(x₀) = f(x₀) = ${isFinite(deriv)?deriv.toFixed(4):'未定义'}</strong>。<br>` +
+    `<strong>微积分基本定理（FTC）：</strong>上图F(x)在某点的切线斜率 = 下图f(x)在同一点的函数值。<br>` +
+    `${Math.abs(deriv)<0.05?'此处斜率≈0，F(x)在极值点附近（f=0）。':deriv>0?'f(x₀)>0，F(x)在此处单调递增。':'f(x₀)<0，F(x)在此处单调递减。'} 左右拖动感受联动。`;
+}
+
+cvs.addEventListener('pointerdown',e=>{dragging=true;cvs.setPointerCapture(e.pointerId);updateX0(e);});
+cvs.addEventListener('pointermove',e=>{if(dragging) updateX0(e);});
+cvs.addEventListener('pointerup',()=>{dragging=false;});
+function updateX0(e){
+  const rect=cvs.getBoundingClientRect();
+  const W=rect.width;
+  const margin=44;const plotW=W-margin-20;
+  const xRange=4;
+  x0=Math.max(-xRange,Math.min(xRange,(e.clientX-rect.left-margin)/plotW*(2*xRange)-xRange));
+  draw();
+}
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

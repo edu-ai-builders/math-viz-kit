@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>函数性质实验室 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="函数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="单调性/奇偶性/最值/零点高亮，拖动区间端点，动态揭示函数的各类性质">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:ew-resize;}
+    .fn-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .fn-btn{padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);font-weight:700;transition:all .2s;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .prop-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .prop-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;text-align:center;}
+    .prop-val{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;}
+    .prop-lbl{font-size:11px;color:var(--ink2);margin-top:2px;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 函数 · 认知动作：比较</div>
+  <h1>函数性质实验室</h1>
+  <p class="sub">拖动区间端点，高亮单调/最值/零点区域，动态感受函数的各类性质</p>
+</header>
+<main>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn(0,this)">x²-2x</button>
+    <button class="fn-btn" onclick="setFn(1,this)">x³-3x</button>
+    <button class="fn-btn" onclick="setFn(2,this)">|x|-1</button>
+    <button class="fn-btn" onclick="setFn(3,this)">sin(x)</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="prop-grid">
+    <div class="prop-box"><div class="prop-val" id="monoVal" style="color:var(--blue)">—</div><div class="prop-lbl">区间单调性</div></div>
+    <div class="prop-box"><div class="prop-val" id="parityVal" style="color:var(--teal)">—</div><div class="prop-lbl">奇偶性</div></div>
+    <div class="prop-box"><div class="prop-val" id="extremaVal" style="color:var(--amber)">—</div><div class="prop-lbl">区间最值</div></div>
+    <div class="prop-box"><div class="prop-val" id="zerosVal" style="color:#7c3aed">—</div><div class="prop-lbl">零点数量</div></div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 单调性/最值只有配合可拖动区间才能让学生"自己发现"
+// PEDAGOGY V4 信号聚焦: 绿=单调递增，红=单调递减，黄=零点，星=极值
+// PEDAGOGY V5 操作先于符号: 先拖动区间感受性质，再给出正式定义
+// PEDAGOGY V7 单一认知动作: 比较（在不同区间上函数有什么性质）
+// PEDAGOGY V8 概念反馈: 对每个性质给出严格定义+图形印证
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 300;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da'
+};
+
+const FNS = [
+  { label:'f(x) = x²-2x', f:x=>x*x-2*x, df:x=>2*x-2, domain:[-2,4], parity:'非奇非偶' },
+  { label:'f(x) = x³-3x', f:x=>x*x*x-3*x, df:x=>3*x*x-3, domain:[-3,3], parity:'奇函数' },
+  { label:'f(x) = |x|-1', f:x=>Math.abs(x)-1, df:x=>x>0?1:(x<0?-1:0), domain:[-3,3], parity:'偶函数' },
+  { label:'f(x) = sin(x)', f:x=>Math.sin(x), df:x=>Math.cos(x), domain:[-2*Math.PI, 2*Math.PI], parity:'奇函数' },
+];
+
+let fnIdx = 0;
+let xA, xB; // interval endpoints
+let dragging = null;
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr;
+  ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function setFn(i, btn) {
+  fnIdx = i;
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const fn = FNS[i];
+  xA = fn.domain[0] + (fn.domain[1]-fn.domain[0])*0.2;
+  xB = fn.domain[0] + (fn.domain[1]-fn.domain[0])*0.6;
+  draw();
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0,0,W,H);
+  const fn = FNS[fnIdx];
+  const [xMin, xMax] = fn.domain;
+
+  const pad = {l:50, r:15, t:20, b:35};
+  const cw = W-pad.l-pad.r;
+  const ch = H-pad.t-pad.b;
+
+  // Compute y range
+  const ys = [];
+  for(let i=0;i<=200;i++) ys.push(fn.f(xMin+i/200*(xMax-xMin)));
+  const yMax = Math.max(...ys)*1.2, yMin = Math.min(...ys)*1.2;
+
+  function toX(x){return pad.l+(x-xMin)/(xMax-xMin)*cw;}
+  function toY(y){return pad.t+ch/2-(y/(Math.max(Math.abs(yMax),Math.abs(yMin))))*ch/2;}
+  const x0line = toY(0);
+
+  // Shade interval [xA, xB]
+  const xAs=toX(xA), xBs=toX(xB);
+
+  // Determine monotonicity in interval
+  const steps = 50;
+  let increasing = 0, decreasing = 0;
+  for(let i=0;i<steps;i++){
+    const x = xA + i/steps*(xB-xA);
+    const d = fn.df(x);
+    if(d>0.01) increasing++;
+    else if(d<-0.01) decreasing++;
+  }
+  const mono = increasing > 0 && decreasing === 0 ? 'increasing' :
+               decreasing > 0 && increasing === 0 ? 'decreasing' : 'mixed';
+
+  // Color-fill the interval
+  for(let px=Math.floor(xAs);px<=Math.ceil(xBs);px++){
+    const x = xMin+(px-pad.l)/cw*(xMax-xMin);
+    if(x<xA||x>xB) continue;
+    const d = fn.df(x);
+    const col = d>0.01 ? C.tealL : d<-0.01 ? '#fee2e2' : C.amberL;
+    ctx.fillStyle=col;
+    ctx.fillRect(px, pad.t, 1, ch);
+  }
+
+  // Grid
+  ctx.strokeStyle=C.border; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(pad.l,x0line); ctx.lineTo(W-pad.r,x0line); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // x-axis
+  ctx.strokeStyle=C.ink; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,pad.t+ch); ctx.lineTo(W-pad.r,pad.t+ch); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(pad.l,x0line); ctx.lineTo(W-pad.r,x0line); ctx.stroke();
+
+  // Function curve
+  ctx.strokeStyle=C.blue; ctx.lineWidth=2.5;
+  ctx.beginPath();
+  let first=true;
+  for(let px=0;px<=cw;px++){
+    const x=xMin+px/cw*(xMax-xMin);
+    const y=fn.f(x);
+    const yy=toY(y);
+    if(yy<pad.t-5||yy>pad.t+ch+5){first=true;continue;}
+    if(first){ctx.moveTo(pad.l+px,yy);first=false;}else ctx.lineTo(pad.l+px,yy);
+  }
+  ctx.stroke();
+
+  // Zero points
+  for(let i=0;i<200;i++){
+    const x0=xMin+i/200*(xMax-xMin), x1=xMin+(i+1)/200*(xMax-xMin);
+    if(fn.f(x0)*fn.f(x1)<0){
+      const zx=(x0+x1)/2;
+      ctx.fillStyle='#7c3aed';
+      ctx.beginPath(); ctx.arc(toX(zx),x0line,5,0,Math.PI*2); ctx.fill();
+    }
+  }
+
+  // Extrema (df changes sign)
+  for(let i=1;i<200;i++){
+    const x0=xMin+i/200*(xMax-xMin), xm=xMin+(i-1)/200*(xMax-xMin);
+    if(fn.df(xm)*fn.df(x0)<0){
+      const ex=x0, ey=fn.f(x0);
+      ctx.fillStyle=C.amber;
+      ctx.beginPath(); ctx.arc(toX(ex),toY(ey),6,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=C.amber; ctx.font=`bold 12px 'JetBrains Mono',monospace`;
+      ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText(ey>0?'▲极大':'▼极小', toX(ex), toY(ey)-(ey>0?8:-20));
+    }
+  }
+
+  // Interval endpoints (draggable handles)
+  [xA, xB].forEach((x,i) => {
+    ctx.fillStyle=C.amber; ctx.strokeStyle='#fff'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(toX(x),x0line,9,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.font=`bold 12px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(i===0?'[':']', toX(x), x0line);
+    ctx.fillStyle=C.ink2; ctx.font=`11px 'JetBrains Mono',monospace`;
+    ctx.textBaseline='top';
+    ctx.fillText(x.toFixed(1), toX(x), x0line+12);
+  });
+
+  // Axis ticks
+  for(let x=Math.ceil(xMin);x<=xMax;x++){
+    ctx.fillStyle=C.ink3; ctx.font=`10px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(x,toX(x),pad.t+ch+4);
+  }
+
+  // Title
+  ctx.fillStyle=C.ink; ctx.font=`bold 13px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText(fn.label, pad.l+4, 4);
+
+  updateProps(fn, mono);
+}
+
+function updateProps(fn, mono) {
+  const xA_=xA, xB_=xB;
+  const ys = [];
+  for(let i=0;i<=50;i++) ys.push(fn.f(xA_+i/50*(xB_-xA_)));
+  const yMax=Math.max(...ys), yMin=Math.min(...ys);
+  let zeros=0;
+  for(let i=0;i<50;i++){
+    const x0=xA_+i/50*(xB_-xA_), x1=xA_+(i+1)/50*(xB_-xA_);
+    if(fn.f(x0)*fn.f(x1)<0) zeros++;
+  }
+
+  document.getElementById('monoVal').textContent = mono==='increasing'?'单调递增↑':mono==='decreasing'?'单调递减↓':'非单调';
+  document.getElementById('monoVal').style.color = mono==='increasing'?C.teal:mono==='decreasing'?'#dc2626':C.ink2;
+  document.getElementById('parityVal').textContent = fn.parity;
+  document.getElementById('extremaVal').textContent = `[${yMin.toFixed(2)}, ${yMax.toFixed(2)}]`;
+  document.getElementById('zerosVal').textContent = zeros+'个';
+
+  document.getElementById('fb').innerHTML =
+    `<strong>${fn.label}</strong>，分析区间 [${xA_.toFixed(2)}, ${xB_.toFixed(2)}]：<br>` +
+    `<strong>单调性</strong>：${mono==='increasing'?'单调递增（f'(x)≥0，绿色区域）':mono==='decreasing'?'单调递减（f'(x)≤0，红色区域）':'非单调（区间内有极值点）'}<br>` +
+    `<strong>奇偶性</strong>：${fn.parity}（${fn.parity==='奇函数'?'f(-x)=-f(x)，关于原点对称':fn.parity==='偶函数'?'f(-x)=f(x)，关于y轴对称':'f(-x)≠f(x)且f(-x)≠-f(x)'}）<br>` +
+    `<strong>区间最值</strong>：最大值≈${yMax.toFixed(3)}，最小值≈${yMin.toFixed(3)}（拖动端点改变区间）`;
+}
+
+// Drag
+cvs.addEventListener('pointerdown', e=>{
+  const rect=cvs.getBoundingClientRect();
+  const px=e.clientX-rect.left;
+  const fn=FNS[fnIdx], [xMin,xMax]=fn.domain;
+  const cw=rect.width-65;
+  const xClick=xMin+(px-50)/cw*(xMax-xMin);
+  const dA=Math.abs(xClick-xA), dB=Math.abs(xClick-xB);
+  dragging=dA<dB?'A':'B';
+  cvs.setPointerCapture(e.pointerId);
+});
+cvs.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  const rect=cvs.getBoundingClientRect();
+  const px=e.clientX-rect.left;
+  const fn=FNS[fnIdx], [xMin,xMax]=fn.domain;
+  const cw=rect.width-65;
+  const x=Math.max(xMin,Math.min(xMax,xMin+(px-50)/cw*(xMax-xMin)));
+  if(dragging==='A'){xA=Math.min(x,xB-0.1);}else{xB=Math.max(x,xA+0.1);}
+  draw();
+});
+cvs.addEventListener('pointerup',()=>{dragging=null;});
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();
+setFn(0,document.querySelector('.fn-btn.active'));
+</script>
+</body>
+</html>

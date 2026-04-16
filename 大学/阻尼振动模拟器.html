@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>阻尼振动模拟器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="常微分方程">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="模拟">
+  <meta name="desc" content="弹簧-质量-阻尼系统的动画模拟，对比欠阻尼、临界阻尼和过阻尼三种情况下的位移时间曲线">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .ctrl-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .ctrl-group{display:flex;flex-direction:column;gap:4px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);display:flex;justify-content:space-between;}
+    .ctrl-label strong{font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);width:100%;}
+    .tag-row{display:flex;gap:6px;align-items:center;}
+    .damping-tag{padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;}
+    .underdamped{background:#e8f0f8;color:#2a5c8f;}
+    .critical{background:#e1f5ee;color:#0f6e56;}
+    .overdamped{background:#faeeda;color:#854f0b;}
+    .layout{display:grid;grid-template-columns:160px 1fr;gap:10px;}
+    canvas.anim{width:100%;display:block;border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--border);}
+    canvas.graph{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 常微分方程 · 认知动作：模拟</div>
+  <h1>阻尼振动模拟器</h1>
+  <p class="sub">弹簧质量系统动画，对比三种阻尼类型</p>
+</header>
+<main>
+  <div class="ctrl-panel">
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>弹簧系数 k</span><strong id="kLbl">4.0</strong></div>
+      <input type="range" id="slK" min="0.5" max="16" step="0.5" value="4" oninput="update()">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>阻尼系数 c</span><strong id="cLbl">1.0</strong></div>
+      <input type="range" id="slC" min="0" max="10" step="0.1" value="1" oninput="update()">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>质量 m</span><strong id="mLbl">1.0</strong></div>
+      <input type="range" id="slM" min="0.5" max="4" step="0.1" value="1" oninput="update()">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>初始位移 x₀</span><strong id="x0Lbl">1.0</strong></div>
+      <input type="range" id="slX0" min="0.1" max="2" step="0.1" value="1" oninput="update()">
+    </div>
+  </div>
+  <div class="tag-row" id="tagRow"></div>
+  <div class="layout">
+    <canvas id="cvsAnim" class="anim"></canvas>
+    <canvas id="cvsGraph" class="graph"></canvas>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 弹簧运动和位移曲线需要实时动画才能体验"阻尼"
+// PEDAGOGY V6 动作—数学一致: 调阻尼系数 → 动画和曲线同步变化
+// PEDAGOGY V8 概念反馈: 自动判断欠/临界/过阻尼并说明物理含义
+
+const cvsA=document.getElementById('cvsAnim');
+const ctxA=cvsA.getContext('2d');
+const cvsG=document.getElementById('cvsGraph');
+const ctxG=cvsG.getContext('2d');
+const HA=260,HG=260;
+const T_END=20;
+let k=4,c=1,m=1,x0=1;
+let t=0;
+let animId=null;
+let dt=0.02;
+
+function setup(){
+  const dpr=window.devicePixelRatio||1;
+  function sz(cv,H){const r=cv.getBoundingClientRect();cv.width=r.width*dpr;cv.height=H*dpr;cv.getContext('2d').scale(dpr,dpr);cv.style.height=H+'px';}
+  sz(cvsA,HA);sz(cvsG,HG);
+}
+
+function getParams(){
+  return {
+    k:parseFloat(document.getElementById('slK').value),
+    c:parseFloat(document.getElementById('slC').value),
+    m:parseFloat(document.getElementById('slM').value),
+    x0:parseFloat(document.getElementById('slX0').value)
+  };
+}
+
+function dampingType(c,m,k){
+  const disc=c*c-4*m*k;
+  if(disc<-0.01) return 'underdamped';
+  if(Math.abs(disc)<0.01) return 'critical';
+  return 'overdamped';
+}
+
+function solveX(t_,p){
+  const {k,c,m,x0}=p;
+  const omega0=Math.sqrt(k/m);
+  const zeta=c/(2*Math.sqrt(m*k));
+  if(zeta<1){ // underdamped
+    const omegaD=omega0*Math.sqrt(1-zeta*zeta);
+    return x0*Math.exp(-zeta*omega0*t_)*(Math.cos(omegaD*t_)+zeta/Math.sqrt(1-zeta*zeta)*Math.sin(omegaD*t_));
+  } else if(Math.abs(zeta-1)<0.01){ // critical
+    return x0*(1+omega0*t_)*Math.exp(-omega0*t_);
+  } else { // overdamped
+    const r1=-omega0*(zeta-Math.sqrt(zeta*zeta-1));
+    const r2=-omega0*(zeta+Math.sqrt(zeta*zeta-1));
+    const A=(x0*r2)/(r2-r1);
+    const B=(x0*r1)/(r1-r2);
+    return A*Math.exp(r1*t_)+B*Math.exp(r2*t_);
+  }
+}
+
+function drawSpring(ctx,x,y,w,h,compress){
+  const coils=8;
+  ctx.strokeStyle='#6b6860';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(x,y);
+  const coilW=h/coils;
+  for(let i=0;i<coils;i++){
+    const yc=y+i*coilW;
+    ctx.lineTo(x+w*(i%2===0?1:-1),yc+coilW*0.3);
+    ctx.lineTo(x+w*(i%2===0?-1:1),yc+coilW*0.7);
+  }
+  ctx.lineTo(x,y+h);ctx.stroke();
+}
+
+function update(){
+  const p=getParams();k=p.k;c=p.c;m=p.m;x0=p.x0;
+  document.getElementById('kLbl').textContent=k.toFixed(1);
+  document.getElementById('cLbl').textContent=c.toFixed(1);
+  document.getElementById('mLbl').textContent=m.toFixed(1);
+  document.getElementById('x0Lbl').textContent=x0.toFixed(1);
+
+  const dt_type=dampingType(c,m,k);
+  const tags={underdamped:{cls:'underdamped',text:'欠阻尼（振荡衰减）'},critical:{cls:'critical',text:'临界阻尼（最快返回）'},overdamped:{cls:'overdamped',text:'过阻尼（缓慢返回）'}};
+  const tag=tags[dt_type];
+  const omega0=Math.sqrt(k/m);
+  const zeta=c/(2*Math.sqrt(m*k));
+  document.getElementById('tagRow').innerHTML=
+    `<span class="damping-tag ${tag.cls}">${tag.text}</span>
+    <span style="font-size:12px;color:var(--ink2);font-family:'JetBrains Mono',monospace">ω₀=${omega0.toFixed(2)}, ζ=${zeta.toFixed(3)}, 临界c*=${(2*Math.sqrt(m*k)).toFixed(2)}</span>`;
+
+  drawGraph();
+
+  document.getElementById('fb').innerHTML=
+    `<strong>二阶线性ODE</strong>：m·x''+c·x'+k·x=0，解取决于判别式 c²-4mk。<br>
+    <strong>ζ=${zeta.toFixed(3)} (阻尼比)</strong>：ζ<1 欠阻尼（振荡）；ζ=1 临界阻尼；ζ>1 过阻尼（无振荡）。<br>
+    <strong>临界阻尼</strong>最快速返回平衡位置，没有超调，是汽车悬架、门缓冲器的理想状态。<br>
+    公式：x(t)=x₀·e⁻^(ζω₀t)·(cos ω_d t + ζ/√(1-ζ²)·sin ω_d t)（欠阻尼情形）`;
+}
+
+function drawGraph(){
+  const r=cvsG.getBoundingClientRect();
+  const W=r.width;
+  ctxG.clearRect(0,0,W,HG);
+  const pad={l:45,r:15,t:15,b:30};
+  const cw=W-pad.l-pad.r,ch=HG-pad.t-pad.b;
+  const p={k,c,m,x0};
+
+  function toX(t_){return pad.l+t_/T_END*cw;}
+  function toY(y_){return pad.t+ch-(Math.max(-x0*1.4,Math.min(x0*1.4,y_))+x0*1.4)/(x0*2.8)*ch;}
+
+  // Grid
+  ctxG.strokeStyle='#e4e2da';ctxG.lineWidth=1;ctxG.setLineDash([2,2]);
+  for(let tx=0;tx<=T_END;tx+=5){ctxG.beginPath();ctxG.moveTo(toX(tx),pad.t);ctxG.lineTo(toX(tx),pad.t+ch);ctxG.stroke();}
+  [0,x0,-x0].forEach(y_=>{ctxG.beginPath();ctxG.moveTo(pad.l,toY(y_));ctxG.lineTo(W-pad.r,toY(y_));ctxG.stroke();});
+  ctxG.setLineDash([]);
+
+  // Envelope for underdamped
+  const dt_=dampingType(c,m,k);
+  if(dt_==='underdamped'){
+    const omega0=Math.sqrt(k/m);const zeta=c/(2*Math.sqrt(m*k));
+    ctxG.strokeStyle='#dc262640';ctxG.lineWidth=1;ctxG.setLineDash([3,2]);
+    ctxG.beginPath();let first=true;
+    for(let i=0;i<=200;i++){const t_=i/200*T_END;const y_=x0*Math.exp(-zeta*omega0*t_);if(first){ctxG.moveTo(toX(t_),toY(y_));first=false;}else ctxG.lineTo(toX(t_),toY(y_));}
+    ctxG.stroke();
+    ctxG.beginPath();first=true;
+    for(let i=0;i<=200;i++){const t_=i/200*T_END;const y_=-x0*Math.exp(-zeta*omega0*t_);if(first){ctxG.moveTo(toX(t_),toY(y_));first=false;}else ctxG.lineTo(toX(t_),toY(y_));}
+    ctxG.stroke();ctxG.setLineDash([]);
+  }
+
+  // x(t) curve
+  ctxG.strokeStyle='#2a5c8f';ctxG.lineWidth=2.5;
+  ctxG.beginPath();let first=true;
+  for(let i=0;i<=300;i++){
+    const t_=i/300*T_END;
+    const y_=solveX(t_,p);
+    if(!isFinite(y_)){first=true;continue;}
+    if(first){ctxG.moveTo(toX(t_),toY(y_));first=false;}
+    else ctxG.lineTo(toX(t_),toY(y_));
+  }
+  ctxG.stroke();
+
+  // Axes
+  ctxG.strokeStyle='#6b6860';ctxG.lineWidth=1;
+  ctxG.beginPath();ctxG.moveTo(pad.l,toY(0));ctxG.lineTo(W-pad.r,toY(0));ctxG.stroke();
+  ctxG.fillStyle='#a8a69f';ctxG.font=`9px 'JetBrains Mono',monospace`;
+  for(let tx=0;tx<=T_END;tx+=5){ctxG.textAlign='center';ctxG.textBaseline='top';ctxG.fillText(tx,toX(tx),pad.t+ch+4);}
+  ctxG.textAlign='right';ctxG.textBaseline='middle';
+  ctxG.fillText(x0.toFixed(1),pad.l-3,toY(x0));
+  ctxG.fillText('0',pad.l-3,toY(0));
+  ctxG.fillText(-x0.toFixed(1),pad.l-3,toY(-x0));
+
+  // Animate dot
+  const xCur=solveX(t,p);
+  if(isFinite(xCur)){
+    ctxG.fillStyle='#dc2626';ctxG.beginPath();ctxG.arc(toX(t),toY(xCur),5,0,Math.PI*2);ctxG.fill();
+  }
+}
+
+function drawAnimation(){
+  const r=cvsA.getBoundingClientRect();
+  const W=r.width;
+  ctxA.clearRect(0,0,W,HA);
+  const p={k,c,m,x0};
+  const xCur=solveX(t,p);
+  if(!isFinite(xCur)){return;}
+
+  const eq_y=HA*0.5; // equilibrium position
+  const scale=HA*0.2/x0;
+  const massX=W*0.5;
+  const massY=eq_y-xCur*scale;
+  const wallY=20;
+  const massSize=30;
+
+  // Wall
+  ctxA.fillStyle='#a8a69f';
+  ctxA.fillRect(massX-5,wallY,10,10);
+  ctxA.strokeStyle='#6b6860';ctxA.lineWidth=2;
+  for(let i=0;i<5;i++) ctxA.strokeRect(massX-5+i*4,wallY-8,4,8);
+
+  // Spring
+  const springH=massY-wallY-massSize/2-10;
+  if(springH>20) drawSpring(ctxA,massX-12,wallY+10,12,springH,false);
+  else{ctxA.beginPath();ctxA.moveTo(massX,wallY+10);ctxA.lineTo(massX,massY-massSize/2);ctxA.stroke();}
+
+  // Damper (dashpot)
+  const dx=20;
+  ctxA.strokeStyle='#854f0b';ctxA.lineWidth=2;
+  const dH=massY-wallY-massSize/2-10;
+  if(dH>20){
+    const cy1=wallY+10+dH*0.3,cy2=wallY+10+dH*0.7;
+    ctxA.beginPath();ctxA.moveTo(massX+dx,wallY+10);ctxA.lineTo(massX+dx,cy1);ctx.stroke;
+    ctxA.strokeRect(massX+dx-8,cy1,16,cy2-cy1);
+    ctxA.beginPath();ctxA.moveTo(massX+dx,cy2);ctxA.lineTo(massX+dx,massY-massSize/2);ctxA.stroke();
+  }
+
+  // Mass block
+  const gradient=ctxA.createLinearGradient(massX-massSize/2,massY-massSize/2,massX+massSize/2,massY+massSize/2);
+  gradient.addColorStop(0,'#4a7cbf');gradient.addColorStop(1,'#1a3c6f');
+  ctxA.fillStyle=gradient;
+  ctxA.fillRect(massX-massSize/2,massY-massSize/2,massSize,massSize);
+  ctxA.strokeStyle='#2a5c8f';ctxA.lineWidth=2;
+  ctxA.strokeRect(massX-massSize/2,massY-massSize/2,massSize,massSize);
+  ctxA.fillStyle='#fff';ctxA.font=`bold 12px 'JetBrains Mono',monospace`;
+  ctxA.textAlign='center';ctxA.textBaseline='middle';
+  ctxA.fillText('m',massX,massY);
+
+  // Equilibrium line
+  ctxA.strokeStyle='#dc262640';ctxA.lineWidth=1;ctxA.setLineDash([4,3]);
+  ctxA.beginPath();ctxA.moveTo(0,eq_y);ctxA.lineTo(W,eq_y);ctxA.stroke();ctxA.setLineDash([]);
+
+  // x label
+  ctxA.strokeStyle='#0f6e5688';ctxA.lineWidth=1;
+  ctxA.beginPath();ctxA.moveTo(massX+35,eq_y);ctxA.lineTo(massX+35,massY);ctxA.stroke();
+  ctxA.fillStyle='#0f6e56';ctxA.font=`11px 'JetBrains Mono',monospace`;
+  ctxA.textAlign='left';ctxA.textBaseline='middle';
+  ctxA.fillText(`x=${xCur.toFixed(3)}`,massX+38,(eq_y+massY)/2);
+
+  // Time
+  ctxA.fillStyle='#6b6860';ctxA.font=`10px 'JetBrains Mono',monospace`;
+  ctxA.textAlign='left';ctxA.textBaseline='top';
+  ctxA.fillText(`t=${t.toFixed(2)}s`,8,8);
+}
+
+function animate(){
+  t+=dt;
+  if(t>T_END) t=0;
+  drawAnimation();
+  drawGraph();
+  animId=requestAnimationFrame(animate);
+}
+
+window.addEventListener('resize',()=>{setup();});
+setup();update();animate();
+</script>
+</body>
+</html>

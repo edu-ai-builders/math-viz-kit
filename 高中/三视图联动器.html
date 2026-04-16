@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三视图联动器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="立体几何">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="立体图形与正视图、侧视图、俯视图三视图联动，拖拽旋转3D模型，理解三视图投影关系">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .shape-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .shape-btn{padding:6px 14px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);color:var(--ink2);}
+    .shape-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .view-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .view-cell{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;}
+    .view-title{font-size:11px;font-weight:700;color:var(--ink2);text-align:center;margin-bottom:4px;}
+    canvas{width:100%;display:block;cursor:grab;}
+    canvas.small{border-radius:var(--radius-sm);}
+    .hint{font-size:11px;color:var(--ink2);text-align:center;margin-top:4px;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 立体几何 · 认知动作：变换</div>
+  <h1>三视图联动器</h1>
+  <p class="sub">拖动旋转立体图形，同步更新正视图、侧视图、俯视图</p>
+</header>
+<main>
+  <div class="shape-row">
+    <button class="shape-btn active" onclick="setShape('cube',this)">正方体</button>
+    <button class="shape-btn" onclick="setShape('rect',this)">长方体</button>
+    <button class="shape-btn" onclick="setShape('prism',this)">三棱柱</button>
+    <button class="shape-btn" onclick="setShape('pyramid',this)">四棱锥</button>
+    <button class="shape-btn" onclick="setShape('cylinder',this)">圆柱</button>
+    <button class="shape-btn" onclick="setShape('cone',this)">圆锥</button>
+  </div>
+  <div class="view-grid">
+    <div>
+      <canvas id="cvs3d"></canvas>
+      <div class="hint">拖动旋转</div>
+    </div>
+    <div class="view-cell">
+      <div class="view-title">正视图（从正面看）</div>
+      <canvas id="cvsFront" class="small"></canvas>
+    </div>
+  </div>
+  <div class="view-grid">
+    <div class="view-cell">
+      <div class="view-title">侧视图（从右侧看）</div>
+      <canvas id="cvsSide" class="small"></canvas>
+    </div>
+    <div class="view-cell">
+      <div class="view-title">俯视图（从上方看）</div>
+      <canvas id="cvsTop" class="small"></canvas>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V2 表征桥接: 3D立体与三视图实时联动
+// PEDAGOGY V6 动作—数学一致: 拖动旋转=从不同角度看物体
+// PEDAGOGY V7 单一认知动作: 变换（立体→投影关系）
+
+const cvs3d=document.getElementById('cvs3d');
+const ctx3=cvs3d.getContext('2d');
+const cvsFront=document.getElementById('cvsFront');
+const ctxF=cvsFront.getContext('2d');
+const cvsSide=document.getElementById('cvsSide');
+const ctxS=cvsSide.getContext('2d');
+const cvsTop=document.getElementById('cvsTop');
+const ctxT=cvsTop.getContext('2d');
+
+const H3=220, Hv=140;
+let rotX=0.4, rotY=0.6;
+let dragging3d=false,lastMx=0,lastMy=0;
+let shape='cube';
+
+const SHAPES={
+  cube:{verts:[[-1,-1,-1],[-1,-1,1],[-1,1,-1],[-1,1,1],[1,-1,-1],[1,-1,1],[1,1,-1],[1,1,1]],edges:[[0,1],[0,2],[0,4],[1,3],[1,5],[2,3],[2,6],[3,7],[4,5],[4,6],[5,7],[6,7]],desc:'正方体：六个面都是正方形，三视图都是正方形。'},
+  rect:{verts:[[-1.5,-0.7,-1],[-1.5,-0.7,1],[-1.5,0.7,-1],[-1.5,0.7,1],[1.5,-0.7,-1],[1.5,-0.7,1],[1.5,0.7,-1],[1.5,0.7,1]],edges:[[0,1],[0,2],[0,4],[1,3],[1,5],[2,3],[2,6],[3,7],[4,5],[4,6],[5,7],[6,7]],desc:'长方体：三视图分别是不同尺寸的矩形，反映三个方向的尺寸。'},
+  prism:{verts:null,edges:null,desc:'三棱柱：正视图是矩形，侧视图是矩形，俯视图是三角形。'},
+  pyramid:{verts:null,edges:null,desc:'四棱锥：正视图是三角形，侧视图是三角形，俯视图是带对角线的正方形。'},
+  cylinder:{verts:null,edges:null,desc:'圆柱：正视图和侧视图是矩形，俯视图是圆形。'},
+  cone:{verts:null,edges:null,desc:'圆锥：正视图和侧视图是三角形，俯视图是带圆心的圆。'},
+};
+
+// Build prism verts
+(function(){
+  const h=1.2;
+  const verts=[[-1,-h,-Math.sqrt(3)/3],[0.5,-h,2*Math.sqrt(3)/3],[1.5,-h,-Math.sqrt(3)/3],[-1,h,-Math.sqrt(3)/3],[0.5,h,2*Math.sqrt(3)/3],[1.5,h,-Math.sqrt(3)/3]].map(v=>[v[0]*0.8,v[1]*0.8,v[2]*0.8]);
+  SHAPES.prism.verts=verts;
+  SHAPES.prism.edges=[[0,1],[1,2],[2,0],[3,4],[4,5],[5,3],[0,3],[1,4],[2,5]];
+})();
+
+// Build pyramid verts
+(function(){
+  const verts=[[-1,-1,-1],[-1,-1,1],[1,-1,-1],[1,-1,1],[0,1,0]];
+  SHAPES.pyramid.verts=verts;
+  SHAPES.pyramid.edges=[[0,1],[0,2],[1,3],[2,3],[0,4],[1,4],[2,4],[3,4]];
+})();
+
+function setup(){
+  function sz(c,h,dpr){c.width=c.getBoundingClientRect().width*dpr;c.height=h*dpr;}
+  const dpr=window.devicePixelRatio||1;
+  sz(cvs3d,H3,dpr);ctx3.scale(dpr,dpr);cvs3d.style.height=H3+'px';
+  sz(cvsFront,Hv,dpr);ctxF.scale(dpr,dpr);cvsFront.style.height=Hv+'px';
+  sz(cvsSide,Hv,dpr);ctxS.scale(dpr,dpr);cvsSide.style.height=Hv+'px';
+  sz(cvsTop,Hv,dpr);ctxT.scale(dpr,dpr);cvsTop.style.height=Hv+'px';
+}
+
+function rotVec(v){
+  let [x,y,z]=v;
+  // Rotate Y
+  let nx=x*Math.cos(rotY)+z*Math.sin(rotY),nz=-x*Math.sin(rotY)+z*Math.cos(rotY);
+  x=nx;z=nz;
+  // Rotate X
+  let ny=y*Math.cos(rotX)-z*Math.sin(rotX),nz2=y*Math.sin(rotX)+z*Math.cos(rotX);
+  return [x,ny,nz2];
+}
+
+function project3D(ctx,W,H,verts,edges,faceColor){
+  const cx=W/2,cy=H/2;
+  const s=Math.min(W,H)*0.28;
+  const proj=verts.map(v=>{
+    const [x,y,z]=rotVec(v);
+    return [cx+x*s,cy-y*s,z];
+  });
+  // Sort edges by avg z (painter)
+  const sorted=[...edges].sort((a,b)=>{
+    const za=(proj[a[0]][2]+proj[a[1]][2])/2;
+    const zb=(proj[b[0]][2]+proj[b[1]][2])/2;
+    return za-zb;
+  });
+  sorted.forEach(([i,j])=>{
+    const avgZ=(proj[i][2]+proj[j][2])/2;
+    const isBack=avgZ<-0.1;
+    ctx.strokeStyle=isBack?'#c8c5be88':'#1a1814';
+    ctx.lineWidth=isBack?1:2;
+    ctx.setLineDash(isBack?[3,3]:[]);
+    ctx.beginPath();ctx.moveTo(proj[i][0],proj[i][1]);ctx.lineTo(proj[j][0],proj[j][1]);ctx.stroke();
+    ctx.setLineDash([]);
+  });
+  // Dots
+  proj.forEach(([px,py])=>{
+    ctx.fillStyle='#2a5c8f';
+    ctx.beginPath();ctx.arc(px,py,2.5,0,Math.PI*2);ctx.fill();
+  });
+}
+
+function drawCircleShape(ctx,W,H){
+  const cx=W/2,cy=H/2,r=H*0.3;
+  const h=r*1.5;
+  const top=cy-h/2,bot=cy+h/2;
+  if(shape==='cylinder'){
+    ctx.strokeStyle='#1a1814';ctx.lineWidth=2;
+    ctx.beginPath();ctx.ellipse(cx,top,r,r*0.35,0,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='#2a5c8f22';
+    ctx.beginPath();ctx.ellipse(cx,top,r,r*0.35,0,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#c8c5be';ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.ellipse(cx,bot,r,r*0.35,0,Math.PI,2*Math.PI);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle='#1a1814';ctx.lineWidth=2;
+    ctx.beginPath();ctx.ellipse(cx,bot,r,r*0.35,0,0,Math.PI);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx-r,top);ctx.lineTo(cx-r,bot);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx+r,top);ctx.lineTo(cx+r,bot);ctx.stroke();
+  } else {
+    // Cone
+    ctx.strokeStyle='#1a1814';ctx.lineWidth=2;
+    ctx.strokeStyle='#c8c5be';ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.ellipse(cx,bot,r,r*0.35,0,Math.PI,2*Math.PI);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle='#1a1814';
+    ctx.beginPath();ctx.ellipse(cx,bot,r,r*0.35,0,0,Math.PI);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx-r,bot);ctx.lineTo(cx,top);ctx.lineTo(cx+r,bot);ctx.stroke();
+    ctx.fillStyle='#2a5c8f';ctx.beginPath();ctx.arc(cx,top,4,0,Math.PI*2);ctx.fill();
+  }
+}
+
+function draw(){
+  const W3=cvs3d.getBoundingClientRect().width;
+  const Wv=cvsFront.getBoundingClientRect().width;
+  ctx3.clearRect(0,0,W3,H3);ctxF.clearRect(0,0,Wv,Hv);ctxS.clearRect(0,0,Wv,Hv);ctxT.clearRect(0,0,Wv,Hv);
+
+  const s=SHAPES[shape];
+  if(s.verts){
+    project3D(ctx3,W3,H3,s.verts,s.edges);
+    drawFlatViews(ctxF,ctxS,ctxT,Wv,Hv,s.verts,s.edges);
+  } else {
+    drawCircleShape(ctx3,W3,H3);
+    drawCircleViews(ctxF,ctxS,ctxT,Wv,Hv);
+  }
+
+  document.getElementById('fb').innerHTML=
+    `<strong>三视图</strong>：正视图（从正面沿y轴方向投影）、侧视图（从右侧沿x轴方向投影）、俯视图（从上方沿z轴方向投影）。<br>
+    ${s.desc||''}<br>
+    拖动3D图形旋转，三视图会实时更新以帮助理解投影关系。`;
+}
+
+function drawFlatViews(ctxF,ctxS,ctxT,W,H,verts,edges){
+  // Front view: project onto xz plane (eliminate y)
+  const scl=Math.min(W,H)*0.35;
+  const cx=W/2,cy=H/2;
+
+  function drawView(ctx,proj2d,edges2d){
+    ctx.strokeStyle='#1a1814';ctx.lineWidth=2;
+    edges2d.forEach(([i,j])=>{
+      ctx.beginPath();ctx.moveTo(proj2d[i][0],proj2d[i][1]);ctx.lineTo(proj2d[j][0],proj2d[j][1]);ctx.stroke();
+    });
+    ctx.fillStyle='#2a5c8f22';
+    // Fill convex hull approximation — just draw outline
+  }
+
+  // Front: looking from +y direction, see x-z plane
+  const pFront=verts.map(v=>[cx+v[0]*scl,cy-v[2]*scl]);
+  drawView(ctxF,pFront,edges);
+
+  // Side: looking from +x direction, see y-z plane (but we use z horizontal, y vertical)
+  const pSide=verts.map(v=>[cx+v[1]*scl,cy-v[2]*scl]);
+  drawView(ctxS,pSide,edges);
+
+  // Top: looking from +z direction, see x-y plane
+  const pTop=verts.map(v=>[cx+v[0]*scl,cy-v[1]*scl]);
+  drawView(ctxT,pTop,edges);
+}
+
+function drawCircleViews(ctxF,ctxS,ctxT,W,H){
+  const r=H*0.3,cx=W/2,cy=H/2;
+  // Front view
+  if(shape==='cylinder'){
+    ctxF.strokeStyle='#1a1814';ctxF.lineWidth=2;
+    ctxF.strokeRect(cx-r,cy-r*1.4,2*r,2.8*r);
+  } else {
+    ctxF.strokeStyle='#1a1814';ctxF.lineWidth=2;
+    ctxF.beginPath();ctxF.moveTo(cx-r,cy+r*1.4);ctxF.lineTo(cx,cy-r*1.4);ctxF.lineTo(cx+r,cy+r*1.4);ctxF.closePath();ctxF.stroke();
+  }
+  // Side view (same as front for these shapes)
+  if(shape==='cylinder'){
+    ctxS.strokeStyle='#1a1814';ctxS.lineWidth=2;
+    ctxS.strokeRect(cx-r,cy-r*1.4,2*r,2.8*r);
+  } else {
+    ctxS.strokeStyle='#1a1814';ctxS.lineWidth=2;
+    ctxS.beginPath();ctxS.moveTo(cx-r,cy+r*1.4);ctxS.lineTo(cx,cy-r*1.4);ctxS.lineTo(cx+r,cy+r*1.4);ctxS.closePath();ctxS.stroke();
+  }
+  // Top view (circle)
+  ctxT.strokeStyle='#1a1814';ctxT.lineWidth=2;
+  ctxT.beginPath();ctxT.arc(cx,cy,r,0,Math.PI*2);ctxT.stroke();
+  if(shape==='cone'){
+    ctxT.fillStyle='#2a5c8f';ctxT.beginPath();ctxT.arc(cx,cy,3,0,Math.PI*2);ctxT.fill();
+  }
+}
+
+function setShape(s,btn){
+  shape=s;
+  document.querySelectorAll('.shape-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+cvs3d.addEventListener('pointerdown',e=>{dragging3d=true;lastMx=e.clientX;lastMy=e.clientY;cvs3d.setPointerCapture(e.pointerId);cvs3d.style.cursor='grabbing';});
+cvs3d.addEventListener('pointermove',e=>{
+  if(!dragging3d) return;
+  rotY+=(e.clientX-lastMx)*0.01;
+  rotX+=(e.clientY-lastMy)*0.01;
+  lastMx=e.clientX;lastMy=e.clientY;
+  draw();
+});
+cvs3d.addEventListener('pointerup',()=>{dragging3d=false;cvs3d.style.cursor='grab';});
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

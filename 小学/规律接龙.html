@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>规律接龙 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="规律与代数">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="发现数字或图形规律，预测下一项，训练模式识别思维">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;
+      --blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;
+      --teal:#0f6e56;--teal-light:#e1f5ee;
+      --amber:#854f0b;--amber-light:#faeeda;
+      --radius:12px;--radius-sm:8px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:680px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:680px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .sequence-row{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .seq-item{width:52px;height:52px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    .seq-item.known{background:var(--blue);color:#fff;}
+    .seq-item.blank{background:var(--bg);border:2px dashed var(--blue);color:var(--blue);cursor:pointer;font-size:24px;}
+    .seq-item.blank:hover{background:var(--blue-light);}
+    .seq-item.correct{background:var(--teal);color:#fff;}
+    .seq-item.wrong{background:#c0392b;color:#fff;animation:shake .3s;}
+    .arrow{color:var(--ink3);font-size:18px;}
+    @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}75%{transform:translateX(4px);}}
+    .pattern-info{background:var(--blue-light);border:2px solid var(--blue);border-radius:var(--radius);padding:12px 16px;font-size:14px;color:var(--blue);opacity:0;transition:opacity .4s;}
+    .pattern-info.show{opacity:1;}
+    .choices{display:flex;gap:8px;flex-wrap:wrap;}
+    .choice-btn{padding:10px 18px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;background:var(--surface);cursor:pointer;transition:all .2s;color:var(--ink);}
+    .choice-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-light);}
+    .progress{font-size:13px;color:var(--ink2);}
+    .score{font-size:20px;font-weight:700;color:var(--blue);font-family:'JetBrains Mono',monospace;}
+    .next-btn{width:100%;padding:13px;border:none;border-radius:var(--radius);font-size:15px;font-family:inherit;font-weight:600;cursor:pointer;background:var(--blue);color:#fff;transition:all .2s;opacity:0;pointer-events:none;}
+    .next-btn.show{opacity:1;pointer-events:auto;}
+    .next-btn:hover{background:var(--blue-dark);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;opacity:0;transition:opacity .5s;}
+    .fb.show{opacity:1;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 规律 · 认知动作：比较</div>
+  <h1>规律接龙</h1>
+  <p class="sub">观察数列规律，预测下一个数，发现数字中藏着的秘密</p>
+</header>
+<main>
+  <div style="display:flex;align-items:center;justify-content:space-between;">
+    <div class="progress">第 <span id="qNum">1</span> / <span id="qTotal">8</span> 题</div>
+    <div>得分：<span class="score" id="score">0</span></div>
+  </div>
+  <div class="sequence-row" id="seqRow"></div>
+  <div class="pattern-info" id="patInfo"></div>
+  <div class="choices" id="choices"></div>
+  <div class="fb" id="fb"></div>
+  <button class="next-btn" id="nextBtn" onclick="nextQ()">下一题 →</button>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：比较
+// V1 动态跃迁：选择后立即高亮正确项并显示规律描述
+// V3 分步揭示：先看已知项，选择后才显示规律说明
+// V5 操作先于符号：先观察规律再看代数表达
+// V7 单一认知动作：比较（找相邻差/比）
+// V8 概念反馈：揭示"差是常数=等差，比是常数=等比"
+
+const QUESTIONS=[
+  {seq:[2,4,6,8,'?'],answer:10,rule:'等差数列，每次 +2',type:'arithmetic',d:2,choices:[8,10,12,11]},
+  {seq:[1,3,9,27,'?'],answer:81,rule:'等比数列，每次 ×3',type:'geometric',r:3,choices:[54,81,90,72]},
+  {seq:[1,1,2,3,5,'?'],answer:8,rule:'斐波那契数列：前两项之和',type:'fib',choices:[7,8,9,10]},
+  {seq:[100,90,80,70,'?'],answer:60,rule:'等差数列，每次 −10',type:'arithmetic',d:-10,choices:[55,65,60,50]},
+  {seq:[2,4,8,16,'?'],answer:32,rule:'等比数列，每次 ×2',type:'geometric',r:2,choices:[24,28,32,36]},
+  {seq:[5,10,15,20,'?'],answer:25,rule:'等差数列，每次 +5（5的倍数）',type:'arithmetic',d:5,choices:[22,24,25,30]},
+  {seq:[81,27,9,3,'?'],answer:1,rule:'等比数列，每次 ÷3',type:'geometric',r:1/3,choices:[0,1,2,3]},
+  {seq:[3,6,11,18,'?'],answer:27,rule:'差递增：+3,+5,+7,+9',type:'quad',choices:[25,26,27,29]},
+];
+
+let currentQ=0, score=0, answered=false;
+// Shuffle choices
+function shuffle(arr){return [...arr].sort(()=>Math.random()-0.5);}
+
+function renderQ(){
+  answered=false;
+  const q=QUESTIONS[currentQ];
+  document.getElementById('qNum').textContent=currentQ+1;
+  document.getElementById('qTotal').textContent=QUESTIONS.length;
+  document.getElementById('patInfo').classList.remove('show');
+  document.getElementById('fb').classList.remove('show');
+  document.getElementById('nextBtn').classList.remove('show');
+
+  // Sequence row
+  const row=document.getElementById('seqRow');
+  row.innerHTML='';
+  q.seq.forEach((val,i)=>{
+    if(i>0){
+      const arrow=document.createElement('span');
+      arrow.className='arrow'; arrow.textContent='→'; row.appendChild(arrow);
+    }
+    const el=document.createElement('div');
+    el.className=`seq-item ${val==='?'?'blank':'known'}`;
+    el.textContent=val;
+    if(val==='?') el.id='blankSlot';
+    row.appendChild(el);
+  });
+
+  // Choices
+  const choicesEl=document.getElementById('choices');
+  choicesEl.innerHTML='';
+  const shuffled=shuffle(q.choices);
+  shuffled.forEach(v=>{
+    const btn=document.createElement('button');
+    btn.className='choice-btn'; btn.textContent=v;
+    btn.onclick=()=>choose(v,btn);
+    choicesEl.appendChild(btn);
+  });
+}
+
+function choose(val,btn){
+  if(answered)return;
+  answered=true;
+  const q=QUESTIONS[currentQ];
+  const blank=document.getElementById('blankSlot');
+  const allBtns=document.querySelectorAll('.choice-btn');
+  allBtns.forEach(b=>b.disabled=true);
+
+  if(val===q.answer){
+    score++;
+    document.getElementById('score').textContent=score;
+    blank.className='seq-item correct'; blank.textContent=val;
+    btn.style.background='var(--teal)'; btn.style.color='#fff'; btn.style.borderColor='var(--teal)';
+    showFeedback(true,q);
+  } else {
+    blank.className='seq-item wrong'; blank.textContent='✗';
+    btn.style.background='#c0392b'; btn.style.color='#fff'; btn.style.borderColor='#c0392b';
+    // Show correct answer
+    allBtns.forEach(b=>{if(parseInt(b.textContent)===q.answer){b.style.background='var(--teal)';b.style.color='#fff';b.style.borderColor='var(--teal)';}});
+    blank.textContent=q.answer;
+    blank.className='seq-item correct';
+    showFeedback(false,q);
+  }
+
+  // Show pattern
+  const pi=document.getElementById('patInfo');
+  pi.textContent=`规律：${q.rule}`;
+  pi.classList.add('show');
+  document.getElementById('nextBtn').classList.add('show');
+  if(currentQ===QUESTIONS.length-1) document.getElementById('nextBtn').textContent=`完成！查看成绩 🎉`;
+}
+
+function showFeedback(correct,q){
+  // PEDAGOGY V8: reveal the mathematical pattern
+  const fb=document.getElementById('fb');
+  let msg=correct?`✓ 答对了！`:`答案是 <strong>${q.answer}</strong>。`;
+  msg+=`<br>规律：<strong>${q.rule}</strong>。`;
+  if(q.type==='arithmetic'){
+    const d=q.d;
+    msg+=`<br>等差数列：相邻两项的差固定为 <strong>${d}</strong>，这叫"公差"。`;
+  } else if(q.type==='geometric'){
+    const r=q.r;
+    msg+=`<br>等比数列：相邻两项的比固定为 <strong>${r}</strong>，这叫"公比"。`;
+  } else if(q.type==='fib'){
+    msg+=`<br>斐波那契数列：每一项 = 前两项之和。1,1,2,3,5,8,13...自然界中经常出现！`;
+  } else {
+    msg+=`<br>差不固定，但差的差是固定的（等差的等差），这是"二阶等差"。`;
+  }
+  fb.innerHTML=msg; fb.classList.add('show');
+}
+
+function nextQ(){
+  currentQ++;
+  if(currentQ>=QUESTIONS.length){
+    // Final score
+    document.getElementById('seqRow').innerHTML=`<div style="font-size:18px;font-weight:600;color:var(--teal)">🎉 全部完成！你答对了 ${score}/${QUESTIONS.length} 题。</div>`;
+    document.getElementById('choices').innerHTML='';
+    document.getElementById('nextBtn').classList.remove('show');
+    document.getElementById('patInfo').classList.remove('show');
+    document.getElementById('fb').innerHTML=`规律是数学中最基础的思维之一。等差数列的差是常数，等比数列的比是常数——这两种规律在初高中数学中非常重要。`;
+    document.getElementById('fb').classList.add('show');
+    return;
+  }
+  renderQ();
+}
+
+renderQ();
+</script>
+</body>
+</html>

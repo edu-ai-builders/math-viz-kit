@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>高斯消元过程可视化 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="线性代数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="逐步演示高斯消元的行变换过程，每步高亮当前主元行和被消元行，展示增广矩阵的变化">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .preset-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .preset-btn{padding:6px 14px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);}
+    .preset-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .btn-row{display:flex;gap:8px;}
+    .btn{padding:8px 18px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-family:'Noto Sans SC',sans-serif;font-weight:700;}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-secondary{background:var(--surface);border:2px solid var(--border);color:var(--ink2);}
+    .matrix-display{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;overflow-x:auto;}
+    .step-info{font-size:12px;color:var(--ink2);margin-bottom:10px;min-height:20px;}
+    .matrix-wrap{display:inline-flex;align-items:center;gap:4px;}
+    .mat-bracket{font-size:48px;color:var(--ink2);line-height:1;}
+    table.mat{border-collapse:separate;border-spacing:0;}
+    table.mat td{padding:6px 12px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;text-align:center;min-width:50px;border-radius:4px;}
+    .cell-pivot{background:var(--blue-light);color:var(--blue);}
+    .cell-target{background:#fee2e2;color:#dc2626;}
+    .cell-zeroed{background:var(--teal-light);color:var(--teal);}
+    .divider{width:2px;background:var(--border);margin:0 6px;align-self:stretch;}
+    .step-list{max-height:180px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;}
+    .step-item{font-size:12px;font-family:'JetBrains Mono',monospace;padding:3px 6px;border-radius:4px;margin-bottom:2px;}
+    .step-item.cur{background:var(--blue-light);color:var(--blue);font-weight:700;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 线性代数 · 认知动作：变换</div>
+  <h1>高斯消元过程可视化</h1>
+  <p class="sub">逐步演示增广矩阵的行变换，直观理解消元过程</p>
+</header>
+<main>
+  <div class="preset-row">
+    <button class="preset-btn active" onclick="loadPreset('basic',this)">3阶标准</button>
+    <button class="preset-btn" onclick="loadPreset('swap',this)">需要换行</button>
+    <button class="preset-btn" onclick="loadPreset('singular',this)">奇异矩阵</button>
+    <button class="preset-btn" onclick="loadPreset('large',this)">4阶方程组</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="stepForward()">下一步</button>
+    <button class="btn btn-primary" onclick="runAll()">全部完成</button>
+    <button class="btn btn-secondary" onclick="resetGauss()">重置</button>
+  </div>
+  <div class="matrix-display">
+    <div class="step-info" id="stepInfo">初始增广矩阵 [A|b]</div>
+    <div id="matrixWrap"></div>
+  </div>
+  <div class="step-list" id="stepList"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V3 分步揭示: 每次点击执行一步行变换，清晰追踪每一步操作
+// PEDAGOGY V4 信号聚焦: 主元行蓝色，被消元行红色，零化元素绿色
+// PEDAGOGY V8 概念反馈: 解释当前行操作的数学含义
+
+const PRESETS={
+  basic:{
+    A:[[2,1,-1],[4,2,2],[2,-1,1]],
+    b:[8,14,2],
+    name:'3×3方程组'
+  },
+  swap:{
+    A:[[0,2,1],[1,-1,2],[3,1,1]],
+    b:[3,4,7],
+    name:'需要行交换的方程组'
+  },
+  singular:{
+    A:[[1,2,3],[2,4,6],[1,1,1]],
+    b:[6,12,3],
+    name:'奇异矩阵（无唯一解）'
+  },
+  large:{
+    A:[[2,1,1,0],[4,3,3,1],[8,7,9,5],[6,7,9,8]],
+    b:[1,2,4,5],
+    name:'4×4方程组'
+  }
+};
+
+let M=[]; // augmented matrix
+let n=0,stepNum=0;
+let pivotRow=-1,targetRow=-1,pivotCol=-1;
+let state='forward'; // or 'backsubst'
+let stepHistory=[];
+let highlightCells={}; // {row_col: class}
+
+function loadPreset(k,btn){
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const pr=PRESETS[k];
+  n=pr.A.length;
+  M=pr.A.map((row,i)=>[...row,pr.b[i]].map(v=>+v));
+  resetGauss();
+}
+
+function resetGauss(){
+  stepNum=0;pivotRow=0;targetRow=1;pivotCol=0;state='forward';
+  stepHistory=[];highlightCells={};
+  document.getElementById('stepList').innerHTML='';
+  document.getElementById('stepInfo').textContent='初始增广矩阵 [A|b]，准备消元';
+  renderMatrix();
+  updateFb();
+}
+
+function stepForward(){
+  if(state==='done') return;
+
+  // Find next operation
+  if(state==='forward'){
+    // Check if pivotRow < n, pivotCol < n
+    if(pivotCol>=n){state='backsubst';pivotRow=n-1;stepForward();return;}
+
+    // Find pivot (non-zero in pivotCol, row >= pivotRow)
+    let pivR=pivotRow;
+    while(pivR<n&&Math.abs(M[pivR][pivotCol])<1e-10) pivR++;
+    if(pivR===n){pivotCol++;stepForward();return;} // skip column
+    if(pivR!==pivotRow){
+      // Swap rows
+      const tmp=M[pivotRow];M[pivotRow]=M[pivR];M[pivR]=tmp;
+      addStep(`R${pivotRow+1} ↔ R${pivR+1}（行交换）`);
+      highlightCells={};
+      for(let j=0;j<=n;j++){highlightCells[`${pivotRow}_${j}`]='cell-pivot';}
+      renderMatrix();return;
+    }
+
+    // Find targetRow
+    let tr=pivotRow+1;
+    while(tr<n&&Math.abs(M[tr][pivotCol])<1e-10) tr++;
+    if(tr>=n){
+      pivotRow++;pivotCol++;targetRow=pivotRow+1;
+      if(pivotRow>=n){state='backsubst';pivotRow=n-1;stepForward();return;}
+      stepForward();return;
+    }
+
+    // Eliminate
+    const factor=M[tr][pivotCol]/M[pivotRow][pivotCol];
+    const factorStr=factor.toFixed(3).replace(/\.?0+$/,'');
+    highlightCells={};
+    for(let j=0;j<=n;j++){
+      M[tr][j]-=factor*M[pivotRow][j];
+      if(j===pivotCol) highlightCells[`${tr}_${j}`]='cell-zeroed';
+      else highlightCells[`${tr}_${j}`]='cell-target';
+      highlightCells[`${pivotRow}_${j}`]='cell-pivot';
+    }
+    addStep(`R${tr+1} ← R${tr+1} - (${factorStr})·R${pivotRow+1}`);
+
+    // Move to next target
+    let nextTr=tr+1;
+    while(nextTr<n&&Math.abs(M[nextTr][pivotCol])<1e-10) nextTr++;
+    if(nextTr>=n){pivotRow++;pivotCol++;targetRow=pivotRow+1;}
+    else targetRow=nextTr;
+
+    renderMatrix();
+  } else if(state==='backsubst'){
+    // Back substitution
+    if(pivotRow<=0){state='done';document.getElementById('stepInfo').textContent='消元完成！已得到上三角形式，可回代求解。';showSolution();return;}
+    const pc=findPivotCol(pivotRow);
+    if(pc<0){pivotRow--;stepForward();return;}
+    let tr=pivotRow-1;
+    while(tr>=0&&Math.abs(M[tr][pc])<1e-10) tr--;
+    if(tr<0){pivotRow--;stepForward();return;}
+    const factor=M[tr][pc]/M[pivotRow][pc];
+    const factorStr=factor.toFixed(3).replace(/\.?0+$/,'');
+    highlightCells={};
+    for(let j=0;j<=n;j++){
+      M[tr][j]-=factor*M[pivotRow][j];
+      if(j===pc) highlightCells[`${tr}_${j}`]='cell-zeroed';
+      else highlightCells[`${tr}_${j}`]='cell-target';
+      highlightCells[`${pivotRow}_${j}`]='cell-pivot';
+    }
+    addStep(`R${tr+1} ← R${tr+1} - (${factorStr})·R${pivotRow+1}（回代）`);
+    let nextTr=tr-1;
+    if(nextTr<0){pivotRow--;targetRow=pivotRow-1;}
+    else targetRow=nextTr;
+    renderMatrix();
+  }
+}
+
+function findPivotCol(row){
+  for(let j=0;j<n;j++) if(Math.abs(M[row][j])>1e-10) return j;
+  return -1;
+}
+
+function runAll(){
+  let iterations=0;
+  while(state!=='done'&&iterations<100){stepForward();iterations++;}
+}
+
+function addStep(desc){
+  stepHistory.push(desc);
+  const sl=document.getElementById('stepList');
+  sl.querySelectorAll('.step-item.cur').forEach(e=>e.classList.remove('cur'));
+  const el=document.createElement('div');
+  el.className='step-item cur';
+  el.textContent=`${stepHistory.length}. ${desc}`;
+  sl.appendChild(el);
+  sl.scrollTop=sl.scrollHeight;
+  document.getElementById('stepInfo').textContent=`第${stepHistory.length}步：${desc}`;
+}
+
+function renderMatrix(){
+  const wrap=document.getElementById('matrixWrap');
+  let html=`<div class="matrix-wrap"><span class="mat-bracket">[</span><table class="mat">`;
+  M.forEach((row,i)=>{
+    html+='<tr>';
+    row.forEach((v,j)=>{
+      const cls=highlightCells[`${i}_${j}`]||'';
+      const disp=Math.abs(v)<1e-10?'0':v.toFixed(3).replace(/\.?0+$/,'');
+      const sep=j===n-1?`<td style="padding:6px 4px;color:var(--ink2)">|</td>`:'';
+      html+=sep+`<td class="${cls}">${disp}</td>`;
+    });
+    html+='</tr>';
+  });
+  html+=`</table><span class="mat-bracket">]</span></div>`;
+  wrap.innerHTML=html;
+}
+
+function showSolution(){
+  // Normalize pivots and extract solution
+  const sol=[];
+  for(let i=0;i<n;i++){
+    const pc=findPivotCol(i);
+    if(pc<0) continue;
+    const piv=M[i][pc];
+    if(Math.abs(piv)>1e-10) sol[pc]=M[i][n]/piv;
+  }
+  if(sol.filter(v=>v!==undefined).length===n){
+    document.getElementById('fb').innerHTML+=`<br><strong>解：</strong>${sol.map((v,i)=>`x${i+1}=${v.toFixed(4)}`).join(', ')}`;
+  }
+}
+
+function updateFb(){
+  document.getElementById('fb').innerHTML=
+    `<strong>高斯消元法</strong>：通过行变换将增广矩阵化为上三角形式，再回代求解。<br>
+    三种基本行变换：(1) 行交换 Ri↔Rj；(2) 行数乘 Ri←k·Ri；(3) 行加减 Ri←Ri-c·Rj。<br>
+    <strong>主元</strong>：每次选择当前列第一个非零元素作为主元（蓝色），消去下方各行同列元素（红色→绿色）。<br>
+    时间复杂度 O(n³)，适用于中等规模稠密线性方程组。`;
+}
+
+window.addEventListener('load',()=>{
+  document.querySelector('.preset-btn').click();
+});
+</script>
+</body>
+</html>

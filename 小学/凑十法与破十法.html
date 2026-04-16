@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>凑十法与破十法 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="加减法">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="动画演示凑十法（进位加法）与破十法（退位减法）的操作过程">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f7f6f2; --surface: #ffffff;
+      --ink: #1a1814; --ink2: #6b6860; --ink3: #a8a69f; --border: #e4e2da;
+      --blue: #2a5c8f; --blue-light: #e8f0f8; --blue-dark: #0c447c;
+      --teal: #0f6e56; --teal-light: #e1f5ee;
+      --amber: #854f0b; --amber-light: #faeeda;
+      --radius: 12px; --radius-sm: 8px;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:var(--bg); font-family:'Noto Sans SC',sans-serif; color:var(--ink); min-height:100vh; display:flex; flex-direction:column; align-items:center; }
+    header { width:100%; max-width:680px; padding:24px 24px 0; }
+    .badge { display:inline-flex; align-items:center; font-size:12px; color:var(--ink2); background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:4px 12px; margin-bottom:8px; }
+    h1 { font-size:22px; font-weight:700; }
+    .subtitle { font-size:13px; color:var(--ink2); margin-top:4px; }
+    main { width:100%; max-width:680px; padding:16px 24px 32px; display:flex; flex-direction:column; gap:12px; }
+    .tabs { display:flex; gap:6px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:5px; }
+    .tab { flex:1; padding:8px; border:none; border-radius:var(--radius-sm); font-size:14px; font-family:inherit; cursor:pointer; background:transparent; color:var(--ink2); transition:all .2s; }
+    .tab.active { background:var(--blue); color:#fff; }
+    .controls { display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; flex-wrap:wrap; }
+    .num-sel { font-size:26px; font-weight:700; width:56px; height:48px; text-align:center; border:2px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--ink); font-family:'JetBrains Mono',monospace; cursor:pointer; }
+    .num-sel:focus { border-color:var(--blue); outline:none; }
+    .op { font-size:26px; font-weight:700; color:var(--ink2); }
+    .preview { margin-left:auto; font-size:14px; color:var(--ink3); font-family:'JetBrains Mono',monospace; }
+    canvas { width:100%; height:300px; border-radius:var(--radius); background:var(--surface); border:1px solid var(--border); display:block; cursor:pointer; }
+    .btn { width:100%; padding:13px; border:none; border-radius:var(--radius); font-size:15px; font-family:inherit; font-weight:600; cursor:pointer; background:var(--blue); color:#fff; transition:all .2s; }
+    .btn:hover { background:var(--blue-dark); }
+    .btn:disabled { background:var(--ink3); cursor:not-allowed; }
+    .eq-area { background:var(--blue-light); border:2px solid var(--blue); border-radius:var(--radius); padding:14px; text-align:center; font-size:19px; font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--blue); opacity:0; transition:opacity .5s; }
+    .eq-area.show { opacity:1; }
+    .fb { background:var(--teal-light); border-left:4px solid var(--teal); border-radius:var(--radius-sm); padding:12px 16px; font-size:14px; line-height:1.7; opacity:0; transition:opacity .5s; }
+    .fb.show { opacity:1; }
+    @media(max-width:600px){ main{padding:12px 16px 24px;} h1{font-size:19px;} }
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 加减法 · 凑十/破十</div>
+  <h1>凑十法与破十法</h1>
+  <p class="subtitle">把进位加法变成"凑满10"，把退位减法变成"向10借"</p>
+</header>
+<main>
+  <div class="tabs">
+    <button class="tab active" onclick="setMode('make10')">▶ 凑十法（进位加法）</button>
+    <button class="tab" onclick="setMode('break10')">▶ 破十法（退位减法）</button>
+  </div>
+  <div class="controls">
+    <span style="font-size:13px;color:var(--ink2)">算式：</span>
+    <select class="num-sel" id="numA"></select>
+    <span class="op" id="opSign">+</span>
+    <select class="num-sel" id="numB"></select>
+    <span class="preview" id="preview">= ?</span>
+  </div>
+  <canvas id="cvs"></canvas>
+  <button class="btn" id="btn" onclick="nextStep()">开始演示</button>
+  <div class="eq-area" id="eqArea"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ───────────────────────────────────────────
+// 认知动作：变换
+// V1 动态跃迁：积木从一堆移动到十格框，过程可见
+// V3 分步揭示：3个阶段逐步展开，算式最后显示
+// V5 操作先于符号：先看动画再看算式分解
+// V6 动作-数学一致：积木向左移 = 数字归入"10"
+// V8 概念反馈：揭示"凑十/破十"的数学本质
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const BS = 36, GAP = 5; // block size, gap
+
+// ── 1. 常量 ──────────────────────────────────────────────
+const C = {
+  blue:'#2a5c8f', blueL:'#e8f0f8', blueD:'#0c447c',
+  teal:'#0f6e56', tealL:'#e1f5ee',
+  amber:'#854f0b', amberL:'#faeeda',
+  ink:'#1a1814', ink2:'#6b6860', ink3:'#a8a69f',
+  border:'#e4e2da', bg:'#f7f6f2', surf:'#ffffff'
+};
+
+// ── 2. 状态 ───────────────────────────────────────────────
+let mode='make10', step=0, anim=null, t=0;
+let numA=8, numB=5;
+
+// ── 3. 数学逻辑 ───────────────────────────────────────────
+function make10() {
+  const borrow=10-numA, rem=numB-borrow;
+  return {borrow, rem, result:numA+numB};
+}
+function break10() {
+  const ones=numA%10, borrowFrom10=numB-ones, rem10=10-numB, result=numA-numB;
+  return {ones, borrowFrom10, rem10, result};
+}
+
+// ── 4. 渲染 ───────────────────────────────────────────────
+function setup() {
+  const r=cvs.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=300*dpr;
+  ctx.scale(dpr,dpr);
+  cvs.style.height='300px';
+}
+
+function block(x,y,col,alpha=1) {
+  ctx.save(); ctx.globalAlpha=alpha;
+  ctx.fillStyle=col; ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.roundRect(x,y,BS,BS,5); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+function tenFrame(fx,fy,filled,highlightStart,fillCol,highlightCol) {
+  // 2×5 frame
+  const fw=5*(BS+GAP)-GAP+10, fh=2*(BS+GAP)-GAP+10;
+  ctx.fillStyle=C.surf; ctx.strokeStyle=C.border; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.roundRect(fx-5,fy-5,fw,fh,8); ctx.fill(); ctx.stroke();
+  for(let r=0;r<2;r++) for(let c=0;c<5;c++) {
+    const i=r*5+c, bx=fx+c*(BS+GAP), by=fy+r*(BS+GAP);
+    if(i<filled) {
+      const isHL=(highlightStart!==null && i>=highlightStart);
+      block(bx,by,isHL?highlightCol:fillCol);
+    } else {
+      ctx.fillStyle=C.bg; ctx.strokeStyle=C.border; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.roundRect(bx,by,BS,BS,5); ctx.fill(); ctx.stroke();
+    }
+  }
+}
+
+function label(txt,x,y,size=13,col=C.ink2,align='center',bold=false) {
+  ctx.fillStyle=col; ctx.textAlign=align; ctx.textBaseline='middle';
+  ctx.font=`${bold?'bold ':''  }${size}px 'Noto Sans SC',sans-serif`;
+  ctx.fillText(txt,x,y);
+}
+
+function draw() {
+  const W=cvs.getBoundingClientRect().width, H=300;
+  ctx.clearRect(0,0,W,H);
+  mode==='make10' ? drawMake10(W,H) : drawBreak10(W,H);
+}
+
+function drawMake10(W,H) {
+  const d=make10();
+  const frameW=5*(BS+GAP)-GAP+10;
+  const fx=(W-frameW)/2, fy=30;
+
+  if(step===0) {
+    // Initial: two rows of blocks
+    label(`${numA} + ${numB} = ?  （点击"开始演示"）`,W/2,20,14,C.ink2,'center',true);
+    const rowY1=55, rowY2=55+BS+28;
+    label(`第一组：${numA}个（蓝）`,30,rowY1-14,13,C.ink2,'left');
+    for(let i=0;i<numA;i++) block(30+i*(BS+GAP),rowY1,C.blue);
+    label(`第二组：${numB}个（橙）`,30,rowY2-14,13,C.ink2,'left');
+    for(let i=0;i<numB;i++) block(30+i*(BS+GAP),rowY2,C.amber);
+  }
+
+  if(step===1) {
+    label('把第一组放入十格框',W/2,18,14,C.ink,'center',true);
+    tenFrame(fx,fy,numA,null,C.blue,null);
+    label(`已放入 ${numA} 个，还差 ${10-numA} 个`,W/2,fy+2*(BS+GAP)+20,13,C.ink2,'center');
+    label(`第二组 ${numB} 个等待移入：`,30,fy+2*(BS+GAP)+45,13,C.ink2,'left');
+    for(let i=0;i<numB;i++) block(30+i*(BS+GAP),fy+2*(BS+GAP)+60,C.amber);
+  }
+
+  if(step===2) {
+    // PEDAGOGY V1: animation — blocks flying from bottom row into frame
+    const moving=Math.min(Math.floor(t*d.borrow*1.2),d.borrow);
+    const partial=(t*d.borrow*1.2)%1;
+    tenFrame(fx,fy,numA+moving,numA,C.blue,C.teal);
+    label(`凑十中……把 ${d.borrow} 个移入框内`,W/2,18,14,C.teal,'center',true);
+
+    // Remaining blocks
+    const remY=fy+2*(BS+GAP)+55;
+    const stillLeft=numB-moving;
+    for(let i=0;i<stillLeft;i++) block(30+i*(BS+GAP),remY,C.amber);
+
+    // Flying block (next one to move)
+    if(moving<d.borrow) {
+      const targetSlot=numA+moving;
+      const tc=targetSlot%5, tr=Math.floor(targetSlot/5);
+      const tx=fx+tc*(BS+GAP), ty=fy+tr*(BS+GAP);
+      const sx=30+stillLeft*(BS+GAP), sy=remY;
+      const bx=sx+(tx-sx)*partial, by=sy+(ty-sy)*partial-Math.sin(partial*Math.PI)*30;
+      block(bx,by,C.teal,0.75);
+    }
+    label(`十格框: ${numA} + ${moving}/${d.borrow} 个 → 还差 ${10-numA-moving} 个`,W/2,fy+2*(BS+GAP)+35,12,C.ink3,'center');
+  }
+
+  if(step===3) {
+    tenFrame(fx,fy,10,numA,C.blue,C.teal);
+    label('✓ 十格框满了！',W/2,18,14,C.teal,'center',true);
+    if(d.rem>0) {
+      const remY=fy+2*(BS+GAP)+45;
+      label(`还剩 ${d.rem} 个（橙色）：`,30,remY-14,13,C.ink2,'left');
+      for(let i=0;i<d.rem;i++) block(30+i*(BS+GAP),remY,C.amber);
+    }
+    const sumY=H-46;
+    ctx.fillStyle=C.blueL; ctx.beginPath(); ctx.roundRect(20,sumY-8,W-40,44,8); ctx.fill();
+    label(`${numA} + ${numB} = ${numA} + ${d.borrow} + ${d.rem} = 10 + ${d.rem} = ${d.result}`,W/2,sumY+14,16,C.blue,'center',true);
+  }
+}
+
+function drawBreak10(W,H) {
+  const d=break10();
+  const frameW=5*(BS+GAP)-GAP+10;
+  const fx=(W-frameW)/2, fy=30;
+
+  if(step===0) {
+    label(`${numA} − ${numB} = ?  个位 ${d.ones} 不够减 ${numB}，需要破十`,W/2,20,13,C.ink2,'center',true);
+    const rowY=55;
+    label(`把 ${numA} 看作 10 + ${d.ones}：`,30,rowY-14,13,C.ink2,'left');
+    for(let i=0;i<10;i++) block(30+i*(BS+GAP),rowY,C.blue);
+    if(d.ones>0) {
+      ctx.fillStyle=C.ink2; ctx.font="bold 22px 'JetBrains Mono',monospace"; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText('+',30+10*(BS+GAP)+4,rowY+BS/2);
+      for(let i=0;i<d.ones;i++) block(30+(11+i)*(BS+GAP),rowY,C.amber);
+    }
+  }
+
+  if(step===1) {
+    label(`从10里减去 ${numB}（标红的格子）`,W/2,18,14,C.ink,'center',true);
+    tenFrame(fx,fy,10,10-numB,C.blue,C.amber+'99');
+    label(`10 − ${numB} = ${d.rem10}`,W/2,fy+2*(BS+GAP)+22,14,C.teal,'center',true);
+    if(d.ones>0) {
+      const onesY=fy+2*(BS+GAP)+50;
+      label(`个位还有 ${d.ones} 个：`,30,onesY-14,13,C.ink2,'left');
+      for(let i=0;i<d.ones;i++) block(30+i*(BS+GAP),onesY,C.amber);
+    }
+  }
+
+  if(step===2) {
+    // Animation: blocks fade out
+    const removing=Math.min(Math.floor(t*numB*1.2),numB);
+    tenFrame(fx,fy,10-removing,null,C.blue,null);
+    label(`从10里移走 ${removing}/${numB} 个……`,W/2,18,14,C.amber,'center',true);
+    if(d.ones>0) {
+      const onesY=fy+2*(BS+GAP)+55;
+      label(`个位 ${d.ones} 个等待合并：`,30,onesY-14,13,C.ink2,'left');
+      for(let i=0;i<d.ones;i++) block(30+i*(BS+GAP),onesY,C.amber);
+    }
+  }
+
+  if(step===3) {
+    tenFrame(fx,fy,d.rem10,null,C.blue,null);
+    label(`10 − ${numB} = ${d.rem10}，再加个位 ${d.ones}`,W/2,18,14,C.teal,'center',true);
+    if(d.ones>0) {
+      const onesY=fy+2*(BS+GAP)+45;
+      label(`个位 ${d.ones} 个：`,30,onesY-14,13,C.ink2,'left');
+      for(let i=0;i<d.ones;i++) block(30+i*(BS+GAP),onesY,C.amber);
+    }
+    const sumY=H-46;
+    ctx.fillStyle=C.blueL; ctx.beginPath(); ctx.roundRect(20,sumY-8,W-40,44,8); ctx.fill();
+    label(`${numA}−${numB} = 10−${numB}+${d.ones} = ${d.rem10}+${d.ones} = ${d.result}`,W/2,sumY+14,16,C.blue,'center',true);
+  }
+}
+
+// ── 5. 交互 ───────────────────────────────────────────────
+function setMode(m) {
+  mode=m;
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',(i===0&&m==='make10')||(i===1&&m==='break10')));
+  const selA=document.getElementById('numA'), selB=document.getElementById('numB');
+  document.getElementById('opSign').textContent=m==='make10'?'+':'−';
+  selA.innerHTML=''; selB.innerHTML='';
+  if(m==='make10') {
+    [8,7,6,9].forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;selA.appendChild(o);});
+    [5,6,7,4,3,8].forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;selB.appendChild(o);});
+  } else {
+    [15,13,14,12,11,16,17].forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;selA.appendChild(o);});
+    [7,6,8,9,5].forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;selB.appendChild(o);});
+  }
+  reset();
+}
+
+function reset() {
+  numA=parseInt(document.getElementById('numA').value)||numA;
+  numB=parseInt(document.getElementById('numB').value)||numB;
+  step=0; t=0;
+  if(anim) cancelAnimationFrame(anim);
+  document.getElementById('eqArea').classList.remove('show');
+  document.getElementById('fb').classList.remove('show');
+  document.getElementById('btn').disabled=false;
+  document.getElementById('btn').textContent='开始演示';
+  document.getElementById('preview').textContent='= ?';
+  draw();
+}
+
+function nextStep() {
+  const btn=document.getElementById('btn');
+  if(step===0){ step=1; btn.textContent='下一步：移入方块'; draw(); }
+  else if(step===1){ step=2; btn.disabled=true; startAnim(); }
+  else if(step===3){ btn.textContent='重新开始'; showResult(); }
+  else { reset(); }
+}
+
+function startAnim() {
+  t=0; const dur=1400, st=performance.now();
+  function tick(now) {
+    t=Math.min(1,(now-st)/dur); draw();
+    if(t<1) anim=requestAnimationFrame(tick);
+    else { t=1; step=3; draw(); document.getElementById('btn').disabled=false; document.getElementById('btn').textContent='查看结论'; }
+  }
+  anim=requestAnimationFrame(tick);
+}
+
+// ── 6. 概念反馈 ───────────────────────────────────────────
+function showResult() {
+  // PEDAGOGY V5: formula appears only after animation complete
+  // PEDAGOGY V8: reveals the mathematical invariant
+  const eq=document.getElementById('eqArea'), fb=document.getElementById('fb');
+  if(mode==='make10') {
+    const d=make10();
+    eq.textContent=`${numA} + ${numB}  =  ${numA} + ${d.borrow} + ${d.rem}  =  10 + ${d.rem}  =  ${d.result}`;
+    fb.innerHTML=`你把 <strong>${numB}</strong> 拆成了 <strong>${d.borrow} + ${d.rem}</strong>，先把第一个数凑到了10。<br>凑满10之后，加法变成了简单的 <strong>10 + ${d.rem} = ${d.result}</strong>。<br>这就是<strong>凑十法</strong>的核心：先凑10，再加余数。`;
+    document.getElementById('preview').textContent=`= ${d.result}`;
+  } else {
+    const d=break10();
+    eq.textContent=`${numA} − ${numB}  =  10 − ${numB} + ${d.ones}  =  ${d.rem10} + ${d.ones}  =  ${d.result}`;
+    fb.innerHTML=`个位 <strong>${d.ones}</strong> 不够减 <strong>${numB}</strong>，所以从 <strong>10</strong> 里借。<br>10 − ${numB} = ${d.rem10}，再加上个位的 ${d.ones}：<strong>${d.rem10} + ${d.ones} = ${d.result}</strong>。<br>这就是<strong>破十法</strong>：先从10里减，再补上个位。`;
+    document.getElementById('preview').textContent=`= ${d.result}`;
+  }
+  eq.classList.add('show'); fb.classList.add('show');
+  document.getElementById('btn').textContent='重新开始';
+}
+
+// ── 7. 初始化 ─────────────────────────────────────────────
+document.getElementById('numA').addEventListener('change',reset);
+document.getElementById('numB').addEventListener('change',reset);
+window.addEventListener('resize',()=>{setup();draw();});
+setMode('make10');
+setup(); draw();
+</script>
+</body>
+</html>

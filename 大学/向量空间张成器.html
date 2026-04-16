@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>向量空间张成器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="线性代数">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="拖动基向量观察线性生成子空间的变化，理解线性相关与张成、基与维数的几何直觉">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .mode-row{display:flex;gap:6px;}
+    .mode-btn{padding:7px 16px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);font-weight:700;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:default;}
+    .info-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--blue);line-height:1.8;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 线性代数 · 认知动作：变换</div>
+  <h1>向量空间张成器</h1>
+  <p class="sub">拖动向量箭头，观察张成子空间如何变化</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('span2',this)">二维张成</button>
+    <button class="mode-btn" onclick="setMode('span1',this)">一维张成（线）</button>
+    <button class="mode-btn" onclick="setMode('combo',this)">线性组合</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="info-box" id="infoBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V5 操作先于符号: 先拖动感受"当两向量共线时空间退化"
+// PEDAGOGY V6 动作—数学一致: 拖动向量头=改变基向量
+// PEDAGOGY V8 概念反馈: 检测线性相关，说明张成维数
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=340;
+const xRange=[-5,5],yRange=[-4,4];
+let mode='span2';
+
+let v1={x:2,y:1},v2={x:-1,y:2};
+let alpha=1,beta=0.5;
+let dragging=null,lastDrag={x:0,y:0};
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function toX(x){const W=cvs.getBoundingClientRect().width;const pad=40;return pad+(x-xRange[0])/(xRange[1]-xRange[0])*(W-pad*2);}
+function toY(y){const pad=20;return pad+(H-pad*2)*(1-(y-yRange[0])/(yRange[1]-yRange[0]));}
+function fromCanvas(px,py){
+  const r=cvs.getBoundingClientRect();const W=r.width;const pad=40;const pad2=20;
+  return [xRange[0]+(px-pad)/(W-pad*2)*(xRange[1]-xRange[0]),yRange[0]+(1-(py-pad2)/(H-pad2*2))*(yRange[1]-yRange[0])];
+}
+
+function cross2d(a,b){return a.x*b.y-a.y*b.x;}
+
+function drawArrow(ctx2,x1,y1,x2,y2,color,width=2.5,label='',labelColor=''){
+  const px1=toX(x1),py1=toY(y1),px2=toX(x2),py2=toY(y2);
+  ctx2.strokeStyle=color;ctx2.lineWidth=width;
+  ctx2.beginPath();ctx2.moveTo(px1,py1);ctx2.lineTo(px2,py2);ctx2.stroke();
+  const ang=Math.atan2(py2-py1,px2-px1);const hs=10;
+  ctx2.fillStyle=color;ctx2.beginPath();
+  ctx2.moveTo(px2,py2);ctx2.lineTo(px2-hs*Math.cos(ang-0.4),py2-hs*Math.sin(ang-0.4));
+  ctx2.lineTo(px2-hs*Math.cos(ang+0.4),py2-hs*Math.sin(ang+0.4));ctx2.closePath();ctx2.fill();
+  if(label){
+    ctx2.fillStyle=labelColor||color;ctx2.font=`bold 12px 'JetBrains Mono',monospace`;
+    ctx2.textAlign='center';ctx2.textBaseline='middle';
+    ctx2.fillText(label,px2+(px2-px1)*0.1+10,py2+(py2-py1)*0.1-10);
+  }
+  // Handle dot
+  ctx2.fillStyle=color;ctx2.beginPath();ctx2.arc(px2,py2,5,0,Math.PI*2);ctx2.fill();
+  ctx2.fillStyle='#fff';ctx2.beginPath();ctx2.arc(px2,py2,2.5,0,Math.PI*2);ctx2.fill();
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const pad=40,pad2=20;
+
+  // Grid
+  ctx.strokeStyle='#e4e2da';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+  for(let x=xRange[0];x<=xRange[1];x++){ctx.beginPath();ctx.moveTo(toX(x),pad2);ctx.lineTo(toX(x),H-pad2);ctx.stroke();}
+  for(let y=yRange[0];y<=yRange[1];y++){ctx.beginPath();ctx.moveTo(pad,toY(y));ctx.lineTo(W-pad,toY(y));ctx.stroke();}
+  ctx.setLineDash([]);
+
+  const isCollinear=Math.abs(cross2d(v1,v2))<0.1;
+
+  if(mode==='span2'){
+    // Fill span if not collinear
+    if(!isCollinear){
+      ctx.fillStyle='#2a5c8f15';ctx.fillRect(pad,pad2,W-2*pad,H-2*pad2);
+      ctx.fillStyle='#2a5c8f';ctx.font=`11px 'Noto Sans SC',sans-serif`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText('span{v₁,v₂} = ℝ²（整个平面）',W/2,pad2+15);
+    } else {
+      // Draw the line
+      const dir=Math.sqrt(v1.x*v1.x+v1.y*v1.y);
+      if(dir>0){
+        const t=6;
+        ctx.strokeStyle='#2a5c8f40';ctx.lineWidth=3;
+        ctx.beginPath();ctx.moveTo(toX(-v1.x/dir*t),toY(-v1.y/dir*t));ctx.lineTo(toX(v1.x/dir*t),toY(v1.y/dir*t));ctx.stroke();
+        ctx.fillStyle='#dc2626';ctx.font=`11px 'Noto Sans SC',sans-serif`;
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('线性相关！span退化为一维直线',W/2,pad2+15);
+      }
+    }
+  } else if(mode==='span1'){
+    // Span of v1 only (a line)
+    const dir=Math.sqrt(v1.x*v1.x+v1.y*v1.y);
+    if(dir>0.01){
+      ctx.strokeStyle='#2a5c8f40';ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(toX(-v1.x/dir*6),toY(-v1.y/dir*6));ctx.lineTo(toX(v1.x/dir*6),toY(v1.y/dir*6));ctx.stroke();
+      ctx.fillStyle='#2a5c8f';ctx.font=`11px 'Noto Sans SC',sans-serif`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText('span{v₁} = 一维子空间（直线）',W/2,pad2+15);
+    }
+  } else {
+    // Linear combination
+    const cx=alpha*v1.x+beta*v2.x,cy=alpha*v1.y+beta*v2.y;
+    // Draw parallelogram
+    ctx.fillStyle='#2a5c8f15';ctx.strokeStyle='#2a5c8f30';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(toX(0),toY(0));ctx.lineTo(toX(v1.x),toY(v1.y));ctx.lineTo(toX(cx),toY(cy));ctx.lineTo(toX(v2.x),toY(v2.y));ctx.closePath();ctx.fill();ctx.stroke();
+    // αv1 component
+    ctx.strokeStyle='#2a5c8f88';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(toX(0),toY(0));ctx.lineTo(toX(alpha*v1.x),toY(alpha*v1.y));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(toX(alpha*v1.x),toY(alpha*v1.y));ctx.lineTo(toX(cx),toY(cy));ctx.stroke();
+    ctx.setLineDash([]);
+    // Result vector
+    drawArrow(ctx,0,0,cx,cy,'#854f0b',3,'αv₁+βv₂');
+  }
+
+  // Axes
+  ctx.strokeStyle='#6b6860';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(pad,toY(0));ctx.lineTo(W-pad,toY(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(toX(0),pad2);ctx.lineTo(toX(0),H-pad2);ctx.stroke();
+  ctx.fillStyle='#a8a69f';ctx.font=`9px 'JetBrains Mono',monospace`;
+  for(let x=xRange[0];x<=xRange[1];x++){if(x===0)continue;ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(x,toX(x),toY(0)+3);}
+  for(let y=yRange[0];y<=yRange[1];y++){if(y===0)continue;ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(y,toX(0)-3,toY(y));}
+
+  // Vectors
+  drawArrow(ctx,0,0,v1.x,v1.y,'#2a5c8f',3,'v₁');
+  if(mode!=='span1') drawArrow(ctx,0,0,v2.x,v2.y,'#0f6e56',3,'v₂');
+
+  // Alpha, beta sliders (if combo mode)
+  if(mode==='combo'){
+    updateComboInfo();
+  }
+
+  // Info
+  const det=cross2d(v1,v2);
+  document.getElementById('infoBox').innerHTML=
+    `v₁ = (${v1.x.toFixed(2)}, ${v1.y.toFixed(2)})   v₂ = (${v2.x.toFixed(2)}, ${v2.y.toFixed(2)})\n` +
+    (mode!=='span1'?`det[v₁|v₂] = v₁×v₂ = ${det.toFixed(3)}   ${Math.abs(det)<0.1?'⚠ 线性相关！':'✓ 线性无关'}`:
+     `‖v₁‖ = ${Math.sqrt(v1.x**2+v1.y**2).toFixed(3)}`);
+
+  const fbText={
+    span2:isCollinear?'<strong>线性相关</strong>：两向量共线（行列式≈0），张成只有一维直线，不能"铺满"平面。拖动其中一个向量偏离直线方向，即可恢复二维张成。':
+      '<strong>线性无关</strong>：v₁,v₂张成整个平面ℝ²（行列式≠0）。任意平面向量都可以写成 αv₁+βv₂ 的线性组合。这两个向量构成ℝ²的一组基。',
+    span1:'<strong>span{v₁}=一维子空间</strong>：所有 α·v₁（α∈ℝ）构成过原点的一条直线（一维子空间）。这条直线就是v₁的方向。',
+    combo:`<strong>线性组合</strong>：αv₁+βv₂ = α(${v1.x.toFixed(1)},${v1.y.toFixed(1)})+β(${v2.x.toFixed(1)},${v2.y.toFixed(1)}) = (${(alpha*v1.x+beta*v2.x).toFixed(2)},${(alpha*v1.y+beta*v2.y).toFixed(2)})。虚线平行四边形展示了如何"走"α步v₁再走β步v₂。`
+  };
+  document.getElementById('fb').innerHTML=fbText[mode];
+}
+
+function updateComboInfo(){
+  // Show sliders for alpha and beta in the canvas
+}
+
+function setMode(m,btn){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function hitTest(cx,cy){
+  const thresh=15;
+  const p1=[toX(v1.x),toY(v1.y)];const p2=[toX(v2.x),toY(v2.y)];
+  if(Math.hypot(cx-p1[0],cy-p1[1])<thresh) return 'v1';
+  if(Math.hypot(cx-p2[0],cy-p2[1])<thresh) return 'v2';
+  return null;
+}
+
+cvs.style.cursor='default';
+cvs.addEventListener('pointerdown',e=>{
+  const r=cvs.getBoundingClientRect();
+  const mx=e.clientX-r.left,my=e.clientY-r.top;
+  dragging=hitTest(mx,my);
+  if(dragging){cvs.setPointerCapture(e.pointerId);cvs.style.cursor='grabbing';}
+});
+cvs.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const r=cvs.getBoundingClientRect();
+  const [x,y]=fromCanvas(e.clientX-r.left,e.clientY-r.top);
+  const cx=Math.max(xRange[0]+0.5,Math.min(xRange[1]-0.5,x));
+  const cy=Math.max(yRange[0]+0.5,Math.min(yRange[1]-0.5,y));
+  if(dragging==='v1'){v1={x:cx,y:cy};}else{v2={x:cx,y:cy};}
+  draw();
+});
+cvs.addEventListener('pointerup',()=>{dragging=null;cvs.style.cursor='default';});
+
+// Mouse move for cursor change
+cvs.addEventListener('mousemove',e=>{
+  if(dragging) return;
+  const r=cvs.getBoundingClientRect();
+  const hit=hitTest(e.clientX-r.left,e.clientY-r.top);
+  cvs.style.cursor=hit?'grab':'default';
+});
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>二次函数参数实验室 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="函数与图像">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="a、b、c三参数滑杆实时联动抛物线，理解各参数的几何意义">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:grid;grid-template-columns:220px 1fr;gap:14px;}
+    .left-panel{display:flex;flex-direction:column;gap:12px;}
+    .right-panel{display:flex;flex-direction:column;gap:12px;}
+    .eq-card{background:var(--blue-light);border:2px solid var(--blue);border-radius:var(--radius);padding:12px 16px;text-align:center;}
+    .eq-text{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    .param-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;}
+    .param-row{margin-bottom:10px;}
+    .param-row:last-child{margin-bottom:0;}
+    .param-label{font-size:12px;color:var(--ink2);margin-bottom:4px;}
+    .param-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    input[type=range]{width:100%;cursor:pointer;margin-top:2px;}
+    canvas{width:100%;flex:1;min-height:320px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);display:block;}
+    .info-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;}
+    .info-title{font-size:12px;color:var(--ink2);margin-bottom:6px;}
+    .info-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid var(--border);}
+    .info-row:last-child{border-bottom:none;}
+    .info-key{color:var(--ink2);}
+    .info-val{font-family:'JetBrains Mono',monospace;font-weight:600;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;line-height:1.7;grid-column:1/-1;}
+    @media(max-width:600px){main{grid-template-columns:1fr;}.canvas-wrap{min-height:260px;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 二次函数 · 认知动作：变换</div>
+  <h1>二次函数参数实验室</h1>
+  <p class="sub">y = ax² + bx + c，拖动 a、b、c 看抛物线怎么变</p>
+</header>
+<main>
+  <div class="left-panel">
+    <div class="eq-card">
+      <div class="eq-text" id="eqText">y = x²</div>
+    </div>
+    <div class="param-card">
+      <div class="param-row">
+        <div class="param-label">a（开口与宽窄）<span id="aLabel" style="color:var(--blue);font-weight:600;float:right">1.0</span></div>
+        <input type="range" id="aSl" min="-3" max="3" value="1" step="0.1" style="accent-color:var(--blue)">
+      </div>
+      <div class="param-row">
+        <div class="param-label">b（对称轴位置）<span id="bLabel" style="color:var(--teal);font-weight:600;float:right">0.0</span></div>
+        <input type="range" id="bSl" min="-4" max="4" value="0" step="0.5" style="accent-color:var(--teal)">
+      </div>
+      <div class="param-row">
+        <div class="param-label">c（y轴截距）<span id="cLabel" style="color:var(--amber);font-weight:600;float:right">0.0</span></div>
+        <input type="range" id="cSl" min="-5" max="5" value="0" step="0.5" style="accent-color:var(--amber)">
+      </div>
+    </div>
+    <div class="info-card">
+      <div class="info-title">关键性质</div>
+      <div class="info-row"><span class="info-key">开口方向</span><span class="info-val" id="openDir">向上（a>0）</span></div>
+      <div class="info-row"><span class="info-key">对称轴</span><span class="info-val" id="axisVal">x = 0</span></div>
+      <div class="info-row"><span class="info-key">顶点</span><span class="info-val" id="vertexVal">(0, 0)</span></div>
+      <div class="info-row"><span class="info-key">y轴截距</span><span class="info-val" id="yIntercept">0</span></div>
+      <div class="info-row"><span class="info-key">判别式Δ</span><span class="info-val" id="deltaVal">0</span></div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button style="flex:1;padding:10px;border:none;border-radius:var(--radius-sm);font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;background:var(--blue);color:#fff;" onclick="resetParams()">重置</button>
+    </div>
+  </div>
+  <div class="right-panel">
+    <canvas id="cvs" height="380"></canvas>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：变换
+// V1 动态跃迁：三参数实时改变抛物线形状，联动三个不同几何效果
+// V2 表征桥接：参数值 + 解析式 + 图像 + 性质卡同步
+// V4 信号聚焦：蓝=a(宽窄/开口)，绿=b(平移/对称轴)，橙=c(y截距)
+// V6 动作-数学一致：a滑杆增大→抛物线变窄/正负改变开口方向
+// V7 单一认知动作：变换
+// V8 概念反馈：揭示各参数的几何意义和相互关系
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',amberL:'#faeeda',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let a=1,b=0,c=0;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=380*dpr; ctx.scale(dpr,dpr); cvs.style.height='380px';
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=380;
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2, cy=H/2, scale=28;
+  const xRange=W/(2*scale), yRange=H/(2*scale);
+
+  // Grid
+  ctx.strokeStyle=C.border; ctx.lineWidth=0.5;
+  for(let gx=Math.ceil(-xRange);gx<=xRange;gx++){
+    const px=cx+gx*scale;
+    ctx.beginPath(); ctx.moveTo(px,0); ctx.lineTo(px,H); ctx.stroke();
+  }
+  for(let gy=Math.ceil(-yRange);gy<=yRange;gy++){
+    const py=cy-gy*scale;
+    ctx.beginPath(); ctx.moveTo(0,py); ctx.lineTo(W,py); ctx.stroke();
+  }
+
+  // Axes
+  ctx.strokeStyle=C.ink2; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(W,cy); ctx.stroke(); // x-axis
+  ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,H); ctx.stroke(); // y-axis
+
+  // Axis labels
+  ctx.fillStyle=C.ink2; ctx.font=`11px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let gx=Math.ceil(-xRange);gx<=xRange;gx++){
+    if(gx===0)continue;
+    ctx.fillText(gx,cx+gx*scale,cy+4);
+  }
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(let gy=Math.ceil(-yRange);gy<=yRange;gy++){
+    if(gy===0)continue;
+    ctx.fillText(gy,cx-4,cy-gy*scale);
+  }
+  ctx.fillStyle=C.ink; ctx.font=`bold 13px 'Noto Sans SC',sans-serif`; ctx.textAlign='right'; ctx.textBaseline='bottom';
+  ctx.fillText('x',W-4,cy-4);
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('y',cx+4,4);
+
+  if(a===0){
+    // Draw line y=bx+c
+    ctx.strokeStyle=C.blue; ctx.lineWidth=2.5;
+    ctx.beginPath();
+    const x1=-xRange, y1=b*x1+c;
+    const x2=xRange, y2=b*x2+c;
+    ctx.moveTo(cx+x1*scale,cy-y1*scale); ctx.lineTo(cx+x2*scale,cy-y2*scale); ctx.stroke();
+    return;
+  }
+
+  // Draw parabola
+  ctx.strokeStyle=C.blue; ctx.lineWidth=2.5; ctx.lineJoin='round';
+  ctx.beginPath();
+  let first=true;
+  for(let px=0;px<W;px++){
+    const xv=(px-cx)/scale;
+    const yv=a*xv*xv+b*xv+c;
+    const py=cy-yv*scale;
+    if(py>-50&&py<H+50){
+      if(first){ctx.moveTo(px,py);first=false;}
+      else ctx.lineTo(px,py);
+    } else {
+      first=true;
+    }
+  }
+  ctx.stroke();
+
+  // Axis of symmetry
+  const axisX=-b/(2*a);
+  const axPx=cx+axisX*scale;
+  ctx.strokeStyle=C.teal+'88'; ctx.lineWidth=1.5; ctx.setLineDash([5,5]);
+  ctx.beginPath(); ctx.moveTo(axPx,0); ctx.lineTo(axPx,H); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.teal; ctx.font=`12px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText(`x=${Math.round(axisX*10)/10}`,axPx,4);
+
+  // Vertex
+  const vy=a*axisX*axisX+b*axisX+c;
+  const vpx=cx+axisX*scale, vpy=cy-vy*scale;
+  ctx.fillStyle=C.teal;
+  ctx.beginPath(); ctx.arc(vpx,vpy,5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=C.teal; ctx.font=`bold 12px 'JetBrains Mono',monospace`; ctx.textAlign='left'; ctx.textBaseline='bottom';
+  ctx.fillText(`(${Math.round(axisX*10)/10}, ${Math.round(vy*10)/10})`,vpx+8,vpy-4);
+
+  // y-intercept
+  const yip=cy-c*scale;
+  ctx.fillStyle=C.amber;
+  ctx.beginPath(); ctx.arc(cx,yip,5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=C.amber; ctx.font=`bold 12px 'JetBrains Mono',monospace`; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(`c=${c}`,cx+8,yip);
+
+  // a annotation
+  ctx.fillStyle=C.blue+'99'; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='right'; ctx.textBaseline='top';
+  ctx.fillText(`a=${a>0?'+':`${a}`}${a}: ${a>0?'开口向上':'开口向下'}`,W-8,8);
+}
+
+function updateAll(){
+  // PEDAGOGY V2: update all representations simultaneously
+  const fmt=v=>v===0?'0':(v>0?`+${v}`:String(v));
+  let eq=`y = `;
+  if(a===0){
+    eq+=`${b===0?'':(b===1?'x':b===-1?'-x':`${b}x`)}${b!==0&&c>0?'+':b!==0&&c<0?'':b===0?'':' '}${c===0&&b!==0?'':(c===0&&b===0?'0':c)}`;
+  } else {
+    eq+=`${a===1?'':a===-1?'-':`${a}`}x²`;
+    if(b!==0) eq+=`${b>0?' + '+b:' - '+Math.abs(b)}x`;
+    if(c!==0) eq+=`${c>0?' + '+c:' - '+Math.abs(c)}`;
+  }
+  document.getElementById('eqText').textContent=eq;
+
+  const axisX=a!==0?-b/(2*a):undefined;
+  const vertY=a!==0?(a*axisX*axisX+b*axisX+c):undefined;
+  const delta=b*b-4*a*c;
+
+  document.getElementById('aLabel').textContent=a.toFixed(1);
+  document.getElementById('bLabel').textContent=b.toFixed(1);
+  document.getElementById('cLabel').textContent=c.toFixed(1);
+  document.getElementById('openDir').textContent=a>0?'向上 (a>0)':a<0?'向下 (a<0)':'直线(a=0)';
+  document.getElementById('axisVal').textContent=a!==0?`x = ${Math.round(axisX*100)/100}`:'无';
+  document.getElementById('vertexVal').textContent=a!==0?`(${Math.round(axisX*100)/100}, ${Math.round(vertY*100)/100})`:'无';
+  document.getElementById('yIntercept').textContent=c;
+  document.getElementById('deltaVal').textContent=`${Math.round(delta*100)/100} (${delta>0?'2个根':delta===0?'1个根':'无实根'})`;
+
+  // PEDAGOGY V8
+  const fb=document.getElementById('fb');
+  let msgs=[];
+  if(a>0) msgs.push(`<strong>a=${a}>0</strong>：抛物线<strong>开口向上</strong>，有最小值`);
+  else if(a<0) msgs.push(`<strong>a=${a}<0</strong>：抛物线<strong>开口向下</strong>，有最大值`);
+  if(Math.abs(a)>1) msgs.push(`|a|=${Math.abs(a)}>1：开口<strong>变窄</strong>`);
+  else if(Math.abs(a)<1&&a!==0) msgs.push(`|a|=${Math.abs(a)}<1：开口<strong>变宽</strong>`);
+  if(b!==0&&a!==0) msgs.push(`b=${b}≠0：对称轴 x=${Math.round(axisX*100)/100}（不在y轴上）`);
+  if(c!==0) msgs.push(`c=${c}：图像在y轴的截距为<strong>${c}</strong>`);
+  fb.innerHTML=msgs.length?msgs.join('；')+'。<br>三个参数相互配合，完全决定了抛物线的形状和位置。':'调整参数观察抛物线变化。';
+  draw();
+}
+
+document.getElementById('aSl').addEventListener('input',e=>{a=parseFloat(e.target.value);updateAll();});
+document.getElementById('bSl').addEventListener('input',e=>{b=parseFloat(e.target.value);updateAll();});
+document.getElementById('cSl').addEventListener('input',e=>{c=parseFloat(e.target.value);updateAll();});
+
+function resetParams(){
+  a=1;b=0;c=0;
+  document.getElementById('aSl').value=1;
+  document.getElementById('bSl').value=0;
+  document.getElementById('cSl').value=0;
+  updateAll();
+}
+
+window.addEventListener('resize',()=>{setup();draw();updateAll();});
+setup(); updateAll();
+</script>
+</body>
+</html>

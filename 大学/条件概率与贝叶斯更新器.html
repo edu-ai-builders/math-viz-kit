@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>条件概率与贝叶斯更新器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="概率统计">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="面积图可视化条件概率P(A|B)，贝叶斯定理动态更新先验到后验">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .mode-row{display:flex;gap:6px;}
+    .mode-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 概率统计 · 认知动作：累积</div>
+  <h1>条件概率与贝叶斯更新器</h1>
+  <p class="sub">面积图解释 P(A|B)——B已发生的情况下，A发生的概率只看重叠区域</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setMode('area',this)">面积图（条件概率）</button>
+    <button class="mode-btn" onclick="setMode('bayes',this)">贝叶斯更新（先验→后验）</button>
+    <button class="mode-btn" onclick="setMode('medical',this)">医学检测场景</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">P(A)</div><div class="stat-val" id="pA" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">P(B)</div><div class="stat-val" id="pB" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">P(A∩B)</div><div class="stat-val" id="pAB" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl" id="condLbl">P(A|B)</div><div class="stat-val" id="condVal" style="color:var(--ink)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl" id="sl1Lbl">P(A) 事件A的概率</div>
+      <div class="sl-val" id="sl1Val">0.40</div>
+      <input type="range" id="sl1" min="0.05" max="0.95" step="0.05" value="0.4">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl" id="sl2Lbl">P(B) 事件B的概率</div>
+      <div class="sl-val" id="sl2Val">0.50</div>
+      <input type="range" id="sl2" min="0.05" max="0.95" step="0.05" value="0.5">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl" id="sl3Lbl">P(A∩B) 同时发生</div>
+      <div class="sl-val" id="sl3Val">0.20</div>
+      <input type="range" id="sl3" min="0.01" max="0.5" step="0.01" value="0.2">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl" id="sl4Lbl">（第4个参数）</div>
+      <div class="sl-val" id="sl4Val">—</div>
+      <input type="range" id="sl4" min="0.01" max="0.99" step="0.01" value="0.5">
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 条件概率的"缩小样本空间"只有面积图才能感受
+// PEDAGOGY V2 表征桥接: 图形面积 ↔ 概率数值 ↔ 公式
+// PEDAGOGY V3 分步揭示: 先条件概率，再贝叶斯，再实际场景
+// PEDAGOGY V7 单一认知动作: 累积（观察重叠区域占B的比例）
+// PEDAGOGY V8 概念反馈: 揭示"条件概率=用B缩小样本空间后，A的比例"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=320;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  red:'#c0392b',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+let mode='area';
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setMode(m,btn){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  // Update slider labels
+  if(m==='bayes'){
+    document.getElementById('sl1Lbl').textContent='先验 P(H)';
+    document.getElementById('sl2Lbl').textContent='似然 P(E|H)';
+    document.getElementById('sl3Lbl').textContent='P(E|¬H) 似然比较';
+    document.getElementById('sl4Lbl').textContent='（未使用）';
+  } else if(m==='medical'){
+    document.getElementById('sl1Lbl').textContent='患病率 P(有病)';
+    document.getElementById('sl2Lbl').textContent='灵敏度 P(阳性|有病)';
+    document.getElementById('sl3Lbl').textContent='特异度 P(阴性|无病)';
+    document.getElementById('sl4Lbl').textContent='（未使用）';
+  } else {
+    document.getElementById('sl1Lbl').textContent='P(A) 事件A的概率';
+    document.getElementById('sl2Lbl').textContent='P(B) 事件B的概率';
+    document.getElementById('sl3Lbl').textContent='P(A∩B) 同时发生';
+    document.getElementById('sl4Lbl').textContent='（第4个参数）';
+  }
+  draw();
+}
+
+function drawAreaMode(W,pA,pB,pAB){
+  const margin={left:20,right:20,top:30,bottom:30};
+  const boxW=W-margin.left-margin.right;
+  const boxH=H-margin.top-margin.bottom;
+
+  // Background = sample space
+  ctx.fillStyle=C.border;
+  ctx.fillRect(margin.left,margin.top,boxW,boxH);
+  ctx.fillStyle=C.ink3;ctx.font=`12px 'Noto Sans SC',sans-serif`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText('样本空间Ω（总面积=1）',margin.left+4,margin.top+4);
+
+  // Event A (blue)
+  const aW=pA*boxW, aH=boxH;
+  ctx.fillStyle=C.blue+'55';
+  ctx.fillRect(margin.left,margin.top,aW,aH);
+  ctx.fillStyle=C.blue;ctx.font=`bold 14px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(`A\n${(pA*100).toFixed(0)}%`,margin.left+aW/2,margin.top+boxH*0.25);
+
+  // Event B (teal)
+  const bH=pB*boxH;
+  ctx.fillStyle=C.teal+'55';
+  ctx.fillRect(margin.left,margin.top,boxW,bH);
+  ctx.fillStyle=C.teal;ctx.font=`bold 14px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(`B  ${(pB*100).toFixed(0)}%`,margin.left+boxW*0.75,margin.top+bH/2);
+
+  // Intersection A∩B (amber overlay)
+  // A occupies left pA of width, B occupies top pB of height
+  // Overlap: if independent, pAB=pA*pB; here user controls overlap
+  const intW=Math.min(pAB/pB,pA)*boxW; // width of intersection given pAB=intW/boxW * bH/boxH * boxW * boxH...
+  // Simpler: show A∩B as rectangle in top-left corner proportional to pAB
+  const intArea=pAB;
+  // Show as: within B strip (height=bH), A∩B occupies intArea/pB width
+  const intWpx=(intArea/pB)*boxW;
+  ctx.fillStyle=C.amberD+'88';
+  ctx.fillRect(margin.left,margin.top,Math.min(intWpx,boxW),bH);
+  ctx.fillStyle=C.amberD;ctx.font=`bold 13px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+  if(intWpx>30)ctx.fillText(`A∩B\n${(pAB*100).toFixed(0)}%`,margin.left+intWpx/2,margin.top+bH/2);
+
+  // Highlight: P(A|B) = P(A∩B)/P(B)
+  const pAgivenB=pAB/pB;
+  // Draw thick border around B strip
+  ctx.strokeStyle=C.teal;ctx.lineWidth=3;ctx.setLineDash([]);
+  ctx.strokeRect(margin.left,margin.top,boxW,bH);
+  // Arrow pointing to ratio
+  ctx.fillStyle=C.ink;ctx.font=`bold 13px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText(`P(A|B) = P(A∩B)/P(B) = ${(pAB*100).toFixed(0)}%/${(pB*100).toFixed(0)}% = ${(pAgivenB*100).toFixed(1)}%`,W/2,margin.top+bH+8);
+
+  // Stats
+  document.getElementById('pA').textContent=(pA*100).toFixed(0)+'%';
+  document.getElementById('pB').textContent=(pB*100).toFixed(0)+'%';
+  document.getElementById('pAB').textContent=(pAB*100).toFixed(0)+'%';
+  document.getElementById('condLbl').textContent='P(A|B)';
+  document.getElementById('condVal').textContent=(pAgivenB*100).toFixed(1)+'%';
+
+  document.getElementById('fb').innerHTML=
+    `P(A|B) = P(A∩B)/P(B) = <strong>${(pAgivenB*100).toFixed(1)}%</strong>。<br>` +
+    `<strong>含义：</strong>已知 B 已发生（只看蓝色框内），A 发生的比例就是 P(A|B)。<br>` +
+    `这相当于把样本空间从"整个 Ω"缩小到"B 内部"，再计算 A 占 B 的面积比。<br>` +
+    `${Math.abs(pAgivenB-pA)<0.02?'P(A|B)≈P(A)，说明 A 和 B <strong>相互独立</strong>，知道B不影响A的概率。':
+    pAgivenB>pA?'P(A|B)>P(A)，B 发生使 A 更可能发生（正相关）。':'P(A|B)<P(A)，B 发生使 A 更不可能发生（负相关）。'}`;
+}
+
+function drawBayesMode(W,priorH,likH,likNotH){
+  const pH=priorH;
+  const pNotH=1-pH;
+  const pEH=likH;
+  const pENotH=likNotH;
+  const pE=pEH*pH+pENotH*pNotH;
+  const posterior=pEH*pH/pE;
+
+  const margin={left:20,right:20,top:20,bottom:20};
+  const W2=W-margin.left-margin.right;
+  const barH=50;
+  const gap=24;
+
+  const drawBar=(y,val,label,color,subLabel)=>{
+    const w=val*W2;
+    ctx.fillStyle=color+'44';ctx.fillRect(margin.left,y,W2,barH);
+    ctx.fillStyle=color;ctx.fillRect(margin.left,y,w,barH);
+    ctx.fillStyle=C.surf;ctx.font=`bold 14px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='middle';
+    if(w>40) ctx.fillText(`${(val*100).toFixed(1)}%`,margin.left+6,y+barH/2);
+    ctx.fillStyle=C.ink;ctx.font=`bold 13px 'Noto Sans SC',sans-serif`;ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(label,margin.left-4,y+barH/2);
+    ctx.fillStyle=color;ctx.textAlign='left';ctx.font=`12px 'JetBrains Mono',monospace`;
+    ctx.fillText(subLabel,margin.left+W2+4,y+barH/2);
+  };
+
+  drawBar(margin.top,pH,'先验 P(H)',C.blue,`=${(pH*100).toFixed(0)}%`);
+  drawBar(margin.top+barH+gap,pE,'全概率 P(E)',C.teal,`=${(pE*100).toFixed(1)}%`);
+  drawBar(margin.top+2*(barH+gap),posterior,'后验 P(H|E)',C.amberD,`=${(posterior*100).toFixed(1)}%`);
+
+  // Arrow labels
+  ctx.fillStyle=C.ink2;ctx.font=`12px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText(`P(E|H)=${(pEH*100).toFixed(0)}%  P(E|¬H)=${(pENotH*100).toFixed(0)}%`,W/2,margin.top+barH+4);
+  ctx.fillText('↑ 观测到证据E',W/2,margin.top+2*barH+gap+4);
+
+  document.getElementById('pA').textContent=(pH*100).toFixed(0)+'%';
+  document.getElementById('pB').textContent=(pE*100).toFixed(1)+'%';
+  document.getElementById('pAB').textContent=(pEH*100).toFixed(0)+'%';
+  document.getElementById('condLbl').textContent='后验P(H|E)';
+  document.getElementById('condVal').textContent=(posterior*100).toFixed(1)+'%';
+
+  const update=posterior-pH;
+  document.getElementById('fb').innerHTML=
+    `贝叶斯定理：P(H|E) = P(E|H)·P(H) / P(E)。<br>` +
+    `先验 P(H) = ${(pH*100).toFixed(0)}%，观测到证据 E 后，更新为后验 P(H|E) = <strong>${(posterior*100).toFixed(1)}%</strong>。<br>` +
+    `<strong>更新幅度：${update>0?'+':''}${(update*100).toFixed(1)}%</strong>。` +
+    `${Math.abs(update)<0.02?'证据对信念几乎无影响。':update>0?'证据支持假设 H，信念增强。':'证据反对假设 H，信念减弱。'}<br>` +
+    `<strong>P(E) = P(E|H)·P(H) + P(E|¬H)·P(¬H)</strong>（全概率公式，分母归一化）。`;
+}
+
+function drawMedicalMode(W,prev,sens,spec){
+  // prev = P(病), sens = P(阳|病), spec = P(阴|无病)
+  const pDisease=prev;
+  const pNoDisease=1-prev;
+  const pPosGivenDisease=sens;
+  const pNegGivenNoDisease=spec;
+  const pPosGivenNoDisease=1-spec;
+  const pPos=pPosGivenDisease*pDisease+pPosGivenNoDisease*pNoDisease;
+  const ppv=pPosGivenDisease*pDisease/pPos; // positive predictive value = P(病|阳)
+
+  const margin={left:20,right:20,top:20,bottom:20};
+  const W2=W-margin.left-margin.right;
+  const rowH=40;
+  const popN=1000;
+
+  // Simulate 1000 people
+  const diseased=Math.round(prev*popN);
+  const healthy=popN-diseased;
+  const TP=Math.round(pPosGivenDisease*diseased);
+  const FN=diseased-TP;
+  const FP=Math.round(pPosGivenNoDisease*healthy);
+  const TN=healthy-FP;
+  const totalPos=TP+FP;
+
+  // Draw 2x2 table
+  const tx=margin.left+W2*0.3;
+  const tw=(W2*0.7)/2;
+  const ty=margin.top;
+  const th=(H-2*margin.top)/4;
+
+  const cells=[
+    [tx,ty,'真阳性(TP)',TP,C.teal],
+    [tx+tw,ty,'假阴性(FN)',FN,C.red],
+    [tx,ty+th*1.5,'假阳性(FP)',FP,C.red],
+    [tx+tw,ty+th*1.5,'真阴性(TN)',TN,C.teal],
+  ];
+  cells.forEach(([x,y,label,n,color])=>{
+    ctx.fillStyle=color+'33';ctx.fillRect(x,y,tw,th);
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.strokeRect(x,y,tw,th);
+    ctx.fillStyle=color;ctx.font=`bold 14px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(String(n),x+tw/2,y+th/2);
+    ctx.fillStyle=C.ink2;ctx.font=`10px 'Noto Sans SC',sans-serif`;ctx.textBaseline='top';
+    ctx.fillText(label,x+tw/2,y+4);
+  });
+  ctx.fillStyle=C.blue;ctx.font=`bold 12px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('阳性',tx+tw/2,ty-12);ctx.fillText('阴性',tx+tw*1.5,ty-12);
+  ctx.save();ctx.translate(tx-8,ty+th/2);ctx.rotate(-Math.PI/2);ctx.textBaseline='middle';
+  ctx.fillText('有病',0,0);ctx.restore();
+  ctx.save();ctx.translate(tx-8,ty+th*2);ctx.rotate(-Math.PI/2);ctx.textBaseline='middle';
+  ctx.fillText('无病',0,0);ctx.restore();
+
+  // PPV bar
+  const barY=ty+th*3+10;
+  ctx.fillStyle=C.border;ctx.fillRect(margin.left,barY,W2,30);
+  ctx.fillStyle=C.amberD;ctx.fillRect(margin.left,barY,ppv*W2,30);
+  ctx.fillStyle='#fff';ctx.font=`bold 13px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(`阳性预测值 PPV=${(ppv*100).toFixed(1)}%`,margin.left+W2/2,barY+15);
+
+  document.getElementById('pA').textContent=(prev*100).toFixed(1)+'%';
+  document.getElementById('pB').textContent=(pPos*100).toFixed(1)+'%';
+  document.getElementById('pAB').textContent=(sens*100).toFixed(0)+'%';
+  document.getElementById('condLbl').textContent='PPV P(病|阳)';
+  document.getElementById('condVal').textContent=(ppv*100).toFixed(1)+'%';
+
+  document.getElementById('fb').innerHTML=
+    `1000人中：患病 ${diseased} 人，健康 ${healthy} 人。<br>` +
+    `真阳性 ${TP}，假阳性 ${FP}，共 ${totalPos} 人阳性。其中真正有病占：<strong>${(ppv*100).toFixed(1)}%</strong>（PPV）。<br>` +
+    `<strong>患病率越低，即使检测灵敏度高，PPV也可能很低</strong>——这是"基率谬误"的来源。<br>` +
+    `降低 P(有病) 看看：当患病率极低时，阳性结果大多数是假阳性！`;
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const v1=parseFloat(document.getElementById('sl1').value);
+  const v2=parseFloat(document.getElementById('sl2').value);
+  const v3=parseFloat(document.getElementById('sl3').value);
+  const v4=parseFloat(document.getElementById('sl4').value);
+
+  document.getElementById('sl1Val').textContent=v1.toFixed(2);
+  document.getElementById('sl2Val').textContent=v2.toFixed(2);
+  document.getElementById('sl3Val').textContent=v3.toFixed(2);
+  document.getElementById('sl4Val').textContent=v4.toFixed(2);
+
+  if(mode==='area'){
+    // Ensure pAB <= min(pA,pB)
+    const pAB=Math.min(v3,v1,v2);
+    drawAreaMode(W,v1,v2,pAB);
+  } else if(mode==='bayes'){
+    drawBayesMode(W,v1,v2,v3);
+  } else {
+    drawMedicalMode(W,v1,v2,v3);
+  }
+}
+
+['sl1','sl2','sl3','sl4'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

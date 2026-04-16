@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>一次函数滑杆实验室 · 初中数学可视化</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    /* ── 1. CSS 变量 ─────────────────────────────── */
+    :root {
+      --bg: #f7f6f2;
+      --surface: #ffffff;
+      --surface2: #f2f0ea;
+      --ink: #1a1814;
+      --ink2: #5a5650;
+      --ink3: #a8a49c;
+      --border: #e0ddd6;
+
+      /* PEDAGOGY V4：两种强调色各对应一个参数 */
+      --color-k: #2a5c8f;       /* 斜率 k（蓝色） */
+      --color-k-light: #dceeff;
+      --color-k-dark: #1a4a7c;
+
+      --color-b: #0f6e56;       /* 截距 b（绿色） */
+      --color-b-light: #d4f5e3;
+      --color-b-dark: #0a5040;
+
+      --color-line: #c87820;    /* 函数直线（橙色） */
+      --color-line-light: #faeeda;
+      --color-line-dark: #9a5810;
+
+      --color-zero: #6b3fb8;    /* 零点（紫色） */
+      --color-zero-light: #f0e8fb;
+
+      --radius: 14px;
+      --radius-sm: 8px;
+      --shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+    }
+
+    /* ── 2. 全局重置 ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Noto Sans SC', sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    /* ── 3. 头部 ─────────────────────────────────── */
+    header {
+      background: var(--surface);
+      border-bottom: 2px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: var(--shadow);
+    }
+    header .icon { font-size: 22px; }
+    header h1 { font-size: 17px; font-weight: 700; color: var(--color-k-dark); }
+    .header-eq {
+      margin-left: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 17px; font-weight: 700;
+      color: var(--color-line-dark);
+      background: var(--color-line-light);
+      padding: 4px 14px;
+      border-radius: 20px;
+      border: 1.5px solid #e8c890;
+    }
+    .header-eq .ek { color: var(--color-k-dark); }
+    .header-eq .eb { color: var(--color-b-dark); }
+
+    /* ── 4. 主体：三列布局 ───────────────────────── */
+    main {
+      display: grid;
+      grid-template-columns: 240px 1fr 220px;
+      height: calc(100vh - 57px);
+    }
+
+    /* 左侧控制面板 */
+    #leftPanel {
+      background: var(--surface);
+      border-right: 2px solid var(--border);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    /* 中间画布 */
+    #centerPanel {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: hidden;
+    }
+    #graphCanvas {
+      width: 100%; flex: 1; min-height: 0;
+      display: block;
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1.5px solid var(--border);
+      cursor: crosshair;
+    }
+
+    /* 右侧信息面板 */
+    #rightPanel {
+      background: var(--surface);
+      border-left: 2px solid var(--border);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow-y: auto;
+    }
+
+    /* ── 5. 卡片 ─────────────────────────────────── */
+    .card {
+      background: var(--surface2);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      border: 1.5px solid var(--border);
+    }
+    .card-title {
+      font-size: 11px; font-weight: 700;
+      color: var(--ink3);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+
+    /* ── 6. 参数滑杆 ─────────────────────────────── */
+    .param-block { margin-bottom: 16px; }
+    .param-block:last-child { margin-bottom: 0; }
+    .param-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+    .param-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px; font-weight: 700;
+    }
+    .param-name.pk { color: var(--color-k); }
+    .param-name.pb { color: var(--color-b); }
+    .param-meaning {
+      font-size: 11px; color: var(--ink3);
+    }
+    .param-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px; font-weight: 700;
+    }
+    .param-val.pk { color: var(--color-k-dark); }
+    .param-val.pb { color: var(--color-b-dark); }
+
+    input[type="range"].slider-k,
+    input[type="range"].slider-b {
+      width: 100%; height: 8px;
+      -webkit-appearance: none;
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+      margin-bottom: 4px;
+    }
+    input[type="range"].slider-k::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 3px solid var(--color-k);
+      cursor: pointer;
+      box-shadow: 0 1px 6px rgba(42,92,143,0.25);
+    }
+    input[type="range"].slider-b::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 3px solid var(--color-b);
+      cursor: pointer;
+      box-shadow: 0 1px 6px rgba(15,110,86,0.25);
+    }
+    .slider-range {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px; color: var(--ink3);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── 7. 数值表（PEDAGOGY V2：表征桥接） ─────── */
+    .value-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+    .value-table th {
+      padding: 5px 8px;
+      background: var(--surface);
+      border-bottom: 2px solid var(--border);
+      font-weight: 700;
+      font-size: 11px;
+    }
+    .value-table th.th-x { color: var(--ink3); }
+    .value-table th.th-y { color: var(--color-line-dark); }
+    .value-table td {
+      padding: 5px 8px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+    .value-table td.td-x { color: var(--ink2); }
+    .value-table td.td-y { color: var(--color-line-dark); font-weight: 600; }
+    .value-table tr:last-child td { border-bottom: none; }
+    .value-table tr.row-zero { background: var(--color-zero-light); }
+    .value-table tr.row-zero .td-x,
+    .value-table tr.row-zero .td-y { color: var(--color-zero); font-weight: 700; }
+
+    /* ── 8. 关键点信息 ───────────────────────────── */
+    .keypoint-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .keypoint-row:last-child { border-bottom: none; }
+    .kp-label { color: var(--ink3); font-size: 11px; }
+    .kp-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 13px; }
+    .kp-val.kp-intercept-y { color: var(--color-b-dark); }
+    .kp-val.kp-intercept-x { color: var(--color-zero); }
+    .kp-val.kp-slope { color: var(--color-k-dark); }
+
+    /* ── 9. 概念反馈（PEDAGOGY V8） ─────────────── */
+    #feedbackArea {
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--ink2);
+      padding: 10px 12px;
+      background: var(--color-line-light);
+      border-radius: var(--radius-sm);
+      border-left: 4px solid var(--color-line);
+      min-height: 50px;
+      transition: all 0.3s;
+    }
+
+    /* ── 10. 挑战模式 ────────────────────────────── */
+    .mode-tabs {
+      display: flex; gap: 6px; margin-bottom: 0;
+    }
+    .mode-tab {
+      flex: 1; padding: 7px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      font-size: 11px; font-weight: 600;
+      cursor: pointer; color: var(--ink3);
+      transition: all 0.15s;
+      text-align: center;
+    }
+    .mode-tab.active { border-color: var(--color-line); background: var(--color-line-light); color: var(--color-line-dark); }
+
+    #challengeArea { display: none; }
+    #challengeArea.show { display: block; }
+    .challenge-hint {
+      font-size: 12px; color: var(--ink2); margin-bottom: 10px;
+      padding: 8px 10px;
+      background: var(--surface); border-radius: var(--radius-sm);
+      border: 1px dashed var(--color-line);
+    }
+    .challenge-btns { display: flex; gap: 8px; }
+    .chal-btn {
+      flex: 1; padding: 9px;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface);
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      color: var(--ink2); transition: all 0.15s;
+    }
+    .chal-btn:hover { border-color: var(--color-k); color: var(--color-k-dark); }
+    .chal-btn.success { border-color: var(--color-b); background: var(--color-b-light); color: var(--color-b-dark); }
+
+    /* 重置按钮 */
+    .reset-btn {
+      width: 100%; padding: 8px;
+      border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      background: transparent;
+      font-family: 'Noto Sans SC', sans-serif;
+      font-size: 11px; color: var(--ink3);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .reset-btn:hover { border-color: var(--ink3); color: var(--ink2); }
+
+    /* ── 11. 响应式 ──────────────────────────────── */
+    @media (max-width: 800px) {
+      main { grid-template-columns: 1fr; grid-template-rows: auto auto auto; height: auto; }
+      #graphCanvas { height: 55vw; min-height: 260px; }
+      #centerPanel { height: auto; }
+      #leftPanel, #rightPanel { border: none; border-top: 2px solid var(--border); max-height: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="icon">📈</span>
+  <h1>一次函数滑杆实验室</h1>
+  <div class="header-eq" id="headerEq">
+    y = <span class="ek" id="eqK">1</span>x + <span class="eb" id="eqB">0</span>
+  </div>
+</header>
+
+<main>
+  <!-- 左侧：参数控制 -->
+  <div id="leftPanel">
+
+    <div class="card">
+      <div class="card-title">参数调节</div>
+
+      <!-- PEDAGOGY V6：滑杆向右 = k增大 = 直线变陡（动作与数学方向一致） -->
+      <div class="param-block">
+        <div class="param-header">
+          <div>
+            <span class="param-name pk">k</span>
+            <span class="param-meaning">斜率</span>
+          </div>
+          <span class="param-val pk" id="dispK">1</span>
+        </div>
+        <input type="range" class="slider-k" id="sliderK" min="-3" max="3" step="0.1" value="1">
+        <div class="slider-range"><span>−3</span><span>0</span><span>+3</span></div>
+      </div>
+
+      <div class="param-block">
+        <div class="param-header">
+          <div>
+            <span class="param-name pb">b</span>
+            <span class="param-meaning">纵截距</span>
+          </div>
+          <span class="param-val pb" id="dispB">0</span>
+        </div>
+        <input type="range" class="slider-b" id="sliderB" min="-5" max="5" step="0.5" value="0">
+        <div class="slider-range"><span>−5</span><span>0</span><span>+5</span></div>
+      </div>
+    </div>
+
+    <!-- 关键点信息 -->
+    <div class="card">
+      <div class="card-title">关键点</div>
+      <div class="keypoint-row">
+        <span class="kp-label">纵截距（x=0）</span>
+        <span class="kp-val kp-intercept-y" id="kpY">(0, 0)</span>
+      </div>
+      <div class="keypoint-row">
+        <span class="kp-label">零点（y=0）</span>
+        <span class="kp-val kp-intercept-x" id="kpX">x = 0</span>
+      </div>
+      <div class="keypoint-row">
+        <span class="kp-label">单调性</span>
+        <span class="kp-val kp-slope" id="kpMono">k&gt;0，递增</span>
+      </div>
+    </div>
+
+    <!-- 模式切换 -->
+    <div class="card">
+      <div class="card-title">模式</div>
+      <div class="mode-tabs">
+        <div class="mode-tab active" onclick="setMode('explore')" id="tabExplore">自由探索</div>
+        <div class="mode-tab" onclick="setMode('challenge')" id="tabChallenge">挑战模式</div>
+      </div>
+    </div>
+
+    <!-- 挑战模式内容（PEDAGOGY V3：默认隐藏） -->
+    <div id="challengeArea">
+      <div class="card">
+        <div class="card-title">挑战：匹配目标直线</div>
+        <div class="challenge-hint" id="challengeHint">
+          调整 k 和 b，让你的橙色直线与灰色目标线完全重合！
+        </div>
+        <div class="challenge-btns">
+          <button class="chal-btn" onclick="checkChallenge()" id="checkBtn">验证匹配</button>
+          <button class="chal-btn" onclick="newChallenge()">新题目</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="reset-btn" onclick="resetAll()">↺ 重置为默认值</button>
+  </div>
+
+  <!-- 中间：坐标图 -->
+  <div id="centerPanel">
+    <canvas id="graphCanvas"></canvas>
+    <!-- 概念反馈（PEDAGOGY V8） -->
+    <div id="feedbackArea">
+      拖动左侧的 <strong>k 滑杆</strong>，观察直线如何旋转；拖动 <strong>b 滑杆</strong>，观察直线如何平移。
+    </div>
+  </div>
+
+  <!-- 右侧：数值表（PEDAGOGY V2：表征桥接） -->
+  <div id="rightPanel">
+    <div class="card">
+      <div class="card-title">数值表 <span style="font-weight:400;color:var(--ink3)">y = kx + b</span></div>
+      <table class="value-table">
+        <thead>
+          <tr>
+            <th class="th-x">x</th>
+            <th class="th-y">y</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">斜率含义</div>
+      <div id="slopeExplain" style="font-size:12px;color:var(--ink2);line-height:1.7"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ══════════════════════════════════════════════════════
+// 0. 教学法标注
+// ══════════════════════════════════════════════════════
+// 学段：初中（初一下~初二上）
+// 认知动作：变换（参数 k、b 独立控制直线的斜率和截距）
+// 核心动态关系：k 控制旋转，b 控制平移，二者互相独立
+//
+// PEDAGOGY V1：函数参数的意义必须通过动态观察才能真正建立
+// PEDAGOGY V2：方程式 + 坐标图 + 数值表三联动（表征桥接）
+// PEDAGOGY V3：挑战模式和详细标注默认隐藏，用户主动开启
+// PEDAGOGY V4：蓝色专属斜率k，绿色专属截距b，橙色专属函数线
+// PEDAGOGY V6：向右拖 k 滑杆 → 直线斜率增大（动作与数学一致）
+// PEDAGOGY V7：只讲"两个参数各自做什么"，不讲方程求解或应用题
+// PEDAGOGY V8：根据当前参数值，实时更新概念反馈
+// ══════════════════════════════════════════════════════
+
+// ── 1. 常量与配置 ──────────────────────────────────
+const canvas = document.getElementById('graphCanvas');
+const ctx = canvas.getContext('2d');
+let DPR = window.devicePixelRatio || 1;
+
+const GRID_RANGE = 6;  // 坐标轴显示范围 ±6
+const X_STEP = 1;      // 数值表 x 步长
+
+// ── 2. 状态变量 ────────────────────────────────────
+let k = 1, b = 0;
+let mode = 'explore';
+let challengeK = 0, challengeB = 0;  // 挑战目标
+
+// ── 3. 核心数学函数 ─────────────────────────────────
+function f(x) { return k * x + b; }
+function xIntercept() { return k === 0 ? null : -b / k; }
+
+// ── 4. 渲染函数 ────────────────────────────────────
+function initCanvas() {
+  const panel = document.getElementById('centerPanel');
+  const fb = document.getElementById('feedbackArea');
+  const W = panel.clientWidth - 32;
+  const H = panel.clientHeight - fb.offsetHeight - 10 - 32;
+  const side = Math.max(200, Math.min(W, H));
+  canvas.width = side * DPR;
+  canvas.height = side * DPR;
+  canvas.style.width = side + 'px';
+  canvas.style.height = side + 'px';
+  ctx.scale(DPR, DPR);
+}
+
+function getCoordSys() {
+  const W = canvas.width / DPR;
+  const H = canvas.height / DPR;
+  const PAD = 36;
+  const gridW = W - PAD * 2;
+  const gridH = H - PAD * 2;
+  const unitX = gridW / (GRID_RANGE * 2);
+  const unitY = gridH / (GRID_RANGE * 2);
+  const unit = Math.min(unitX, unitY);
+  const ox = W / 2;
+  const oy = H / 2;
+  return { W, H, PAD, unit, ox, oy };
+}
+
+function toCanvas(x, y, cs) {
+  return { x: cs.ox + x * cs.unit, y: cs.oy - y * cs.unit };
+}
+
+function drawGraph() {
+  const cs = getCoordSys();
+  const { W, H, unit, ox, oy } = cs;
+  ctx.clearRect(0, 0, W, H);
+
+  // 背景
+  ctx.fillStyle = '#fafaf8';
+  ctx.fillRect(0, 0, W, H);
+
+  // 网格线（PEDAGOGY V4：低调颜色，不分散注意力）
+  ctx.strokeStyle = '#ede9e0';
+  ctx.lineWidth = 1;
+  for (let v = -GRID_RANGE; v <= GRID_RANGE; v++) {
+    const xc = ox + v * unit;
+    const yc = oy - v * unit;
+    ctx.beginPath(); ctx.moveTo(xc, 0); ctx.lineTo(xc, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, yc); ctx.lineTo(W, yc); ctx.stroke();
+  }
+
+  // 挑战模式：目标直线（灰色虚线）
+  if (mode === 'challenge') {
+    drawLine(challengeK, challengeB, '#b0a89a', 2, [8, 5], cs);
+  }
+
+  // x 轴、y 轴
+  ctx.strokeStyle = '#4a4640';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(W, oy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, H); ctx.stroke();
+
+  // 轴箭头
+  ctx.fillStyle = '#4a4640';
+  arrow(W - 2, oy, 'right');
+  arrow(ox, 2, 'up');
+
+  // 刻度和数字
+  ctx.font = `500 10px 'JetBrains Mono', monospace`;
+  ctx.fillStyle = '#a8a49c';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let v = -GRID_RANGE; v <= GRID_RANGE; v++) {
+    if (v === 0) continue;
+    const xc = ox + v * unit;
+    ctx.fillText(v, xc, oy + 4);
+  }
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let v = -GRID_RANGE; v <= GRID_RANGE; v++) {
+    if (v === 0) continue;
+    const yc = oy - v * unit;
+    ctx.fillText(v, ox - 5, yc);
+  }
+  ctx.fillStyle = '#a8a49c';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('x', W - 18, oy + 4);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('y', ox + 5, 2);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('O', ox - 10, oy + 10);
+
+  // 函数直线（橙色）
+  drawLine(k, b, '#c87820', 2.5, [], cs);
+
+  // 纵截距点（绿色，PEDAGOGY V4：b 的颜色）
+  const yInt = toCanvas(0, b, cs);
+  drawPoint(yInt.x, yInt.y, '#0f6e56', 7);
+
+  // 零点（紫色，若在范围内）
+  const xi = xIntercept();
+  if (xi !== null && Math.abs(xi) <= GRID_RANGE + 0.5) {
+    const xInt = toCanvas(xi, 0, cs);
+    drawPoint(xInt.x, xInt.y, '#6b3fb8', 7);
+  }
+}
+
+function drawLine(kv, bv, color, width, dash, cs) {
+  const { W, H, unit, ox, oy } = cs;
+  const halfW = W / 2 + 20;
+  const x1 = -halfW / unit, x2 = halfW / unit;
+  const y1 = kv * x1 + bv, y2 = kv * x2 + bv;
+  const p1 = toCanvas(x1, y1, cs);
+  const p2 = toCanvas(x2, y2, cs);
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.setLineDash(dash || []);
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawPoint(x, y, color, r) {
+  ctx.fillStyle = color;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+}
+
+function arrow(x, y, dir) {
+  ctx.beginPath();
+  if (dir === 'right') {
+    ctx.moveTo(x, y); ctx.lineTo(x - 8, y - 5); ctx.lineTo(x - 8, y + 5);
+  } else {
+    ctx.moveTo(x, y); ctx.lineTo(x - 5, y + 8); ctx.lineTo(x + 5, y + 8);
+  }
+  ctx.closePath(); ctx.fill();
+}
+
+// ── 5. 表征桥接更新（PEDAGOGY V2：同步更新所有表征） ──
+function updateAll() {
+  // PEDAGOGY V2：三个表征全部同步更新
+  drawGraph();           // 图形层
+  updateTable();         // 数值表层
+  updateEquation();      // 符号层（方程式）
+  updateKeypoints();     // 关键点信息
+  updateSlopeExplain();  // 斜率含义
+  showConceptFeedback(); // PEDAGOGY V8
+}
+
+function updateEquation() {
+  const kStr = k === 1 ? '' : k === -1 ? '−' : (k < 0 ? k.toFixed(1) : '+'+k.toFixed(1)).replace('+-','-');
+  const kDisplay = k === 0 ? '0' : (k === 1 ? '' : k === -1 ? '−' : (k > 0 ? k.toFixed(1) : k.toFixed(1)));
+  const bStr = b === 0 ? '0' : (b > 0 ? '+' + b.toFixed(1) : b.toFixed(1));
+  const bDisplay = b === 0 ? '0' : b.toFixed(1);
+
+  document.getElementById('eqK').textContent = kDisplay;
+  document.getElementById('eqB').textContent = bDisplay;
+  document.getElementById('dispK').textContent = k.toFixed(1);
+  document.getElementById('dispB').textContent = b.toFixed(1);
+
+  // 更新头部等式
+  const eqK = document.getElementById('eqK');
+  const eqB = document.getElementById('eqB');
+  eqK.textContent = k === 0 ? '0' : k.toFixed(1);
+  if (b >= 0) {
+    eqB.textContent = '+' + b.toFixed(1);
+  } else {
+    eqB.textContent = b.toFixed(1);
+  }
+  if (k === 0) {
+    document.getElementById('headerEq').innerHTML = 'y = <span class="eb">' + b.toFixed(1) + '</span>';
+  } else if (b === 0) {
+    document.getElementById('headerEq').innerHTML = 'y = <span class="ek">' + k.toFixed(1) + '</span>x';
+  } else {
+    const bPart = b >= 0 ? `＋<span class="eb">${b.toFixed(1)}</span>` : `<span class="eb">${b.toFixed(1)}</span>`;
+    document.getElementById('headerEq').innerHTML = `y = <span class="ek">${k.toFixed(1)}</span>x ${bPart}`;
+  }
+}
+
+function updateTable() {
+  const xVals = [-3, -2, -1, 0, 1, 2, 3];
+  const xi = xIntercept();
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = xVals.map(x => {
+    const y = f(x);
+    const isNearZero = xi !== null && Math.abs(x - xi) < 0.01;
+    const rowClass = isNearZero ? 'row-zero' : '';
+    return `<tr class="${rowClass}">
+      <td class="td-x">${x}</td>
+      <td class="td-y">${y % 1 === 0 ? y : y.toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function updateKeypoints() {
+  document.getElementById('kpY').textContent = `(0, ${b % 1 === 0 ? b : b.toFixed(1)})`;
+
+  const xi = xIntercept();
+  if (xi === null) {
+    document.getElementById('kpX').textContent = '无零点（k=0）';
+  } else {
+    document.getElementById('kpX').textContent = `x = ${xi % 1 === 0 ? xi : xi.toFixed(2)}`;
+  }
+
+  if (k > 0) document.getElementById('kpMono').textContent = 'k > 0，单调递增';
+  else if (k < 0) document.getElementById('kpMono').textContent = 'k < 0，单调递减';
+  else document.getElementById('kpMono').textContent = 'k = 0，水平线（常数函数）';
+}
+
+function updateSlopeExplain() {
+  const el = document.getElementById('slopeExplain');
+  if (k === 0) {
+    el.innerHTML = 'k = 0：直线水平，y 值恒为 ' + b.toFixed(1) + '，x 怎么变 y 都不变。';
+  } else {
+    const absK = Math.abs(k).toFixed(1);
+    const dir = k > 0 ? '增大' : '减小';
+    const side = k > 0 ? '向右上' : '向右下';
+    el.innerHTML = `k = ${k.toFixed(1)}：x 每增加 1，y 就<strong>${dir} ${absK}</strong>。
+      直线走向：${side}方向。${Math.abs(k) > 2 ? '<br>斜率绝对值较大，直线较陡。' : Math.abs(k) < 0.5 ? '<br>斜率绝对值较小，直线较平。' : ''}`;
+  }
+}
+
+// PEDAGOGY V8：概念反馈——揭示参数的数学含义
+function showConceptFeedback() {
+  const el = document.getElementById('feedbackArea');
+  const lastK = parseFloat(document.getElementById('sliderK').dataset.prev || k);
+  const lastB = parseFloat(document.getElementById('sliderB').dataset.prev || b);
+  const kChanged = Math.abs(k - lastK) > 0.05;
+  const bChanged = Math.abs(b - lastB) > 0.05;
+
+  if (kChanged) {
+    if (k > 0) el.innerHTML = `<strong>k = ${k.toFixed(1)} > 0</strong>：直线从左下延伸到右上，x 越大，y 越大。`;
+    else if (k < 0) el.innerHTML = `<strong>k = ${k.toFixed(1)} < 0</strong>：直线从左上延伸到右下，x 越大，y 越小。`;
+    else el.innerHTML = `<strong>k = 0</strong>：斜率为零，直线变成水平线——y 值不再随 x 变化。`;
+  } else if (bChanged) {
+    if (b > 0) el.innerHTML = `<strong>b = ${b.toFixed(1)} > 0</strong>：直线整体<strong>上移</strong>，纵截距在 y 轴正半轴。`;
+    else if (b < 0) el.innerHTML = `<strong>b = ${b.toFixed(1)} < 0</strong>：直线整体<strong>下移</strong>，纵截距在 y 轴负半轴。`;
+    else el.innerHTML = `<strong>b = 0</strong>：直线过原点，纵截距为 0。`;
+  }
+
+  // 保存上次的值
+  document.getElementById('sliderK').dataset.prev = k;
+  document.getElementById('sliderB').dataset.prev = b;
+}
+
+// ── 6. 挑战模式 ─────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  document.getElementById('tabExplore').className = 'mode-tab' + (m === 'explore' ? ' active' : '');
+  document.getElementById('tabChallenge').className = 'mode-tab' + (m === 'challenge' ? ' active' : '');
+  document.getElementById('challengeArea').className = m === 'challenge' ? 'show' : '';
+
+  if (m === 'challenge') newChallenge();
+  else drawGraph();
+}
+
+function newChallenge() {
+  const options = [
+    [1, 2], [2, -1], [-1, 3], [0.5, -2], [-2, 0],
+    [1.5, 1], [-0.5, 2], [2, 3], [-1, -2], [3, 0]
+  ];
+  const pick = options[Math.floor(Math.random() * options.length)];
+  challengeK = pick[0]; challengeB = pick[1];
+  document.getElementById('challengeHint').innerHTML =
+    `找到一条直线，使它与目标线重合。<br>提示：目标线过 (0, ${challengeB}) 点。`;
+  document.getElementById('checkBtn').className = 'chal-btn';
+  drawGraph();
+}
+
+function checkChallenge() {
+  const kMatch = Math.abs(k - challengeK) < 0.2;
+  const bMatch = Math.abs(b - challengeB) < 0.3;
+  const btn = document.getElementById('checkBtn');
+  if (kMatch && bMatch) {
+    btn.className = 'chal-btn success';
+    document.getElementById('feedbackArea').innerHTML =
+      `🎉 完全匹配！目标直线是 y = ${challengeK}x ${challengeB >= 0 ? '+ ' + challengeB : challengeB}。<br>` +
+      `你调对了斜率 k = ${challengeK}，截距 b = ${challengeB}。`;
+  } else {
+    btn.className = 'chal-btn';
+    const hint = !kMatch && !bMatch ? '斜率和截距都需要调整。'
+               : !kMatch ? '斜率 k 还需要调整，注意直线的倾斜方向。'
+               : '截距 b 还需要调整，注意直线与 y 轴的交点。';
+    document.getElementById('feedbackArea').textContent = hint;
+  }
+}
+
+// ── 7. 滑杆事件 ─────────────────────────────────────
+document.getElementById('sliderK').addEventListener('input', function () {
+  k = parseFloat(this.value);
+  document.getElementById('dispK').textContent = k.toFixed(1);
+  // 更新滑杆渐变
+  const p = (k + 3) / 6 * 100;
+  this.style.background = `linear-gradient(to right, var(--color-k) 0%, var(--color-k) ${p}%, var(--border) ${p}%)`;
+  updateAll();
+});
+
+document.getElementById('sliderB').addEventListener('input', function () {
+  b = parseFloat(this.value);
+  document.getElementById('dispB').textContent = b.toFixed(1);
+  const p = (b + 5) / 10 * 100;
+  this.style.background = `linear-gradient(to right, var(--color-b) 0%, var(--color-b) ${p}%, var(--border) ${p}%)`;
+  updateAll();
+});
+
+function resetAll() {
+  k = 1; b = 0;
+  document.getElementById('sliderK').value = 1;
+  document.getElementById('sliderB').value = 0;
+  const pk = (1 + 3) / 6 * 100;
+  const pb = (0 + 5) / 10 * 100;
+  document.getElementById('sliderK').style.background = `linear-gradient(to right, var(--color-k) 0%, var(--color-k) ${pk}%, var(--border) ${pk}%)`;
+  document.getElementById('sliderB').style.background = `linear-gradient(to right, var(--color-b) 0%, var(--color-b) ${pb}%, var(--border) ${pb}%)`;
+  mode = 'explore';
+  document.getElementById('tabExplore').className = 'mode-tab active';
+  document.getElementById('tabChallenge').className = 'mode-tab';
+  document.getElementById('challengeArea').className = '';
+  document.getElementById('feedbackArea').innerHTML = '拖动左侧的 <strong>k 滑杆</strong>，观察直线如何旋转；拖动 <strong>b 滑杆</strong>，观察直线如何平移。';
+  updateAll();
+}
+
+// ── 8. 初始化 ───────────────────────────────────────
+window.addEventListener('load', () => {
+  initCanvas();
+  // 初始滑杆渐变
+  const pk = (1 + 3) / 6 * 100;
+  const pb = (0 + 5) / 10 * 100;
+  document.getElementById('sliderK').style.background = `linear-gradient(to right, var(--color-k) 0%, var(--color-k) ${pk}%, var(--border) ${pk}%)`;
+  document.getElementById('sliderB').style.background = `linear-gradient(to right, var(--color-b) 0%, var(--color-b) ${pb}%, var(--border) ${pb}%)`;
+  updateAll();
+});
+
+window.addEventListener('resize', () => {
+  initCanvas();
+  drawGraph();
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>指数增长衰减模拟器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="指数函数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="底数滑杆控制a^x，多情境建模：细胞分裂/放射衰变/复利，直观对比增长与衰减">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .ctrl-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;}
+    .ctrl-label{font-size:12px;color:var(--ink2);margin-bottom:6px;}
+    .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--blue);margin-bottom:6px;}
+    input[type=range]{width:100%;accent-color:var(--blue);}
+    .scene-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .scene-btn{padding:8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;background:var(--surface);font-family:'Noto Sans SC',sans-serif;transition:all .2s;}
+    .scene-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 指数函数 · 认知动作：比较</div>
+  <h1>指数增长衰减模拟器</h1>
+  <p class="sub">调整底数，观察指数函数 y = aˣ 的形态变化与现实情境</p>
+</header>
+<main>
+  <div class="scene-row">
+    <button class="scene-btn active" onclick="setScene('cell',this)">🦠 细胞分裂</button>
+    <button class="scene-btn" onclick="setScene('decay',this)">☢ 放射衰变</button>
+    <button class="scene-btn" onclick="setScene('money',this)">💰 银行复利</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="ctrl-grid">
+    <div class="ctrl-box">
+      <div class="ctrl-label">底数 a（a > 0 且 a ≠ 1）</div>
+      <div class="ctrl-val" id="aVal">a = 2.00</div>
+      <input type="range" id="aSlider" min="0.1" max="4" step="0.05" value="2" oninput="update()">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink3);margin-top:4px;">
+        <span>0.1（衰减）</span><span>1</span><span>4（快增长）</span>
+      </div>
+    </div>
+    <div class="ctrl-box">
+      <div class="ctrl-label">x 范围</div>
+      <div class="ctrl-val" id="xRangeVal">x ∈ [0, 10]</div>
+      <input type="range" id="xRange" min="5" max="20" step="1" value="10" oninput="update()">
+      <div style="margin-top:8px;font-size:13px;color:var(--ink2);" id="yVal">y(x=5) = 32</div>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: a>1增长 vs 0<a<1衰减只有动态才能感受速率差异
+// PEDAGOGY V2 表征桥接: 函数图像 + 情境故事 + 当前值联动
+// PEDAGOGY V4 信号聚焦: 蓝=a>1增长，琥珀=0<a<1衰减，灰=a=1水平线
+// PEDAGOGY V7 单一认知动作: 比较（增长vs衰减，不同底数的速率差异）
+// PEDAGOGY V8 概念反馈: 揭示"底数决定增减方向，指数决定每步的变化倍率"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 340;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+let scene = 'cell';
+const scenes = {
+  cell:  { label:'细胞分裂', unit:'个细胞', desc:'初始1个细胞，每x小时翻倍', xLabel:'时间（小时）', yLabel:'细胞数量', color: C.blue },
+  decay: { label:'放射衰变', unit:'%剩余', desc:'放射性物质按比例衰减', xLabel:'时间（半衰期）', yLabel:'剩余量', color: C.amber },
+  money: { label:'银行复利', unit:'元', desc:'本金100元，年利率 = a-1', xLabel:'年数', yLabel:'本金+利息（元）', color: C.teal },
+};
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setScene(s, btn) {
+  scene = s;
+  document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Auto-set sensible a
+  if (s === 'decay') document.getElementById('aSlider').value = 0.5;
+  else if (s === 'money') document.getElementById('aSlider').value = 1.1;
+  else document.getElementById('aSlider').value = 2;
+  update();
+}
+
+function update() {
+  const a = parseFloat(document.getElementById('aSlider').value);
+  const xMax = parseInt(document.getElementById('xRange').value);
+  document.getElementById('aVal').textContent = `a = ${a.toFixed(2)}`;
+  document.getElementById('xRangeVal').textContent = `x ∈ [0, ${xMax}]`;
+  draw(a, xMax);
+  updateFeedback(a, xMax);
+}
+
+function draw(a, xMax) {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+
+  const pad = { l: 60, r: 20, t: 40, b: 40 };
+  const cw = W - pad.l - pad.r;
+  const ch = H - pad.t - pad.b;
+
+  // Compute y range
+  const scn = scenes[scene];
+  const yScale = scene === 'money' ? 100 : 1;
+  const yMax_raw = yScale * Math.pow(a, xMax);
+  const yMax = Math.min(yMax_raw, yScale * 1000); // cap display
+
+  function toX(x) { return pad.l + (x / xMax) * cw; }
+  function toY(y) { return pad.t + ch - Math.min(y / yMax, 1) * ch; }
+
+  // Grid
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  for (let i = 0; i <= 4; i++) {
+    const y = i / 4 * yMax;
+    const yy = toY(y);
+    ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(W - pad.r, yy); ctx.stroke();
+    ctx.fillStyle = C.ink3; ctx.font = `11px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const label = yScale > 1 ? (y/yScale).toFixed(0)+'x₀' : y.toFixed(1);
+    ctx.fillText(label, pad.l - 4, yy);
+  }
+  for (let i = 0; i <= 5; i++) {
+    const x = i / 5 * xMax;
+    const xx = toX(x);
+    ctx.beginPath(); ctx.moveTo(xx, pad.t); ctx.lineTo(xx, pad.t + ch); ctx.stroke();
+    ctx.fillStyle = C.ink3; ctx.font = `11px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(x.toFixed(0), xx, pad.t + ch + 4);
+  }
+  ctx.setLineDash([]);
+
+  // Also draw comparison curves for context
+  const compareAs = a > 1 ? [1.5, 3] : [0.7, 0.3];
+  compareAs.forEach((ca, idx) => {
+    if (Math.abs(ca - a) < 0.1) return;
+    ctx.strokeStyle = idx === 0 ? C.ink3 + '80' : C.ink3 + '50';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4,3]);
+    ctx.beginPath();
+    let first = true;
+    for (let px = 0; px <= cw; px++) {
+      const x = px / cw * xMax;
+      const y = yScale * Math.pow(ca, x);
+      const ys = toY(y);
+      if (first) { ctx.moveTo(pad.l + px, ys); first = false; }
+      else ctx.lineTo(pad.l + px, ys);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = C.ink3;
+    ctx.font = `10px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    const endY = Math.min(yScale * Math.pow(ca, xMax), yMax);
+    ctx.fillText(`a=${ca}`, toX(xMax) + 2, toY(endY));
+  });
+
+  // Main curve
+  const col = a > 1 ? C.blue : (Math.abs(a-1)<0.01 ? C.ink2 : C.amber);
+  ctx.strokeStyle = col; ctx.lineWidth = 3;
+  ctx.beginPath();
+  let first = true;
+  for (let px = 0; px <= cw; px++) {
+    const x = px / cw * xMax;
+    const y = yScale * Math.pow(a, x);
+    const ys = toY(y);
+    if (first) { ctx.moveTo(pad.l + px, ys); first = false; }
+    else ctx.lineTo(pad.l + px, ys);
+  }
+  ctx.stroke();
+
+  // Axes
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t+ch); ctx.lineTo(W-pad.r, pad.t+ch); ctx.stroke();
+
+  // Axis labels
+  ctx.fillStyle = C.ink2; ctx.font = `12px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(scn.xLabel, pad.l + cw/2, pad.t + ch + 20);
+  ctx.save(); ctx.translate(14, pad.t + ch/2);
+  ctx.rotate(-Math.PI/2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(scn.yLabel, 0, 0); ctx.restore();
+
+  // Title
+  ctx.fillStyle = C.ink; ctx.font = `bold 14px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  const title = `${scn.label}：y = ${yScale>1?yScale+'×':''}${a.toFixed(2)}ˣ`;
+  ctx.fillText(title, pad.l + 4, 8);
+
+  // Current value at x=half
+  const xMid = xMax / 2;
+  const yMid = yScale * Math.pow(a, xMid);
+  const xx = toX(xMid), yy = toY(yMid);
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(xx, yy, 5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = col; ctx.font = `12px 'JetBrains Mono',monospace`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  const dispY = yScale > 1 ? (yMid/yScale).toFixed(2)+'x₀' : yMid.toFixed(2);
+  ctx.fillText(`x=${xMid}: y≈${dispY}`, xx+6, yy-4);
+
+  // Update point display
+  const yHalf = yScale * Math.pow(a, Math.floor(xMax/2));
+  document.getElementById('yVal').textContent = `x=${Math.floor(xMax/2)} 时 y ≈ ${scene==='money'?(yHalf/100).toFixed(2)+'×本金':yHalf.toFixed(3)}`;
+}
+
+function updateFeedback(a, xMax) {
+  const el = document.getElementById('fb');
+  const scn = scenes[scene];
+  let msg;
+  if (Math.abs(a - 1) < 0.02) {
+    msg = `当 <strong>a = 1</strong> 时，1ˣ = 1，是一条水平线。所以指数函数要求 a ≠ 1。`;
+  } else if (a > 1) {
+    const doubleTime = Math.log(2) / Math.log(a);
+    msg = `当 <strong>a = ${a.toFixed(2)} > 1</strong> 时，函数<strong>单调递增</strong>（增长型）。<br>` +
+      `每经过 <strong>${doubleTime.toFixed(2)} 个单位</strong>，y 值翻倍（翻倍时间）。<br>` +
+      `底数越大，增长越快。y(0) = 1，y → +∞。`;
+  } else {
+    const halfLife = Math.log(0.5) / Math.log(a);
+    msg = `当 <strong>a = ${a.toFixed(2)}（0 < a < 1）</strong> 时，函数<strong>单调递减</strong>（衰减型）。<br>` +
+      `每经过 <strong>${halfLife.toFixed(2)} 个单位</strong>，y 值减半（半衰期）。<br>` +
+      `底数越小，衰减越快。y(0) = 1，y → 0⁺。`;
+  }
+  el.innerHTML = `<strong>${scn.label}情境</strong>：${scn.desc}<br>${msg}<br>灰色虚线为对比曲线，感受底数对速率的影响。`;
+}
+
+window.addEventListener('resize', () => { setup(); update(); });
+setup(); update();
+</script>
+</body>
+</html>

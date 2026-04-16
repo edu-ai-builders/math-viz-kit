@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>点线面平行垂直实验室 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="立体几何">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="三维空间中点线面的平行与垂直关系可视化，拖动旋转棱柱，高亮展示6大空间关系定理">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .rel-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .rel-btn{padding:9px 6px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);font-size:12px;font-weight:700;transition:all .2s;text-align:center;line-height:1.4;}
+    .rel-btn small{display:block;font-size:10px;font-weight:400;color:var(--ink2);}
+    .rel-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .rel-btn.active small{color:rgba(255,255,255,.75);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .theorem-box{background:var(--amber-light);border:2px solid var(--amber);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;font-weight:700;color:var(--amber);text-align:center;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 立体几何 · 认知动作：变换</div>
+  <h1>点线面平行垂直实验室</h1>
+  <p class="sub">选择空间关系，拖动旋转观察；红色=高亮元素，蓝色=参考面</p>
+</header>
+<main>
+  <div class="rel-grid" id="relGrid"></div>
+  <canvas id="cvs"></canvas>
+  <div class="theorem-box" id="theoremBox">选择一个空间关系定理</div>
+  <div class="fb" id="fb">选择左侧的空间关系，旋转正方体理解三维中平行与垂直的含义。</div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 空间平行垂直关系只有三维旋转才能真正看懂
+// PEDAGOGY V3 分步揭示: 先展示正方体框架，选关系后才高亮相关元素
+// PEDAGOGY V4 信号聚焦: 红色=高亮的关键线/面，蓝色=参考面，灰色=背景框架
+// PEDAGOGY V7 单一认知动作: 变换（通过旋转观察三维空间关系）
+// PEDAGOGY V8 概念反馈: 每个关系都给出精确定理陈述和判定条件
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 380;
+
+// Cube vertices
+const V = [
+  [-1,-1, 1],[ 1,-1, 1],[ 1, 1, 1],[-1, 1, 1], // front 0-3
+  [-1,-1,-1],[ 1,-1,-1],[ 1, 1,-1],[-1, 1,-1]  // back  4-7
+];
+
+const EDGES = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+
+// Space relationship definitions
+const RELS = [
+  {
+    name:'直线‖平面', abbr:'线∥面',
+    theorem:'直线∥平面 ⟺ 直线与平面内任意直线不相交，且直线不在平面内',
+    condition:'判定：若直线∥平面内的一条直线，且直线不在平面内，则直线∥平面',
+    // Show edge [0,1] (top front edge) parallel to face [4,5,6,7] (back face)
+    highlight:{
+      lines:[[[−1,1,1],[1,1,1]]],  // top front edge (parallel to back face)
+      faces:[[[−1,−1,−1],[1,−1,−1],[1,1,−1],[−1,1,−1]]],  // back face
+    },
+    desc:'图中：顶面前棱（红线）与背面（蓝色阴影面）平行。<br>判断方法：直线不与平面相交，且不在平面内，则平行。<br><strong>性质定理</strong>：直线与平面平行，则直线上各点到平面的距离相等。'
+  },
+  {
+    name:'直线⊥平面', abbr:'线⊥面',
+    theorem:'直线⊥平面 ⟺ 直线与平面内所有直线都垂直',
+    condition:'判定：若一条直线与平面内两条相交直线都垂直，则该直线⊥平面',
+    highlight:{
+      lines:[[[0,1,1],[0,1,−1]]],  // vertical edge through midpoint of top
+      faces:[[[−1,1,−1],[1,1,−1],[1,−1,−1],[−1,−1,−1]]],  // bottom face
+    },
+    desc:'图中：红色竖线（棱）垂直于底面（蓝色）。<br>判定定理：线面垂直的充要条件是该直线与面内<strong>两条相交直线</strong>都垂直。<br><strong>推论</strong>：面的法向量即为与面垂直的直线方向。'
+  },
+  {
+    name:'平面‖平面', abbr:'面∥面',
+    theorem:'两平面平行 ⟺ 两平面无公共点（不相交）',
+    condition:'判定：若一个平面内有两条相交直线分别平行于另一平面，则两平面平行',
+    highlight:{
+      faces:[
+        [[−1,−1,1],[1,−1,1],[1,1,1],[−1,1,1]],  // front face
+        [[−1,−1,−1],[1,−1,−1],[1,1,−1],[−1,1,−1]]  // back face
+      ],
+    },
+    desc:'图中：正面（红色）与背面（蓝色）互相平行。<br>两平行平面之间距离处处相等，一直线与两平行面的交点将该直线分成等比的线段（平行线分线段定理）。<br><strong>推论</strong>：等角面（法向量相同或相反）的两平面平行。'
+  },
+  {
+    name:'平面⊥平面', abbr:'面⊥面',
+    theorem:'两平面垂直 ⟺ 两平面所成的二面角为90°',
+    condition:'判定：若一个平面内有一条直线垂直于另一平面，则两平面垂直',
+    highlight:{
+      faces:[
+        [[−1,−1,−1],[1,−1,−1],[1,−1,1],[−1,−1,1]],  // bottom face
+        [[−1,−1,−1],[−1,1,−1],[−1,1,1],[−1,−1,1]]   // left face
+      ],
+    },
+    desc:'图中：底面（红色）与左侧面（蓝色）相互垂直，二面角=90°。<br>两平面垂直时，从一个平面内作另一平面的垂线，该垂线就在第一个平面内。<br><strong>推论</strong>：相邻两个面的法向量互相垂直，则两面垂直。'
+  },
+  {
+    name:'直线‖直线', abbr:'线∥线',
+    theorem:'空间中两直线平行 ⟺ 同向（方向向量平行）且不重合',
+    condition:'判定：若两直线都平行于第三条直线，则这两条直线互相平行',
+    highlight:{
+      lines:[[[−1,−1,1],[−1,1,1]],[[1,−1,1],[1,1,1]]],  // two parallel vertical front edges
+    },
+    desc:'图中：两条红色竖边（棱）互相平行（方向相同，均为竖直方向）。<br>空间中两直线的位置关系：平行、相交、异面（不平行且不相交）。<br><strong>传递性</strong>：a∥b，b∥c，则 a∥c。'
+  },
+  {
+    name:'异面直线', abbr:'异面',
+    theorem:'异面直线：空间中不平行、也不相交的两条直线',
+    condition:'判断：若两条直线不能确定一个平面（移到同一平面后才能比较），则它们异面',
+    highlight:{
+      lines:[[[−1,−1,1],[1,−1,1]],[[1,−1,−1],[1,1,−1]]],  // top front edge & right back vertical
+    },
+    desc:'图中：顶部前棱（一红线）与右侧后棱（另一红线）是异面直线——它们既不平行，也不相交。<br>异面直线所成角：将两直线平移至一点后所成的锐角（0°< θ ≤90°）。<br><strong>异面直线的距离</strong>：公垂线的长度。'
+  }
+];
+
+let relIdx = 0;
+let rotY = -0.5;
+let rotX = 0.4;
+let isDragging = false;
+let lastMouse = {x:0,y:0};
+
+// Build buttons
+const grid = document.getElementById('relGrid');
+RELS.forEach((r,i)=>{
+  const btn = document.createElement('button');
+  btn.className='rel-btn'+(i===0?' active':'');
+  btn.innerHTML=`${r.name}<small>${r.abbr}</small>`;
+  btn.onclick=()=>setRel(i,btn);
+  grid.appendChild(btn);
+});
+
+function setRel(i, btn) {
+  relIdx = i;
+  document.querySelectorAll('.rel-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+  const rel = RELS[i];
+  document.getElementById('theoremBox').textContent = rel.theorem;
+  document.getElementById('fb').innerHTML = `<strong>${rel.condition}</strong><br>${rel.desc}`;
+}
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr;
+  ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function project(v, W) {
+  let [x,y,z] = v;
+  const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+  let x2 = x*cosY + z*sinY;
+  let z2 = -x*sinY + z*cosY;
+  const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+  let y2 = y*cosX - z2*sinX;
+  let z3 = y*sinX + z2*cosX;
+  const scale = W*0.2;
+  return [W/2 + x2*scale, H/2 + y2*scale, z3];
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+
+  const rel = RELS[relIdx];
+  const hl = rel.highlight;
+
+  // Draw highlighted faces first (behind edges)
+  if(hl.faces) {
+    hl.faces.forEach((face, fi)=>{
+      const col = fi===0?'#dc2626':'#2a5c8f';
+      const projFace = face.map(v=>project(v,W));
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(projFace[0][0], projFace[0][1]);
+      projFace.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = col; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(projFace[0][0], projFace[0][1]);
+      projFace.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));
+      ctx.closePath(); ctx.stroke();
+    });
+  }
+
+  // Draw cube edges
+  EDGES.forEach(([i,j])=>{
+    const p1 = project(V[i],W);
+    const p2 = project(V[j],W);
+    const avgZ = (p1[2]+p2[2])/2;
+    const isBack = avgZ > 0.3;
+    ctx.strokeStyle = isBack?'#d0cdc5':'#6b6860';
+    ctx.lineWidth = isBack?0.8:1.5;
+    ctx.setLineDash(isBack?[3,3]:[]);
+    ctx.beginPath(); ctx.moveTo(p1[0],p1[1]); ctx.lineTo(p2[0],p2[1]); ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // Draw highlighted lines
+  if(hl.lines) {
+    hl.lines.forEach((line, li)=>{
+      const col = '#dc2626';
+      const p1 = project(line[0],W);
+      const p2 = project(line[1],W);
+      ctx.strokeStyle = col; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(p1[0],p1[1]); ctx.lineTo(p2[0],p2[1]); ctx.stroke();
+      // Arrow heads
+      const dx=p2[0]-p1[0], dy=p2[1]-p1[1];
+      const len=Math.sqrt(dx*dx+dy*dy);
+      if(len>5){
+        const nx=dx/len, ny=dy/len;
+        ctx.fillStyle=col;
+        ctx.beginPath();
+        ctx.moveTo(p2[0],p2[1]);
+        ctx.lineTo(p2[0]-nx*12-ny*7,p2[1]-ny*12+nx*7);
+        ctx.lineTo(p2[0]-nx*12+ny*7,p2[1]-ny*12-nx*7);
+        ctx.closePath(); ctx.fill();
+      }
+      // Dots at endpoints
+      [p1,p2].forEach(p=>{
+        ctx.fillStyle=col;
+        ctx.beginPath(); ctx.arc(p[0],p[1],4,0,Math.PI*2); ctx.fill();
+      });
+    });
+  }
+
+  // Cube vertex dots
+  V.forEach(v=>{
+    const [px,py,pz] = project(v,W);
+    ctx.fillStyle = pz>0.1?'#c0bdb5':'#6b6860';
+    ctx.beginPath(); ctx.arc(px,py,2.5,0,Math.PI*2); ctx.fill();
+  });
+
+  // Label the elements
+  const relLabels = {
+    '线∥面':['AB（线）','CDEF（面）'],
+    '线⊥面':['MN（垂线）','底面α'],
+    '面∥面':['面α','面β'],
+    '面⊥面':['面α','面β'],
+    '线∥线':['l₁','l₂'],
+    '异面':['a','b']
+  };
+
+  // Title and drag hint
+  ctx.fillStyle='#2a5c8f'; ctx.font=`bold 14px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText(RELS[relIdx].name, W/2, 8);
+  ctx.fillStyle='#a8a69f'; ctx.font=`11px 'Noto Sans SC',sans-serif`;
+  ctx.textBaseline='bottom';
+  ctx.fillText('拖动旋转视角', W/2, H-6);
+
+  // Right angle mark if line⊥plane
+  if(relIdx === 1 && hl.lines && hl.faces) {
+    // Draw small square at foot of perpendicular
+    const foot = project([0,1,−1],W);
+    const foot2 = project([0,1,1],W);
+    const side = 10;
+    const dx = foot2[0]-foot[0], dy = foot2[1]-foot[1];
+    const len = Math.sqrt(dx*dx+dy*dy);
+    if(len > 0) {
+      const nx=dx/len*side, ny=dy/len*side;
+      ctx.strokeStyle='#dc2626'; ctx.lineWidth=1.5;
+      ctx.strokeRect(foot[0]-side/2, foot[1]-side/2, side, side);
+    }
+  }
+}
+
+// Drag
+cvs.addEventListener('pointerdown', e=>{
+  isDragging = true; cvs.setPointerCapture(e.pointerId);
+  const r = cvs.getBoundingClientRect();
+  lastMouse = {x:e.clientX-r.left, y:e.clientY-r.top};
+});
+cvs.addEventListener('pointermove', e=>{
+  if(!isDragging) return;
+  const r = cvs.getBoundingClientRect();
+  const mx = e.clientX-r.left, my = e.clientY-r.top;
+  rotY += (mx-lastMouse.x)*0.008;
+  rotX += (my-lastMouse.y)*0.008;
+  rotX = Math.max(-1.3,Math.min(1.3,rotX));
+  lastMouse = {x:mx,y:my};
+  draw();
+});
+cvs.addEventListener('pointerup',()=>{isDragging=false;});
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();
+setRel(0, document.querySelector('.rel-btn.active'));
+</script>
+</body>
+</html>

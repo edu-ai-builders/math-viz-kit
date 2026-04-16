@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>向量场与流线实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="多元微积分">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="多种典型向量场的箭头图和粒子流线动画，理解向量场的源汇、旋转、鞍点等特征">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .field-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .field-btn{padding:7px 4px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);font-size:11px;font-weight:700;text-align:center;}
+    .field-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .ctrl-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+    .ctrl-label{font-size:12px;color:var(--ink2);}
+    input[type=checkbox]{accent-color:var(--blue);}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:#0f0d10;border:1px solid var(--border);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 多元微积分 · 认知动作：变换</div>
+  <h1>向量场与流线实验室</h1>
+  <p class="sub">粒子追踪动画展示向量场的流动特征</p>
+</header>
+<main>
+  <div class="field-row">
+    <button class="field-btn active" onclick="setField('source',this)">点源<br><small>∇·F&gt;0</small></button>
+    <button class="field-btn" onclick="setField('sink',this)">汇点<br><small>∇·F&lt;0</small></button>
+    <button class="field-btn" onclick="setField('rotation',this)">旋转场<br><small>∇×F≠0</small></button>
+    <button class="field-btn" onclick="setField('saddle',this)">鞍点<br><small>双曲场</small></button>
+    <button class="field-btn" onclick="setField('linear',this)">线性流<br><small>均匀场</small></button>
+    <button class="field-btn" onclick="setField('vortex',this)">涡旋<br><small>有旋无散</small></button>
+    <button class="field-btn" onclick="setField('dipole',this)">偶极子<br><small>电场模型</small></button>
+    <button class="field-btn" onclick="setField('damped',this)">阻尼旋转<br><small>螺旋汇</small></button>
+  </div>
+  <div class="ctrl-row">
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink2);cursor:pointer">
+      <input type="checkbox" id="showArrows" checked onchange="redrawStatic()"> 显示箭头
+    </label>
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink2);cursor:pointer">
+      <input type="checkbox" id="showParticles" checked onchange="toggleParticles()"> 粒子流动
+    </label>
+    <span class="ctrl-label">粒子数:</span>
+    <input type="range" min="20" max="200" step="10" value="80" id="slP" style="width:100px;accent-color:#2a5c8f" onchange="resetParticles()">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#2a5c8f" id="pLbl">80</span>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 向量场必须用粒子动画才能感受"流动"
+// PEDAGOGY V4 信号聚焦: 粒子颜色随速度变化，冷色=慢，暖色=快
+// PEDAGOGY V7 单一认知动作: 变换（感受向量场的整体流动特征）
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=340;
+const xRange=[-3,3],yRange=[-3,3];
+let field='source';
+let particles=[];
+let animId=null;
+
+const FIELDS={
+  source:{F:(x,y)=>[x,y],label:'点源 F=(x,y)',desc:'散度∇·F=2>0，所有粒子从原点向外辐射。代表质量/电荷向外流出的场（如点电荷正电场）。'},
+  sink:{F:(x,y)=>[-x,-y],label:'汇点 F=(-x,-y)',desc:'散度∇·F=-2<0，所有粒子向原点汇聚。代表质量/电荷向内流入的场（如引力场中心）。'},
+  rotation:{F:(x,y)=>[-y,x],label:'旋转场 F=(-y,x)',desc:'散度=0（无源无汇），旋度∇×F=2≠0，粒子绕原点做圆周运动。代表均匀旋转流体。'},
+  saddle:{F:(x,y)=>[x,-y],label:'鞍点 F=(x,-y)',desc:'散度=0，旋度=0（无旋场），x方向向外扩张，y方向向内收缩。鞍点处流速=0但不稳定。'},
+  linear:{F:(x,y)=>[1,0.5],label:'均匀场 F=(1,0.5)',desc:'处处相同的均匀流场，散度=0，旋度=0。代表匀速风场或均匀电场。'},
+  vortex:{F:(x,y)=>{const r2=x*x+y*y+0.01;return[-y/r2,x/r2];},label:'涡旋 F=(-y,x)/(x²+y²)',desc:'有旋场：旋度在原点奇异，绕原点旋转速度=1/r（越近越快）。代表龙卷风中心流场。'},
+  dipole:{F:(x,y)=>{const r2=x*x+y*y+0.01;const r4=r2*r2;return[2*x*y/r4,(y*y-x*x)/r4];},label:'偶极子场',desc:'电偶极子的电场，从正电荷出发，到达负电荷。散度在源点奇异，旋度=0（静电场）。'},
+  damped:{F:(x,y)=>[-x-y,x-y],label:'阻尼旋转 F=(-x-y,x-y)',desc:'复特征值（有实部），粒子做螺旋线向原点收缩。代表阻尼谐振系统。'},
+};
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function coordToCanvas(x,y){
+  const W=cvs.getBoundingClientRect().width;
+  return [W*(x-xRange[0])/(xRange[1]-xRange[0]),H*(1-(y-yRange[0])/(yRange[1]-yRange[0]))];
+}
+
+function canvasToCoord(px,py){
+  const W=cvs.getBoundingClientRect().width;
+  return [xRange[0]+px/W*(xRange[1]-xRange[0]),yRange[0]+(1-py/H)*(yRange[1]-yRange[0])];
+}
+
+function setField(f,btn){
+  field=f;
+  document.querySelectorAll('.field-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  resetParticles();
+  redrawStatic();
+  document.getElementById('fb').innerHTML=`<strong>${FIELDS[f].label}</strong>：${FIELDS[f].desc}`;
+}
+
+function resetParticles(){
+  const n=parseInt(document.getElementById('slP').value);
+  document.getElementById('pLbl').textContent=n;
+  particles=Array.from({length:n},()=>({
+    x:xRange[0]+(Math.random()*(xRange[1]-xRange[0])),
+    y:yRange[0]+(Math.random()*(yRange[1]-yRange[0])),
+    age:Math.random()*100,
+    maxAge:80+Math.random()*60
+  }));
+}
+
+function toggleParticles(){
+  if(document.getElementById('showParticles').checked){
+    if(!animId) animate();
+  } else {
+    cancelAnimationFrame(animId);animId=null;
+    redrawStatic();
+  }
+}
+
+function redrawStatic(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.fillStyle='#0f0d10';ctx.fillRect(0,0,W,H);
+
+  if(document.getElementById('showArrows').checked){
+    const gridN=14;
+    for(let i=0;i<gridN;i++) for(let j=0;j<gridN;j++){
+      const x=xRange[0]+(i+0.5)/(gridN)*(xRange[1]-xRange[0]);
+      const y=yRange[0]+(j+0.5)/(gridN)*(yRange[1]-yRange[0]);
+      const [fx,fy]=FIELDS[field].F(x,y);
+      const len=Math.sqrt(fx*fx+fy*fy);
+      if(!isFinite(len)||len<1e-6) continue;
+      const normLen=Math.min(len,3);
+      const scale=0.12;
+      const [px,py]=coordToCanvas(x,y);
+      const [ex,ey]=coordToCanvas(x+fx/len*normLen*scale,y+fy/len*normLen*scale);
+      const speed=Math.min(1,len/3);
+      const r=Math.round(40+speed*180),g=Math.round(80+speed*100),b=Math.round(200-speed*150);
+      ctx.strokeStyle=`rgba(${r},${g},${b},0.5)`;ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(ex,ey);ctx.stroke();
+      // Arrowhead
+      const ang=Math.atan2(ey-py,ex-px);const hs=4;
+      ctx.fillStyle=`rgba(${r},${g},${b},0.5)`;ctx.beginPath();
+      ctx.moveTo(ex,ey);ctx.lineTo(ex-hs*Math.cos(ang-0.5),ey-hs*Math.sin(ang-0.5));
+      ctx.lineTo(ex-hs*Math.cos(ang+0.5),ey-hs*Math.sin(ang+0.5));ctx.closePath();ctx.fill();
+    }
+  }
+
+  // Axes
+  const [ax0,ay0]=coordToCanvas(0,0);
+  ctx.strokeStyle='#333';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(0,ay0);ctx.lineTo(W,ay0);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(ax0,0);ctx.lineTo(ax0,H);ctx.stroke();
+  ctx.fillStyle='#444';ctx.font=`9px 'JetBrains Mono',monospace`;
+  for(let i=xRange[0];i<=xRange[1];i++){if(i===0)continue;const [px]=coordToCanvas(i,0);ctx.textAlign='center';ctx.fillText(i,px,ay0+12);}
+  for(let i=yRange[0];i<=yRange[1];i++){if(i===0)continue;const [,py]=coordToCanvas(0,i);ctx.textAlign='right';ctx.fillText(i,ax0-4,py+4);}
+}
+
+function animate(){
+  redrawStatic();
+  if(!document.getElementById('showParticles').checked) return;
+
+  const dt=0.025;
+  particles.forEach(p=>{
+    p.age++;
+    if(p.age>p.maxAge){
+      p.x=xRange[0]+(Math.random()*(xRange[1]-xRange[0]));
+      p.y=yRange[0]+(Math.random()*(yRange[1]-yRange[0]));
+      p.age=0;p.maxAge=80+Math.random()*60;
+      return;
+    }
+    const [fx,fy]=FIELDS[field].F(p.x,p.y);
+    const len=Math.sqrt(fx*fx+fy*fy);
+    if(!isFinite(len)||len<1e-6||!isFinite(p.x)||!isFinite(p.y)){p.age=p.maxAge;return;}
+    p.x+=fx*dt/Math.max(len,0.5);
+    p.y+=fy*dt/Math.max(len,0.5);
+    if(p.x<xRange[0]||p.x>xRange[1]||p.y<yRange[0]||p.y>yRange[1]) p.age=p.maxAge;
+
+    const [px,py]=coordToCanvas(p.x,p.y);
+    const alpha=Math.min(1,p.age/20)*Math.max(0,(p.maxAge-p.age)/20);
+    const speed=Math.min(1,len/3);
+    const r=Math.round(60+speed*200),g=Math.round(120+speed*100),b=Math.round(255-speed*200);
+    ctx.fillStyle=`rgba(${r},${g},${b},${alpha*0.8})`;
+    ctx.beginPath();ctx.arc(px,py,1.5,0,Math.PI*2);ctx.fill();
+  });
+
+  animId=requestAnimationFrame(animate);
+}
+
+window.addEventListener('resize',()=>{setup();if(animId){cancelAnimationFrame(animId);animate();}else redrawStatic();});
+setup();resetParticles();redrawStatic();animate();
+document.getElementById('fb').innerHTML=`<strong>${FIELDS[field].label}</strong>：${FIELDS[field].desc}`;
+</script>
+</body>
+</html>

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>角度测量器 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="图形与几何">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="拖动角的一条边，用量角器联动展示角的大小变化">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;
+      --blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;
+      --teal:#0f6e56;--teal-light:#e1f5ee;
+      --amber:#854f0b;--amber-light:#faeeda;
+      --radius:12px;--radius-sm:8px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:680px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:680px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .angle-display{background:var(--blue-light);border:2px solid var(--blue);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:center;justify-content:center;gap:16px;}
+    .angle-num{font-size:52px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);line-height:1;}
+    .angle-unit{font-size:22px;color:var(--ink2);}
+    .angle-type{font-size:15px;font-weight:600;color:var(--teal);}
+    canvas{width:100%;height:340px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:grab;}
+    canvas:active{cursor:grabbing;}
+    .angle-types{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .type-btn{padding:10px 8px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--surface);cursor:pointer;text-align:center;transition:all .2s;color:var(--ink2);}
+    .type-btn:hover{border-color:var(--blue);color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.angle-types{grid-template-columns:1fr 1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 几何 · 认知动作：变换</div>
+  <h1>角度测量器</h1>
+  <p class="sub">拖动角的一条边，量角器实时显示角度大小</p>
+</header>
+<main>
+  <div class="angle-display">
+    <div class="angle-num" id="angleDeg">60</div>
+    <div>
+      <div class="angle-unit">度°</div>
+      <div class="angle-type" id="angleType">锐角</div>
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="angle-types">
+    <button class="type-btn" onclick="setAngle(30)">30° 锐角</button>
+    <button class="type-btn" onclick="setAngle(90)">90° 直角</button>
+    <button class="type-btn" onclick="setAngle(120)">120° 钝角</button>
+    <button class="type-btn" onclick="setAngle(180)">180° 平角</button>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：变换
+// V1 动态跃迁：拖动一条边，量角器刻度实时指示角度，角度=旋转量
+// V6 动作-数学一致：边旋转方向 = 角度增减方向
+// V7 单一认知动作：变换（旋转）
+// V8 概念反馈：揭示"角的大小=开口程度=旋转的量"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let angleDeg=60, dragging=false;
+let cx,cy; // vertex position
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=340*dpr; ctx.scale(dpr,dpr); cvs.style.height='340px';
+  const W=cvs.getBoundingClientRect().width;
+  cx=W/2; cy=230;
+}
+
+function angleType(deg){
+  if(deg<90)return{name:'锐角',color:C.blue};
+  if(deg===90)return{name:'直角',color:C.teal};
+  if(deg<180)return{name:'钝角',color:C.amber};
+  if(deg===180)return{name:'平角',color:C.ink2};
+  return{name:'优角',color:'#7b3fa0'};
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=340;
+  ctx.clearRect(0,0,W,H);
+
+  const R=120; // arm length
+  const protR=90; // protractor radius
+
+  // Base ray: pointing right (0°)
+  const baseAngleRad=0;
+  const movAngleRad=-angleDeg*Math.PI/180; // CCW from right = standard
+
+  const bx=cx+R*Math.cos(baseAngleRad), by=cy+R*Math.sin(baseAngleRad);
+  const mx=cx+R*Math.cos(movAngleRad), my=cy+R*Math.sin(movAngleRad);
+
+  // ── Draw protractor (semicircle) ─────────────────────
+  ctx.save();
+  ctx.translate(cx,cy);
+  // Outer arc
+  ctx.strokeStyle=C.ink3; ctx.lineWidth=1.5;
+  ctx.fillStyle=C.blueL+'88';
+  ctx.beginPath(); ctx.arc(0,0,protR,Math.PI,0); ctx.lineTo(protR,0); ctx.lineTo(-protR,0); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // Tick marks
+  for(let a=0;a<=180;a+=10){
+    const rad=(180-a)*Math.PI/180; // standard: 0°=right, measured CCW
+    const isMajor=(a%30===0);
+    const r1=protR, r2=protR-(isMajor?14:7);
+    ctx.strokeStyle=isMajor?C.ink2:C.ink3; ctx.lineWidth=isMajor?1.5:1;
+    ctx.beginPath();
+    ctx.moveTo(r1*Math.cos(rad),r1*Math.sin(rad));
+    ctx.lineTo(r2*Math.cos(rad),r2*Math.sin(rad)); ctx.stroke();
+    if(isMajor){
+      ctx.fillStyle=C.ink2; ctx.font=`10px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+      const lr=r2-10; ctx.fillText(`${a}°`,lr*Math.cos(rad),lr*Math.sin(rad));
+    }
+  }
+
+  // Angle arc fill
+  ctx.fillStyle=C.blue+'33';
+  ctx.beginPath(); ctx.moveTo(0,0);
+  ctx.arc(0,0,protR-20,movAngleRad,0); ctx.closePath(); ctx.fill();
+
+  // Pointer line on protractor
+  ctx.strokeStyle=C.blue; ctx.lineWidth=2.5;
+  const pr=protR+4;
+  ctx.beginPath(); ctx.moveTo((protR-20)*Math.cos(movAngleRad),(protR-20)*Math.sin(movAngleRad));
+  ctx.lineTo(pr*Math.cos(movAngleRad),pr*Math.sin(movAngleRad)); ctx.stroke();
+
+  ctx.restore();
+
+  // ── Draw angle arms ────────────────────────────────
+  ctx.strokeStyle=C.blue; ctx.lineWidth=3; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(bx,by); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(mx,my); ctx.stroke();
+
+  // Arm endpoint handles
+  ctx.fillStyle=C.blue;
+  ctx.beginPath(); ctx.arc(bx,by,7,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=C.teal;
+  ctx.beginPath(); ctx.arc(mx,my,7,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(mx,my,3,0,Math.PI*2); ctx.fill();
+
+  // Vertex dot
+  ctx.fillStyle=C.ink; ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2); ctx.fill();
+
+  // Vertex label
+  ctx.fillStyle=C.ink2; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('顶点',cx,cy+8);
+
+  // Drag hint
+  ctx.fillStyle=C.teal+'aa'; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='center';
+  ctx.fillText('← 拖动绿点调整角度 →',cx,cy-R-24);
+
+  // Right angle mark if 90°
+  if(Math.abs(angleDeg-90)<2){
+    const s=12;
+    ctx.strokeStyle=C.teal; ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(cx+s,cy); ctx.lineTo(cx+s,cy-s); ctx.lineTo(cx,cy-s); ctx.stroke();
+  }
+
+  // Angle label in arc
+  const midAngle=movAngleRad/2;
+  const lr=38;
+  ctx.fillStyle=C.blue; ctx.font=`bold 16px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(`${Math.round(angleDeg)}°`,cx+lr*Math.cos(midAngle),cy+lr*Math.sin(midAngle));
+}
+
+function updateDisplay(){
+  const deg=Math.round(angleDeg);
+  const t=angleType(deg);
+  document.getElementById('angleDeg').textContent=deg;
+  document.getElementById('angleType').textContent=t.name;
+  document.getElementById('angleType').style.color=t.color;
+
+  // PEDAGOGY V8
+  const fb=document.getElementById('fb');
+  let msg=`角度 = <strong>${deg}°</strong>，这是一个<strong style="color:${t.color}">${t.name}</strong>。`;
+  if(deg<90) msg+=`<br>锐角：0° < 角度 < 90°，开口比直角小。`;
+  else if(deg===90) msg+=`<br>直角：恰好是 90°，两条边垂直，用小方块标记。`;
+  else if(deg<180) msg+=`<br>钝角：90° < 角度 < 180°，开口比直角大。`;
+  else msg+=`<br>平角：180°，两条边在一条直线上。`;
+  msg+=`<br>角的大小 = 一条边从另一条边旋转过的<strong>旋转量</strong>，与边的长度无关。`;
+  fb.innerHTML=msg;
+}
+
+function setAngle(deg){
+  angleDeg=deg; draw(); updateDisplay();
+}
+
+// Pointer interaction
+function getCanvasPos(e){
+  const rect=cvs.getBoundingClientRect();
+  const touch=e.touches?e.touches[0]:e;
+  return{x:(touch.clientX-rect.left),y:(touch.clientY-rect.top)};
+}
+
+function onPointerDown(e){
+  const {x,y}=getCanvasPos(e);
+  const R=120;
+  const movAngleRad=-angleDeg*Math.PI/180;
+  const mx=cx+R*Math.cos(movAngleRad), my=cy+R*Math.sin(movAngleRad);
+  const dist=Math.hypot(x-mx,y-my);
+  if(dist<24){dragging=true; cvs.setPointerCapture&&cvs.setPointerCapture(e.pointerId);}
+}
+
+function onPointerMove(e){
+  if(!dragging)return;
+  const {x,y}=getCanvasPos(e);
+  let angle=-Math.atan2(y-cy,x-cx)*180/Math.PI;
+  angle=Math.max(0,Math.min(180,angle));
+  angleDeg=Math.round(angle);
+  draw(); updateDisplay();
+}
+
+function onPointerUp(){dragging=false;}
+
+cvs.addEventListener('pointerdown',onPointerDown);
+cvs.addEventListener('pointermove',onPointerMove);
+cvs.addEventListener('pointerup',onPointerUp);
+cvs.addEventListener('pointercancel',onPointerUp);
+window.addEventListener('resize',()=>{setup();draw();updateDisplay();});
+setup(); draw(); updateDisplay();
+</script>
+</body>
+</html>

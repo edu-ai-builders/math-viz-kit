@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>特征值特征向量实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="线性代数">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="矩阵变换后方向不变的向量=特征向量，伸缩比=特征值，动态旋转找特征方向">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .matrix-input{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--blue-light);border-radius:var(--radius-sm);padding:8px;}
+    .mat-cell{display:flex;flex-direction:column;align-items:center;gap:2px;}
+    .mat-cell label{font-size:11px;color:var(--ink2);}
+    .mat-cell input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .mat-cell .val{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--amber);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .preset-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .preset-btn{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 线性代数 · 认知动作：变换</div>
+  <h1>特征值特征向量实验室</h1>
+  <p class="sub">旋转探针向量——当变换后方向不变时，你找到了特征向量，伸缩比就是特征值</p>
+</header>
+<main>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">特征值 λ₁</div><div class="stat-val" id="ev1" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">特征值 λ₂</div><div class="stat-val" id="ev2" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">探针方向(角度)</div><div class="stat-val" id="probeAngle" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">对齐度</div><div class="stat-val" id="alignVal" style="color:var(--ink)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div>
+      <div style="font-size:13px;color:var(--ink2);margin-bottom:6px;">矩阵 A（2×2）</div>
+      <div class="matrix-input">
+        <div class="mat-cell"><label>a₁₁</label><div class="val" id="a11v">2</div><input type="range" id="a11" min="-4" max="4" step="0.5" value="2"></div>
+        <div class="mat-cell"><label>a₁₂</label><div class="val" id="a12v">1</div><input type="range" id="a12" min="-4" max="4" step="0.5" value="1"></div>
+        <div class="mat-cell"><label>a₂₁</label><div class="val" id="a21v">0</div><input type="range" id="a21" min="-4" max="4" step="0.5" value="0"></div>
+        <div class="mat-cell"><label>a₂₂</label><div class="val" id="a22v">3</div><input type="range" id="a22" min="-4" max="4" step="0.5" value="3"></div>
+      </div>
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">探针向量角度 θ（度）</div>
+      <div class="sl-val" id="thetaLabel">45°</div>
+      <input type="range" id="thetaSl" min="0" max="179" step="1" value="45">
+    </div>
+  </div>
+  <div class="preset-row">
+    <button class="preset-btn" onclick="setMatrix(2,1,0,3)">对角矩阵[2,0;0,3]</button>
+    <button class="preset-btn" onclick="setMatrix(1,2,2,1)">对称矩阵</button>
+    <button class="preset-btn" onclick="setMatrix(0,-1,1,0)">旋转90°</button>
+    <button class="preset-btn" onclick="setMatrix(2,0,0,2)">纯缩放×2</button>
+    <button class="preset-btn" onclick="setMatrix(1,1,0,1)">切变矩阵</button>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 特征向量的"方向不变"只有动画才能体验
+// PEDAGOGY V3 分步揭示: 先看探针变换，再发现特征方向，再看特征值
+// PEDAGOGY V5 操作先于符号: 先转动探针找特征方向，再理解Av=λv
+// PEDAGOGY V6 动作-数学一致: 旋转滑杆=旋转探针向量
+// PEDAGOGY V7 单一认知动作: 变换（矩阵对向量的拉伸/旋转）
+// PEDAGOGY V8 概念反馈: 揭示"Av=λv：特征向量只被缩放，不改变方向"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=400;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  red:'#c0392b',green:'#27ae60',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setMatrix(a11,a12,a21,a22){
+  document.getElementById('a11').value=a11;document.getElementById('a11v').textContent=a11;
+  document.getElementById('a12').value=a12;document.getElementById('a12v').textContent=a12;
+  document.getElementById('a21').value=a21;document.getElementById('a21v').textContent=a21;
+  document.getElementById('a22').value=a22;document.getElementById('a22v').textContent=a22;
+  draw();
+}
+
+// 2x2 eigenvalues
+function eigenvalues(a,b,c,d){
+  const tr=a+d,det=a*d-b*c;
+  const disc=tr*tr-4*det;
+  if(disc<0) return null; // complex
+  const sqrt=Math.sqrt(disc);
+  return [(tr+sqrt)/2,(tr-sqrt)/2];
+}
+
+// Eigenvector for eigenvalue lam
+function eigenvector(a,b,c,d,lam){
+  // (A-lam*I)v=0
+  const r1=[a-lam,b];
+  const r2=[c,d-lam];
+  if(Math.abs(r1[0])>1e-9||Math.abs(r1[1])>1e-9){
+    if(Math.abs(r1[0])>1e-9) return [-r1[1],r1[0]];
+    return [-r2[1],r2[0]];
+  }
+  return [1,0];
+}
+
+function norm(v){return Math.sqrt(v[0]**2+v[1]**2);}
+function normalize(v){const n=norm(v);return n>1e-9?[v[0]/n,v[1]/n]:[1,0];}
+
+function drawArrow(x1,y1,x2,y2,color,width,label){
+  const dx=x2-x1,dy=y2-y1;
+  const angle=Math.atan2(dy,dx);
+  ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  const hs=10;
+  ctx.fillStyle=color;
+  ctx.beginPath();ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-hs*Math.cos(angle-0.4),y2-hs*Math.sin(angle-0.4));
+  ctx.lineTo(x2-hs*Math.cos(angle+0.4),y2-hs*Math.sin(angle+0.4));
+  ctx.fill();
+  if(label){
+    ctx.fillStyle=color;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText(label,x2+8*Math.cos(angle+Math.PI/2),y2+8*Math.sin(angle+Math.PI/2));
+  }
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const a=parseFloat(document.getElementById('a11').value);
+  const b=parseFloat(document.getElementById('a12').value);
+  const c=parseFloat(document.getElementById('a21').value);
+  const d=parseFloat(document.getElementById('a22').value);
+  const theta=parseFloat(document.getElementById('thetaSl').value)*Math.PI/180;
+  ['a11','a12','a21','a22'].forEach(id=>{
+    document.getElementById(id+'v').textContent=parseFloat(document.getElementById(id).value).toFixed(1);
+  });
+
+  const RANGE=4;
+  const margin={left:44,right:24,top:16,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const cx=margin.left+plotW/2;
+  const cy=margin.top+plotH/2;
+  const scale=plotW/(2*RANGE);
+  const xToP=x=>cx+x*scale;
+  const yToP=y=>cy-y*scale;
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let i=-RANGE;i<=RANGE;i++){
+    ctx.beginPath();ctx.moveTo(xToP(i),margin.top);ctx.lineTo(xToP(i),margin.top+plotH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(i));ctx.lineTo(margin.left+plotW,yToP(i));ctx.stroke();
+  }
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,cy);ctx.lineTo(margin.left+plotW,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,margin.top);ctx.lineTo(cx,margin.top+plotH);ctx.stroke();
+
+  // Compute eigenvalues and eigenvectors
+  const evals=eigenvalues(a,b,c,d);
+  if(evals){
+    const [lam1,lam2]=evals;
+    const ev1=normalize(eigenvector(a,b,c,d,lam1));
+    const ev2=normalize(eigenvector(a,b,c,d,lam2));
+    // Draw eigenvector lines (through origin)
+    [[ev1,C.blue,lam1,'λ₁'],[ev2,C.teal,lam2,'λ₂']].forEach(([ev,color,lam,lblPre])=>{
+      const len=RANGE*0.9;
+      ctx.strokeStyle=color+'66';ctx.lineWidth=1.5;ctx.setLineDash([5,3]);
+      ctx.beginPath();ctx.moveTo(xToP(-ev[0]*len),yToP(-ev[1]*len));ctx.lineTo(xToP(ev[0]*len),yToP(ev[1]*len));ctx.stroke();
+      ctx.setLineDash([]);
+      // Arrow (unit eigenvector scaled by |lam|)
+      const dispLen=Math.min(Math.abs(lam)*0.8,2.5);
+      drawArrow(cx,cy,xToP(ev[0]*dispLen),yToP(ev[1]*dispLen),color,2.5,`${lblPre}=${lam.toFixed(2)}`);
+    });
+    document.getElementById('ev1').textContent=lam1.toFixed(3);
+    document.getElementById('ev2').textContent=lam2.toFixed(3);
+  } else {
+    document.getElementById('ev1').textContent='复数';
+    document.getElementById('ev2').textContent='复数';
+  }
+
+  // Unit circle (ghost)
+  ctx.strokeStyle=C.ink3;ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.arc(cx,cy,scale,0,Math.PI*2);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw grid deformation (transformed unit vectors)
+  const e1t=[a,c],e2t=[b,d]; // columns of A
+  // Transformed grid (parallelogram)
+  ctx.strokeStyle=C.blue+'33';ctx.lineWidth=1;
+  const gridN=5;
+  for(let i=-gridN;i<=gridN;i++){
+    const t=i/gridN*2;
+    ctx.beginPath();
+    ctx.moveTo(xToP(-e1t[0]*2+e2t[0]*t),yToP(-e1t[1]*2+e2t[1]*t));
+    ctx.lineTo(xToP(e1t[0]*2+e2t[0]*t),yToP(e1t[1]*2+e2t[1]*t));
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(xToP(e1t[0]*t-e2t[0]*2),yToP(e1t[1]*t-e2t[1]*2));
+    ctx.lineTo(xToP(e1t[0]*t+e2t[0]*2),yToP(e1t[1]*t+e2t[1]*2));
+    ctx.stroke();
+  }
+
+  // Probe vector v = [cos(theta), sin(theta)]
+  const vx=Math.cos(theta),vy=Math.sin(theta);
+  // Transformed: Av
+  const Avx=a*vx+b*vy;
+  const Avy=c*vx+d*vy;
+  const probeLen=1.5;
+  drawArrow(cx,cy,xToP(vx*probeLen),yToP(vy*probeLen),C.amberD,3,'v');
+  drawArrow(cx,cy,xToP(Avx),yToP(Avy),'#7b3f9e',3,'Av');
+
+  // Alignment: cos(angle between v and Av)
+  const vn=norm([vx,vy]),Avn=norm([Avx,Avy]);
+  const alignment=Avn>1e-9?(vx*Avx+vy*Avy)/(vn*Avn):0;
+  const isEigDir=Math.abs(Math.abs(alignment)-1)<0.02;
+
+  // Scale factor if eigenvector
+  const scaleFactor=Avn/vn;
+  document.getElementById('probeAngle').textContent=Math.round(theta*180/Math.PI)+'°';
+  document.getElementById('alignVal').textContent=isEigDir?'✓ 特征方向':`${(alignment*100).toFixed(0)}%`;
+
+  // Alignment indicator
+  const indX=margin.left+plotW-80;
+  ctx.fillStyle=isEigDir?C.teal:C.amber;ctx.font=`bold 12px 'Noto Sans SC',sans-serif`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(isEigDir?`⚡ 特征方向！λ≈${scaleFactor.toFixed(2)}`:`对齐度: ${(Math.abs(alignment)*100).toFixed(0)}%`,margin.left+4,margin.top+4);
+
+  // Matrix display
+  ctx.fillStyle=C.ink;ctx.font=`13px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(`A = [[${a},${b}],[${c},${d}]]`,margin.left+4,margin.top+20);
+
+  document.getElementById('thetaLabel').textContent=Math.round(theta*180/Math.PI)+'°';
+
+  // PEDAGOGY V8
+  document.getElementById('fb').innerHTML=
+    `矩阵 A 将探针向量 v（橙色）变换为 Av（紫色）。<br>` +
+    (evals?`<strong>实际特征值：λ₁=${evals[0].toFixed(3)}, λ₂=${evals[1].toFixed(3)}</strong>——对应的特征方向用虚线标出。<br>`:`该矩阵的特征值为复数，不存在实特征向量。<br>`) +
+    `<strong>特征向量满足 Av = λv</strong>：变换后方向不变（或反向），仅被缩放 λ 倍。<br>` +
+    `旋转滑杆找到${isEigDir?`特征方向（当前角度=${Math.round(theta*180/Math.PI)}°，λ≈${scaleFactor.toFixed(3)}）！`:'特征方向——当橙色和紫色箭头共线时即为特征方向。'} 对齐度=${ (Math.abs(alignment)*100).toFixed(1)}%。`;
+}
+
+['a11','a12','a21','a22','thetaSl'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

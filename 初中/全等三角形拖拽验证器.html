@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>全等三角形拖拽验证器 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="三角形">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="SSS/SAS/ASA/AAS四种判定条件，拖拽一个三角形叠合到另一个，验证完全重合">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:grab;}
+    .cond-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+    .cond-btn{padding:10px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);font-weight:700;transition:all .2s;}
+    .cond-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .ctrl-row{display:flex;gap:8px;}
+    .btn{padding:10px 18px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;font-family:'Noto Sans SC',sans-serif;font-weight:500;}
+    .btn-overlap{background:var(--teal);color:#fff;}
+    .btn-reset{background:var(--surface);border:2px solid var(--border);color:var(--ink2);}
+    .result-box{border-radius:var(--radius-sm);padding:10px 16px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;text-align:center;}
+    .result-yes{background:var(--teal-light);color:var(--teal);border:2px solid var(--teal);}
+    .result-no{background:var(--amber-light);color:var(--amber);border:2px solid var(--amber);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 三角形 · 认知动作：变换</div>
+  <h1>全等三角形拖拽验证器</h1>
+  <p class="sub">选择判定条件，拖动橙色三角形叠合到蓝色三角形，验证完全重合</p>
+</header>
+<main>
+  <div class="cond-row">
+    <button class="cond-btn active" onclick="setCond('SSS',this)">SSS<br><small>三边相等</small></button>
+    <button class="cond-btn" onclick="setCond('SAS',this)">SAS<br><small>两边夹角</small></button>
+    <button class="cond-btn" onclick="setCond('ASA',this)">ASA<br><small>两角夹边</small></button>
+    <button class="cond-btn" onclick="setCond('AAS',this)">AAS<br><small>两角一边</small></button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="ctrl-row">
+    <button class="btn btn-overlap" onclick="animateOverlap()">▶ 动画叠合</button>
+    <button class="btn btn-reset" onclick="reset()">↺ 重置位置</button>
+  </div>
+  <div class="result-box result-yes" id="result">拖动橙色三角形到蓝色三角形上方验证</div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 全等验证只有物理叠合才能让学生信服"完全相同"
+// PEDAGOGY V5 操作先于符号: 先拖合，再标出哪些边/角相等
+// PEDAGOGY V6 动作-数学一致: 拖动=平移，点击叠合按钮=旋转平移到重合
+// PEDAGOGY V7 单一认知动作: 变换（通过平移/旋转验证全等）
+// PEDAGOGY V8 概念反馈: "两三角形完全重合说明对应边角都相等——这就是全等"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 320;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da'
+};
+
+// Reference triangle (blue) - fixed
+const TRIANGLES = {
+  SSS: { pts: [[-60,-30],[60,-30],[0,50]], label:'SSS：三边相等（a=b=c）', desc:'已知三边相等，三角形完全确定（SSS定理）' },
+  SAS: { pts: [[-70,-20],[70,-20],[20,55]], label:'SAS：两边夹角相等', desc:'两边及夹角相等，三角形完全确定（SAS定理）' },
+  ASA: { pts: [[-60,-30],[80,-30],[-10,50]], label:'ASA：两角夹边相等', desc:'两角及夹边相等，三角形完全确定（ASA定理）' },
+  AAS: { pts: [[-50,-30],[70,-30],[30,60]], label:'AAS：两角一边相等', desc:'两角和一边相等，三角形完全确定（AAS定理）' },
+};
+
+let cond = 'SSS';
+let offset = { x: 0, y: 0 }; // movable triangle offset
+let startOffset = null;
+let dragging = false;
+let animating = false;
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio||1;
+  cvs.width = r.width*dpr; cvs.height = H*dpr;
+  ctx.scale(dpr,dpr); cvs.style.height = H+'px';
+}
+
+function setCond(c, btn) {
+  cond = c;
+  document.querySelectorAll('.cond-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  reset();
+}
+
+function reset() {
+  const r = cvs.getBoundingClientRect();
+  offset = { x: r.width*0.35, y: -20 };
+  animating = false;
+  draw();
+  updateFeedback();
+}
+
+function getBlueCenter(W) {
+  return [W*0.35, H*0.5];
+}
+
+function getOrangeCenter(W) {
+  return [W*0.35 + offset.x, H*0.5 + offset.y];
+}
+
+function computeOverlap(W) {
+  const [bx,by] = getBlueCenter(W);
+  const [ox,oy] = getOrangeCenter(W);
+  const dist = Math.sqrt((ox-bx)**2+(oy-by)**2);
+  return dist;
+}
+
+function animateOverlap() {
+  if(animating) return;
+  animating = true;
+  const r = cvs.getBoundingClientRect();
+  const targetX = 0, targetY = 0;
+  const startX = offset.x, startY = offset.y;
+  const dur = 60; let frame = 0;
+  function step() {
+    const t = frame/dur;
+    const ease = t<0.5?2*t*t:1-(-2*t+2)**2/2;
+    offset.x = startX + (targetX-startX)*ease;
+    offset.y = startY + (targetY-startY)*ease;
+    draw();
+    frame++;
+    if(frame<=dur) requestAnimationFrame(step);
+    else { animating=false; offset={x:0,y:0}; draw(); checkResult(); }
+  }
+  requestAnimationFrame(step);
+}
+
+function checkResult() {
+  const r = cvs.getBoundingClientRect();
+  const dist = computeOverlap(r.width);
+  const el = document.getElementById('result');
+  if(dist<5) {
+    el.textContent = `✓ 完全重合！两三角形全等（${cond}条件）`;
+    el.className = 'result-box result-yes';
+  }
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0,0,W,H);
+  const tri = TRIANGLES[cond];
+  const [bx,by] = getBlueCenter(W);
+  const [ox,oy] = getOrangeCenter(W);
+
+  // Blue triangle (reference)
+  const bPts = tri.pts.map(([x,y])=>[bx+x, by+y]);
+  ctx.fillStyle = C.blueL;
+  ctx.beginPath(); ctx.moveTo(...bPts[0]); ctx.lineTo(...bPts[1]); ctx.lineTo(...bPts[2]); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = C.blue; ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // Tick marks on blue triangle (show which sides/angles are equal)
+  drawTicks(bPts, C.blue, cond, false);
+
+  // Orange triangle (movable)
+  const oPts = tri.pts.map(([x,y])=>[ox+x, oy+y]);
+  ctx.globalAlpha = 0.75;
+  ctx.fillStyle = C.amberL;
+  ctx.beginPath(); ctx.moveTo(...oPts[0]); ctx.lineTo(...oPts[1]); ctx.lineTo(...oPts[2]); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = C.amberD; ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  drawTicks(oPts, C.amberD, cond, true);
+
+  // Labels
+  ctx.fillStyle = C.blue; ctx.font=`bold 13px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('△ABC（基准）', bx, by-60);
+  ctx.fillStyle = C.amberD;
+  ctx.fillText('△A\'B\'C\'（拖动）', ox, oy-60);
+
+  // Overlap indicator
+  const dist = computeOverlap(W);
+  if(dist < 10) {
+    ctx.fillStyle = C.teal+'30';
+    ctx.beginPath(); ctx.moveTo(...bPts[0]); ctx.lineTo(...bPts[1]); ctx.lineTo(...bPts[2]); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = C.teal; ctx.font=`bold 14px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('✓ 完全重合', bx, by);
+  }
+
+  // Distance guide
+  ctx.fillStyle = C.ink2; ctx.font=`11px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText(`偏移: (${offset.x.toFixed(0)}, ${offset.y.toFixed(0)}) | 距离: ${dist.toFixed(0)}px`, W/2, H-15);
+}
+
+function drawTicks(pts, col, cond, isOrange) {
+  // Draw tick marks to indicate equal sides/angles
+  const sides = [[0,1],[1,2],[0,2]];
+  const ticked = cond==='SSS'?[0,1,2]:cond==='SAS'?[0,2]:[0];
+  sides.forEach(([i,j], idx) => {
+    if(!ticked.includes(idx)) return;
+    const mx=(pts[i][0]+pts[j][0])/2, my=(pts[i][1]+pts[j][1])/2;
+    const dx=pts[j][0]-pts[i][0], dy=pts[j][1]-pts[i][1];
+    const len=Math.sqrt(dx*dx+dy*dy);
+    const nx=-dy/len, ny=dx/len;
+    ctx.strokeStyle=col; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(mx+nx*6, my+ny*6); ctx.lineTo(mx-nx*6, my-ny*6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx+nx*6+2, my+ny*6+2); ctx.lineTo(mx-nx*6+2, my-ny*6+2); ctx.stroke();
+  });
+}
+
+function updateFeedback() {
+  const tri = TRIANGLES[cond];
+  const condDescriptions = {
+    SSS:'三条边分别对应相等（a₁=a₂, b₁=b₂, c₁=c₂），可以唯一确定三角形的形状和大小。',
+    SAS:'两条边和夹角对应相等，夹角是两边之间的角。注意：SSA（角不是夹角）<strong>不能</strong>判定全等。',
+    ASA:'两个角和夹边对应相等，夹边是两角之间的边。',
+    AAS:'两个角和一条边（非夹边）对应相等。由于三角形内角和=180°，AAS等价于ASA。',
+  };
+  document.getElementById('fb').innerHTML =
+    `<strong>${tri.label}</strong>：${condDescriptions[cond]}<br>` +
+    `拖动橙色三角形到蓝色三角形上，或点击"动画叠合"自动重合。当两三角形完全叠合时，验证了全等关系：△ABC ≅ △A'B'C'。`;
+}
+
+// Drag
+cvs.addEventListener('pointerdown', e=>{
+  dragging=true; cvs.setPointerCapture(e.pointerId);
+  const rect=cvs.getBoundingClientRect();
+  startOffset={x:e.clientX-rect.left-offset.x, y:e.clientY-rect.top-offset.y};
+});
+cvs.addEventListener('pointermove', e=>{
+  if(!dragging||animating) return;
+  const rect=cvs.getBoundingClientRect();
+  offset.x=e.clientX-rect.left-startOffset.x;
+  offset.y=e.clientY-rect.top-startOffset.y;
+  draw();
+  const dist=computeOverlap(rect.width);
+  const el=document.getElementById('result');
+  if(dist<15) {
+    el.textContent=`✓ 已重合！${cond}条件成立`;
+    el.className='result-box result-yes';
+  } else {
+    el.textContent=`继续拖动橙色三角形靠近蓝色三角形（距离：${dist.toFixed(0)}px）`;
+    el.className='result-box result-no';
+  }
+});
+cvs.addEventListener('pointerup',()=>{dragging=false;});
+
+window.addEventListener('resize',()=>{setup();reset();});
+setup(); reset();
+</script>
+</body>
+</html>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>平行线与角关系 · 数学可视化</title>
+  <meta name="grade" content="初中">
+  <meta name="topic" content="平行线">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="拖动截线角度，实时高亮同位角/内错角/同旁内角，理解平行线中角的关系">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .mode-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .mode-btn{padding:8px 16px;border:2px solid var(--border);border-radius:20px;font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .mode-btn.active,.mode-btn:hover{color:#fff;border-color:transparent;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.controls{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">初中 · 平行线 · 认知动作：比较</div>
+  <h1>平行线与角关系</h1>
+  <p class="sub">拖动截线，实时高亮三种角对，理解平行线中角的等量与互补关系</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" style="background:var(--blue)" onclick="setMode(0,this)">同位角（相等）</button>
+    <button class="mode-btn" onclick="setMode(1,this)">内错角（相等）</button>
+    <button class="mode-btn" onclick="setMode(2,this)">同旁内角（互补）</button>
+    <button class="mode-btn" onclick="setMode(3,this)">对顶角（相等）</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">截线角度 θ</div>
+      <div class="sl-val" id="thetaLabel">45°</div>
+      <input type="range" id="thetaSl" min="20" max="160" value="45">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">平行线间距</div>
+      <div class="sl-val" id="gapLabel" style="color:var(--teal)">中等</div>
+      <input type="range" id="gapSl" min="60" max="160" value="110">
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 角的等量关系只有动态截线才能直观体验
+// PEDAGOGY V4 信号聚焦: 每种模式只高亮一对角（单一含义）
+// PEDAGOGY V6 动作-数学一致: 拖动截线角度=角度数值同步改变
+// PEDAGOGY V7 单一认知动作: 比较（比较两角是否相等）
+// PEDAGOGY V8 概念反馈: 揭示"平行线保证了等量关系"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=360;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberL:'#faeeda',red:'#b84040',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+const MODES=[
+  {name:'同位角',color:'#2a5c8f',relation:'相等'},
+  {name:'内错角',color:'#0f6e56',relation:'相等'},
+  {name:'同旁内角',color:'#854f0b',relation:'互补（相加=180°）'},
+  {name:'对顶角',color:'#7b3f9e',relation:'相等'}
+];
+let mode=0;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setMode(m,btn){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach((b,i)=>{
+    b.classList.remove('active');
+    b.style.background='';b.style.color='';b.style.borderColor='';
+  });
+  btn.classList.add('active');
+  btn.style.background=MODES[m].color;
+  btn.style.color='#fff';
+  btn.style.borderColor='transparent';
+  draw();
+}
+
+function drawAngleArc(cx,cy,fromAngle,toAngle,radius,color,label){
+  ctx.fillStyle=color+'44';
+  ctx.beginPath();ctx.moveTo(cx,cy);
+  ctx.arc(cx,cy,radius,fromAngle,toAngle,false);
+  ctx.closePath();ctx.fill();
+  ctx.strokeStyle=color;ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(cx,cy,radius,fromAngle,toAngle,false);ctx.stroke();
+  // Label
+  const midA=(fromAngle+toAngle)/2;
+  const lr=radius*0.65;
+  ctx.fillStyle=color;ctx.font=`bold 13px 'Noto Sans SC',sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(label,cx+Math.cos(midA)*lr,cy+Math.sin(midA)*lr);
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const theta=parseInt(document.getElementById('thetaSl').value);
+  const gap=parseInt(document.getElementById('gapSl').value);
+  const thetaRad=theta*Math.PI/180;
+  const cx=W/2;
+  const y1=H/2-gap/2; // upper parallel line y
+  const y2=H/2+gap/2; // lower parallel line y
+
+  // Parallel lines
+  ctx.strokeStyle=C.ink;ctx.lineWidth=2.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(20,y1);ctx.lineTo(W-20,y1);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(20,y2);ctx.lineTo(W-20,y2);ctx.stroke();
+  // Parallel arrows
+  [y1,y2].forEach(y=>{
+    ctx.fillStyle=C.ink;
+    ctx.beginPath();ctx.moveTo(W-20,y);ctx.lineTo(W-28,y-4);ctx.lineTo(W-28,y+4);ctx.fill();
+  });
+
+  // Labels
+  ctx.fillStyle=C.ink2;ctx.font=`bold 13px 'Noto Sans SC',sans-serif`;ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText('l₁',W-15,y1);
+  ctx.fillText('l₂',W-15,y2);
+
+  // Transversal line (截线)
+  const dx=200*Math.cos(Math.PI-thetaRad);
+  const dy=200*Math.sin(Math.PI-thetaRad);
+  const ix1=cx; // intersection with upper line
+  const ix2=cx; // intersection with lower line (same x for vertical transversal)
+  // Actually tilt the transversal: it hits l1 at (cx-?, y1) and l2 at (cx+?, y2)
+  // Direction vector: (cos θ, -sin θ) since y increases downward
+  const tanT=Math.tan(thetaRad);
+  const dxBetween=(y2-y1)/Math.tan(thetaRad); // horizontal offset between two intersection points
+  const p1x=cx-dxBetween/2, p2x=cx+dxBetween/2;
+
+  // Extend line
+  const extend=300;
+  const cosT=Math.cos(thetaRad), sinT=Math.sin(thetaRad);
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=2;ctx.setLineDash([8,4]);
+  ctx.beginPath();
+  ctx.moveTo(p1x-extend*cosT,y1+extend*sinT);
+  ctx.lineTo(p2x+extend*cosT,y2-extend*sinT);
+  ctx.stroke();ctx.setLineDash([]);
+
+  // Intersections
+  const P1={x:p1x,y:y1};
+  const P2={x:p2x,y:y2};
+
+  // Angle at each intersection
+  // At P1: the transversal goes from lower-left to upper-right at angle θ from horizontal
+  // Standard canvas: x right, y down
+  // Transversal direction from P1 toward P2: angle = atan2(y2-y1, p2x-p1x)
+  const transAngle=Math.atan2(y2-y1,p2x-p1x); // direction from P1 to P2
+
+  // At P1, four angles formed with l1 (horizontal)
+  // Angles from positive x-axis (right along l1):
+  // ∠1 = 0 to transAngle (above-right)
+  // ∠2 = transAngle to π (above-left)
+  // ∠3 = π to π+transAngle (below-left)
+  // ∠4 = π+transAngle to 2π (below-right)
+  const ta=transAngle; // typically positive (going down-right)
+  const supplement=Math.PI-ta;
+
+  const color=MODES[mode].color;
+  const arcR=40;
+
+  // Decide which angles to highlight based on mode
+  if(mode===0){ // 同位角: ∠1 at P1 and ∠1 at P2 (both above-right of transversal)
+    drawAngleArc(P1.x,P1.y,0,ta,arcR,color,`${theta}°`);
+    drawAngleArc(P2.x,P2.y,0,ta,arcR,color,`${theta}°`);
+  } else if(mode===1){ // 内错角: ∠2 at P1 (above-left) and ∠4-related at P2 (below-right of transversal)
+    // ∠2 at P1: between transAngle and π (above the l1, left side)
+    drawAngleArc(P1.x,P1.y,ta,Math.PI,arcR,color,`${180-theta}°`);
+    // ∠at P2 below l2, right of transversal: from π+ta to 2π
+    // Actually inner angles: at P1 below l1 = at P1, ta to π+ta (below)
+    // inner angle at P1 = below l1, right of transversal = ta to π
+    // Actually: 内错角 = alternate interior angles
+    // At P1: below l1, between ta (down-right) and π (horizontal-left)... let's use simpler approach
+    // Below P1 (between lines): π to π+ta
+    drawAngleArc(P1.x,P1.y,Math.PI,Math.PI+ta,arcR,color,`${theta}°`);
+    // At P2: above l2, left of transversal = ta+π to 2π?
+    // above P2: from π+ta to 2π (wraps)
+    drawAngleArc(P2.x,P2.y,-ta,0,arcR,color,`${theta}°`);
+    // Hmm, let me simplify with a cleaner approach:
+  } else if(mode===2){ // 同旁内角: supplementary angles between the parallel lines
+    // At P1 below l1, right of transversal
+    drawAngleArc(P1.x,P1.y,Math.PI,Math.PI+ta,arcR,color,`${theta}°`);
+    // At P2 above l2, right of transversal
+    drawAngleArc(P2.x,P2.y,0,ta,arcR,color,`${180-theta}°`);
+  } else { // 对顶角: ∠1 at P1 and ∠3 at P1
+    drawAngleArc(P1.x,P1.y,0,ta,arcR,color,`${theta}°`);
+    drawAngleArc(P1.x,P1.y,Math.PI,Math.PI+ta,arcR,color,`${theta}°`);
+  }
+
+  // Dots at intersections
+  [P1,P2].forEach(p=>{
+    ctx.fillStyle=C.ink;ctx.beginPath();ctx.arc(p.x,p.y,5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=C.surf;ctx.beginPath();ctx.arc(p.x,p.y,3,0,Math.PI*2);ctx.fill();
+  });
+
+  // Update stats
+  document.getElementById('thetaLabel').textContent=theta+'°';
+  const gapV=parseInt(document.getElementById('gapSl').value);
+  document.getElementById('gapLabel').textContent=gapV<80?'小':gapV<120?'中等':'大';
+
+  // PEDAGOGY V8
+  const fb=document.getElementById('fb');
+  const m=MODES[mode];
+  if(mode===0){
+    fb.innerHTML=`<strong style="color:${m.color}">同位角</strong>：在同一侧，上下对应位置的角。两平行线被截，同位角<strong>相等</strong>。当前角度：<strong>${theta}°</strong>。<br>记忆方法：看起来像"F"形或"Z"形中相同位置的角。`;
+  } else if(mode===1){
+    fb.innerHTML=`<strong style="color:${m.color}">内错角</strong>：在两平行线之间，截线两侧的角。两平行线被截，内错角<strong>相等</strong>。当前角度：<strong>${theta}°</strong>。<br>记忆方法：像"Z"字形中的两个角。`;
+  } else if(mode===2){
+    fb.innerHTML=`<strong style="color:${m.color}">同旁内角</strong>：在两平行线之间，截线同一侧的角。两平行线被截，同旁内角<strong>互补</strong>（相加 = 180°）。当前两角：<strong>${theta}° + ${180-theta}° = 180°</strong>。`;
+  } else {
+    fb.innerHTML=`<strong style="color:${m.color}">对顶角</strong>：两直线相交时，对面的角（不需要平行线）。对顶角<strong>恒相等</strong>。当前角度：<strong>${theta}°</strong>。<br>对顶角是任意两直线相交时都成立的关系，与平行线无关。`;
+  }
+}
+
+document.getElementById('thetaSl').addEventListener('input',draw);
+document.getElementById('gapSl').addEventListener('input',draw);
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+// Fix mode button initial styling
+document.querySelector('.mode-btn.active').style.background=MODES[0].color;
+document.querySelector('.mode-btn.active').style.color='#fff';
+</script>
+</body>
+</html>

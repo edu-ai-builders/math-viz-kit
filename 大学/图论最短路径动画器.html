@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图论最短路径动画器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="图论">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="模拟">
+  <meta name="desc" content="BFS/Dijkstra动态逐步扩展，节点颜色显示访问状态，边权可调，最短路径高亮">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .alg-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+    .alg-btn{padding:10px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;cursor:pointer;background:var(--surface);font-family:'Noto Sans SC',sans-serif;font-weight:500;transition:all .2s;}
+    .alg-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .ctrl-row{display:flex;gap:8px;flex-wrap:wrap;}
+    .btn{padding:10px 18px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;font-family:'Noto Sans SC',sans-serif;font-weight:500;}
+    .btn-step{background:var(--blue);color:#fff;}
+    .btn-run{background:var(--teal);color:#fff;}
+    .btn-reset{background:var(--surface);border:2px solid var(--border);color:var(--ink2);}
+    .dist-table{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;font-family:'JetBrains Mono',monospace;font-size:12px;display:flex;flex-wrap:wrap;gap:6px;}
+    .dist-item{padding:4px 8px;border-radius:4px;font-size:12px;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 图论 · 认知动作：模拟</div>
+  <h1>图论最短路径动画器</h1>
+  <p class="sub">逐步模拟 BFS（无权）和 Dijkstra（带权）算法，观察节点如何被"发现"</p>
+</header>
+<main>
+  <div class="alg-row">
+    <button class="alg-btn active" onclick="setAlg('bfs',this)">BFS 广度优先（无权图）</button>
+    <button class="alg-btn" onclick="setAlg('dijkstra',this)">Dijkstra 最短路径（带权）</button>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="ctrl-row">
+    <button class="btn btn-step" onclick="step()">▶ 单步</button>
+    <button class="btn btn-run" id="runBtn" onclick="toggleRun()">⏩ 自动运行</button>
+    <button class="btn btn-reset" onclick="reset()">↺ 重置</button>
+  </div>
+  <div class="dist-table" id="distTable"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 图搜索算法只有逐步展开才能感受"波浪式扩展"
+// PEDAGOGY V3 分步揭示: 单步模式让学生控制节奏，理解每步决策
+// PEDAGOGY V4 信号聚焦: 白=未访问，黄=队列中，蓝=已处理，红=起点，绿=终点
+// PEDAGOGY V7 单一认知动作: 模拟（BFS/Dijkstra逐步发现最短路径）
+// PEDAGOGY V8 概念反馈: "BFS保证无权图最短，Dijkstra通过优先队列保证带权最短"
+
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const H = 360;
+const C = {
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff',
+  nodeUnvisited:'#f0f0f0',nodeQueue:'#ffd700',nodeVisited:C_dummy_blue,nodeStart:'#dc2626',nodeEnd:'#0f6e56',
+};
+C.nodeVisited = '#2a5c8f';
+
+let alg = 'bfs';
+let running = false;
+let raf = null;
+
+// Graph definition
+const NODES = [
+  { id:0, label:'A', x:0.12, y:0.5 },
+  { id:1, label:'B', x:0.3, y:0.2 },
+  { id:2, label:'C', x:0.3, y:0.8 },
+  { id:3, label:'D', x:0.5, y:0.5 },
+  { id:4, label:'E', x:0.7, y:0.2 },
+  { id:5, label:'F', x:0.7, y:0.8 },
+  { id:6, label:'G', x:0.88, y:0.5 },
+];
+const EDGES = [
+  { u:0, v:1, w:4 }, { u:0, v:2, w:2 }, { u:1, v:3, w:5 }, { u:2, v:3, w:8 },
+  { u:1, v:4, w:10 }, { u:3, v:4, w:2 }, { u:3, v:5, w:6 }, { u:4, v:6, w:3 },
+  { u:5, v:6, w:7 }, { u:2, v:5, w:3 },
+];
+
+const START = 0, END = 6;
+
+// Algorithm state
+let dist = [], prev = [], visited = [], queue = [];
+let stepLog = [];
+let done = false;
+
+function setup() {
+  const r = cvs.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cvs.width = r.width * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr); cvs.style.height = H + 'px';
+}
+
+function setAlg(a, btn) {
+  alg = a;
+  document.querySelectorAll('.alg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  reset();
+}
+
+function reset() {
+  stopRun();
+  dist = NODES.map(() => Infinity);
+  prev = NODES.map(() => -1);
+  visited = NODES.map(() => false);
+  queue = [];
+  stepLog = [];
+  done = false;
+  dist[START] = 0;
+  if (alg === 'bfs') queue = [START];
+  else queue = [{ node: START, d: 0 }]; // min-heap (simulated)
+  draw();
+  updateDistTable();
+  document.getElementById('fb').innerHTML = `<strong>${alg==='bfs'?'BFS（广度优先搜索）':'Dijkstra（单源最短路）'}</strong>：从节点 A 出发，寻找到 G 的最短路径。点击"单步"逐步运行。`;
+}
+
+function getAdj(u) {
+  const result = [];
+  EDGES.forEach(e => {
+    if (e.u === u) result.push({ to: e.v, w: e.w });
+    if (e.v === u) result.push({ to: e.u, w: e.w });
+  });
+  return result;
+}
+
+function step() {
+  if (done || queue.length === 0) { done = true; drawFinalPath(); return; }
+
+  if (alg === 'bfs') {
+    const u = queue.shift();
+    if (visited[u]) { step(); return; }
+    visited[u] = true;
+    stepLog.push(`访问节点 ${NODES[u].label}`);
+    if (u === END) { done = true; drawFinalPath(); return; }
+    const adj = getAdj(u);
+    adj.forEach(({ to, w }) => {
+      if (!visited[to] && dist[to] === Infinity) {
+        dist[to] = dist[u] + 1;
+        prev[to] = u;
+        queue.push(to);
+        stepLog.push(`  → 发现 ${NODES[to].label}（距离=${dist[to]}）`);
+      }
+    });
+  } else {
+    // Dijkstra: extract min from queue
+    queue.sort((a,b) => a.d - b.d);
+    const { node: u, d } = queue.shift();
+    if (visited[u]) { if (queue.length > 0) step(); return; }
+    visited[u] = true;
+    stepLog.push(`处理节点 ${NODES[u].label}（d=${d.toFixed(0)}）`);
+    if (u === END) { done = true; drawFinalPath(); return; }
+    const adj = getAdj(u);
+    adj.forEach(({ to, w }) => {
+      if (!visited[to]) {
+        const newDist = dist[u] + w;
+        if (newDist < dist[to]) {
+          dist[to] = newDist;
+          prev[to] = u;
+          queue.push({ node: to, d: newDist });
+          stepLog.push(`  松弛 ${NODES[u].label}→${NODES[to].label}: ${newDist}`);
+        }
+      }
+    });
+  }
+  draw();
+  updateDistTable();
+  updateStepFeedback();
+}
+
+function getPath() {
+  const path = [];
+  let cur = END;
+  while (cur !== -1) { path.unshift(cur); cur = prev[cur]; }
+  return path[0] === START ? path : [];
+}
+
+function drawFinalPath() {
+  draw();
+  const path = getPath();
+  const distVal = dist[END] !== Infinity ? dist[END] : '∞';
+  document.getElementById('fb').innerHTML =
+    `<strong>算法完成！</strong>${alg==='bfs'?'BFS最短跳数':'Dijkstra最短距离'}：A → ${path.map(i=>NODES[i].label).join(' → ')} = ${distVal}<br>
+    ${alg==='bfs'?'BFS 保证无权图中找到最少跳数的路径（每条边权重视为1）。':'Dijkstra 使用优先队列，每次处理当前最短距离的节点，保证带权图最短路径（要求非负权重）。'}<br>
+    步骤日志：${stepLog.slice(-5).join('；')}`;
+  updateDistTable();
+}
+
+function draw() {
+  const r = cvs.getBoundingClientRect();
+  const W = r.width;
+  ctx.clearRect(0, 0, W, H);
+
+  const pad = 30;
+  const cw = W - 2*pad, ch = H - 2*pad;
+  function nx(n) { return pad + NODES[n].x * cw; }
+  function ny(n) { return pad + NODES[n].y * ch; }
+
+  const path = done ? getPath() : [];
+  const pathEdges = new Set();
+  for (let i=0; i<path.length-1; i++) {
+    pathEdges.add(`${Math.min(path[i],path[i+1])},${Math.max(path[i],path[i+1])}`);
+  }
+
+  // Edges
+  EDGES.forEach(e => {
+    const key = `${Math.min(e.u,e.v)},${Math.max(e.u,e.v)}`;
+    const isPath = pathEdges.has(key);
+    ctx.strokeStyle = isPath ? C.teal : C.border;
+    ctx.lineWidth = isPath ? 3 : 1.5;
+    ctx.beginPath(); ctx.moveTo(nx(e.u), ny(e.u)); ctx.lineTo(nx(e.v), ny(e.v)); ctx.stroke();
+    // Weight label
+    const mx = (nx(e.u)+nx(e.v))/2, my = (ny(e.u)+ny(e.v))/2;
+    ctx.fillStyle = alg==='dijkstra' ? (isPath?C.teal:C.ink3) : C.ink3;
+    ctx.font = alg==='dijkstra' ? `bold 11px 'JetBrains Mono',monospace` : `10px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (alg==='dijkstra') ctx.fillText(e.w, mx, my-6);
+  });
+
+  // Nodes
+  const nodeR = Math.min(20, cw/16);
+  NODES.forEach((n, i) => {
+    let col, textCol = '#fff', border = C.ink;
+    if (i === START) { col = '#dc2626'; }
+    else if (i === END) { col = C.teal; }
+    else if (visited[i]) { col = C.blue; }
+    else if (alg==='bfs' ? queue.includes(i) : queue.some(q=>q.node===i)) { col = '#f59e0b'; textCol = C.ink; }
+    else { col = '#f5f5f5'; textCol = C.ink2; }
+
+    // Highlight path nodes
+    if (done && path.includes(i)) {
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 4;
+    } else {
+      ctx.strokeStyle = border; ctx.lineWidth = 1.5;
+    }
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(nx(i), ny(i), nodeR, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = textCol;
+    ctx.font = `bold ${nodeR > 16 ? 14 : 12}px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(n.label, nx(i), ny(i));
+
+    // Distance label
+    if (dist[i] !== Infinity) {
+      ctx.fillStyle = C.amber; ctx.font = `bold 11px 'JetBrains Mono',monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText(alg==='bfs'?`d=${dist[i]}`:`${dist[i]}`, nx(i), ny(i)-nodeR-2);
+    }
+  });
+
+  // Legend
+  ctx.fillStyle = C.ink3; ctx.font = `11px 'Noto Sans SC',sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  [
+    { col: '#dc2626', label: '起点 A' },
+    { col: C.teal, label: '终点 G' },
+    { col: '#f59e0b', label: '待处理' },
+    { col: C.blue, label: '已访问' },
+  ].forEach((item, i) => {
+    ctx.fillStyle = item.col;
+    ctx.beginPath(); ctx.arc(pad+8+i*80, H-10, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = C.ink3;
+    ctx.fillText(item.label, pad+16+i*80, H-15);
+  });
+}
+
+function updateDistTable() {
+  const el = document.getElementById('distTable');
+  el.innerHTML = NODES.map((n, i) => {
+    const d = dist[i] === Infinity ? '∞' : dist[i];
+    const col = i===START?'#dc2626':i===END?C.teal:visited[i]?C.blue:C.ink3;
+    return `<span class="dist-item" style="background:${col}22;color:${col};">${n.label}:${d}</span>`;
+  }).join('');
+}
+
+function toggleRun() {
+  if (running) stopRun();
+  else startRun();
+}
+
+function startRun() {
+  running = true;
+  document.getElementById('runBtn').textContent = '⏸ 暂停';
+  runNext();
+}
+
+function stopRun() {
+  running = false;
+  cancelAnimationFrame(raf);
+  document.getElementById('runBtn').textContent = '⏩ 自动运行';
+}
+
+function runNext() {
+  if (!running || done) { if (done) stopRun(); return; }
+  step();
+  raf = setTimeout(runNext, 600);
+}
+
+function updateStepFeedback() {
+  const lastSteps = stepLog.slice(-3).join('<br>');
+  const queueLabel = alg==='bfs' ? queue.map(i=>NODES[i].label).join(',') :
+    queue.sort((a,b)=>a.d-b.d).slice(0,5).map(q=>`${NODES[q.node].label}(${q.d})`).join(',');
+  document.getElementById('fb').innerHTML =
+    `<strong>队列</strong>：[${queueLabel||'空'}]<br>${lastSteps}`;
+}
+
+window.addEventListener('resize', () => { setup(); draw(); });
+setup(); reset();
+</script>
+</body>
+</html>

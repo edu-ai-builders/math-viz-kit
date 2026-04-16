@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>马尔可夫链状态转移模拟器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="概率论">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="模拟">
+  <meta name="desc" content="状态转移图和概率矩阵联动，动画演示马尔可夫链的状态转移过程和稳态分布收敛">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:720px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:720px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .preset-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .preset-btn{padding:6px 14px;border:2px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--surface);}
+    .preset-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .layout{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .right-panel{display:flex;flex-direction:column;gap:8px;}
+    .matrix-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;}
+    .matrix-title{font-size:11px;font-weight:700;color:var(--ink2);margin-bottom:6px;}
+    .matrix-grid{display:grid;gap:3px;font-family:'JetBrains Mono',monospace;font-size:12px;}
+    .matrix-cell{background:var(--bg);padding:4px 6px;border-radius:4px;text-align:center;}
+    .matrix-cell.diag{background:var(--blue-light);color:var(--blue);}
+    .btn-row{display:flex;gap:6px;}
+    .btn{padding:7px 14px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;font-family:'Noto Sans SC',sans-serif;font-weight:700;}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-secondary{background:var(--surface);border:2px solid var(--border);color:var(--ink2);}
+    .dist-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;}
+    canvas.small{border-radius:var(--radius-sm);height:120px;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+    @media(max-width:560px){.layout{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 概率论 · 认知动作：模拟</div>
+  <h1>马尔可夫链状态转移模拟器</h1>
+  <p class="sub">动画演示状态转移过程，观察概率分布收敛到稳态</p>
+</header>
+<main>
+  <div class="preset-row">
+    <button class="preset-btn active" onclick="loadPreset('weather',this)">天气模型</button>
+    <button class="preset-btn" onclick="loadPreset('random',this)">随机游走</button>
+    <button class="preset-btn" onclick="loadPreset('absorb',this)">吸收状态</button>
+  </div>
+  <div class="layout">
+    <canvas id="cvsGraph"></canvas>
+    <div class="right-panel">
+      <div class="matrix-box">
+        <div class="matrix-title">转移矩阵 P</div>
+        <div class="matrix-grid" id="matrixGrid"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="stepForward()">步进一步</button>
+        <button class="btn btn-primary" onclick="autoStep()">自动运行</button>
+        <button class="btn btn-secondary" onclick="resetChain()">重置</button>
+      </div>
+      <div class="dist-bar">
+        <div class="matrix-title">当前概率分布（第<span id="stepCount">0</span>步）</div>
+        <canvas id="cvsBar" class="small"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 马尔可夫链需要"时间演化"才能理解
+// PEDAGOGY V3 分步揭示: 每次点击执行一步转移，观察分布变化
+// PEDAGOGY V8 概念反馈: 说明稳态分布的意义
+
+const PRESETS={
+  weather:{
+    states:['晴','阴','雨'],
+    P:[[0.7,0.2,0.1],[0.3,0.5,0.2],[0.2,0.3,0.5]],
+    init:[1,0,0],
+    colors:['#2a5c8f','#0f6e56','#854f0b'],
+    desc:'天气转移链：从晴天出发，观察天气分布逐渐收敛到稳态（晴≈49%，阴≈31%，雨≈20%）'
+  },
+  random:{
+    states:['S₁','S₂','S₃','S₄'],
+    P:[[0.5,0.5,0,0],[0.25,0.5,0.25,0],[0,0.25,0.5,0.25],[0,0,0.5,0.5]],
+    init:[1,0,0,0],
+    colors:['#2a5c8f','#0f6e56','#854f0b','#b84040'],
+    desc:'随机游走：对称随机游走，稳态分布均匀。观察概率如何从S₁扩散到所有状态。'
+  },
+  absorb:{
+    states:['工作','休假','退休'],
+    P:[[0.8,0.15,0.05],[0.3,0.6,0.1],[0,0,1]],
+    init:[1,0,0],
+    colors:['#2a5c8f','#0f6e56','#dc2626'],
+    desc:'"退休"是吸收态（P(退休→退休)=1），链最终会以概率1到达退休状态。'
+  }
+};
+
+const cvsG=document.getElementById('cvsGraph');
+const ctxG=cvsG.getContext('2d');
+const cvsB=document.getElementById('cvsBar');
+const ctxB=cvsB.getContext('2d');
+const HG=220, HB=100;
+let preset='weather';
+let states,P,dist,step,autoTimer,curState;
+
+function loadPreset(k,btn){
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  preset=k;
+  resetChain();
+}
+
+function resetChain(){
+  clearInterval(autoTimer);autoTimer=null;
+  const pr=PRESETS[preset];
+  states=[...pr.states];
+  P=pr.P.map(r=>[...r]);
+  dist=[...pr.init];
+  step=0;curState=0;
+  document.getElementById('stepCount').textContent=0;
+  buildMatrix();
+  drawGraph();drawBar();
+  updateFb();
+}
+
+function buildMatrix(){
+  const pr=PRESETS[preset];
+  const n=states.length;
+  const g=document.getElementById('matrixGrid');
+  g.style.gridTemplateColumns=`repeat(${n+1},1fr)`;
+  let html=`<div class="matrix-cell" style="background:transparent"></div>`;
+  states.forEach(s=>html+=`<div class="matrix-cell" style="color:var(--ink2);font-size:10px">${s}</div>`);
+  P.forEach((row,i)=>{
+    html+=`<div class="matrix-cell" style="color:var(--ink2);font-size:10px">${states[i]}</div>`;
+    row.forEach((v,j)=>html+=`<div class="matrix-cell ${i===j?'diag':''}">${v.toFixed(2)}</div>`);
+  });
+  g.innerHTML=html;
+}
+
+function stepForward(){
+  const n=states.length;
+  const newDist=new Array(n).fill(0);
+  for(let j=0;j<n;j++) for(let i=0;i<n;i++) newDist[j]+=dist[i]*P[i][j];
+  dist=newDist;
+  step++;
+  document.getElementById('stepCount').textContent=step;
+  // Simulate actual state
+  const r=Math.random();let cumul=0;
+  for(let j=0;j<n;j++){cumul+=P[curState][j];if(r<cumul){curState=j;break;}}
+  drawGraph();drawBar();updateFb();
+}
+
+function autoStep(){
+  if(autoTimer) return;
+  autoTimer=setInterval(()=>{
+    if(step>=50){clearInterval(autoTimer);autoTimer=null;return;}
+    stepForward();
+  },400);
+}
+
+function setupCanvases(){
+  const dpr=window.devicePixelRatio||1;
+  function sz(c,H){const r=c.getBoundingClientRect();c.width=r.width*dpr;c.height=H*dpr;const ctx2d=c.getContext('2d');ctx2d.scale(dpr,dpr);c.style.height=H+'px';}
+  sz(cvsG,HG);sz(cvsB,HB);
+}
+
+function drawGraph(){
+  const r=cvsG.getBoundingClientRect();
+  const W=r.width;
+  ctxG.clearRect(0,0,W,HG);
+  const pr=PRESETS[preset];
+  const n=states.length;
+  const cx=W/2,cy=HG/2;
+  const R=Math.min(W,HG)*0.33;
+
+  // State circles
+  const pos=states.map((_,i)=>[cx+R*Math.cos(2*Math.PI*i/n-Math.PI/2),cy+R*Math.sin(2*Math.PI*i/n-Math.PI/2)]);
+
+  // Draw edges
+  P.forEach((row,i)=>{
+    row.forEach((v,j)=>{
+      if(v<0.01) return;
+      const [x1,y1]=pos[i],[x2,y2]=pos[j];
+      if(i===j){
+        // Self loop
+        ctxG.strokeStyle=pr.colors[i]+'80';ctxG.lineWidth=1+v*3;
+        ctxG.beginPath();ctxG.arc(x1+18,y1-18,12,0,Math.PI*1.8);ctxG.stroke();
+      } else {
+        const dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy);
+        const ox=-dy/len*10,oy=dx/len*10;
+        ctxG.strokeStyle=pr.colors[i]+(Math.round(80+v*120).toString(16));ctxG.lineWidth=1+v*2;
+        ctxG.beginPath();ctxG.moveTo(x1+dx/len*18+ox,y1+dy/len*18+oy);ctxG.lineTo(x2-dx/len*20+ox,y2-dy/len*20+oy);ctxG.stroke();
+        // Arrowhead
+        const ax=x2-dx/len*20+ox,ay=y2-dy/len*20+oy;
+        const ang=Math.atan2(dy,dx);const hs=7;
+        ctxG.fillStyle=pr.colors[i];ctxG.beginPath();
+        ctxG.moveTo(ax,ay);ctxG.lineTo(ax-hs*Math.cos(ang-0.4),ay-hs*Math.sin(ang-0.4));
+        ctxG.lineTo(ax-hs*Math.cos(ang+0.4),ay-hs*Math.sin(ang+0.4));ctxG.closePath();ctxG.fill();
+        // Label
+        ctxG.fillStyle='#6b6860';ctxG.font=`9px 'JetBrains Mono',monospace`;
+        ctxG.textAlign='center';ctxG.textBaseline='middle';
+        ctxG.fillText(v.toFixed(2),(x1+x2)/2+ox*1.5,(y1+y2)/2+oy*1.5);
+      }
+    });
+  });
+
+  // State nodes
+  pos.forEach(([x,y],i)=>{
+    const isCur=i===curState;
+    ctxG.fillStyle=pr.colors[i];
+    ctxG.beginPath();ctxG.arc(x,y,isCur?20:16,0,Math.PI*2);ctxG.fill();
+    if(isCur){ctxG.strokeStyle='#1a1814';ctxG.lineWidth=2.5;ctxG.stroke();}
+    ctxG.fillStyle='#fff';ctxG.font=`bold 12px 'Noto Sans SC',sans-serif`;
+    ctxG.textAlign='center';ctxG.textBaseline='middle';
+    ctxG.fillText(states[i],x,y);
+    // Probability label
+    ctxG.fillStyle=pr.colors[i];ctxG.font=`10px 'JetBrains Mono',monospace`;
+    ctxG.textAlign='center';ctxG.textBaseline='top';
+    ctxG.fillText((dist[i]*100).toFixed(1)+'%',x,y+(isCur?22:18));
+  });
+}
+
+function drawBar(){
+  const r=cvsB.getBoundingClientRect();
+  const W=r.width;
+  ctxB.clearRect(0,0,W,HB);
+  const pr=PRESETS[preset];
+  const n=states.length;
+  const pad={l:10,r:10,t:10,b:25};
+  const cw=W-pad.l-pad.r,ch=HB-pad.t-pad.b;
+  const bw=cw/n*0.7,gap=cw/n*0.3;
+
+  dist.forEach((d,i)=>{
+    const x=pad.l+i*cw/n+gap/2;
+    const bh=d*ch;
+    ctxB.fillStyle=pr.colors[i];
+    ctxB.fillRect(x,pad.t+ch-bh,bw,bh);
+    ctxB.fillStyle='#6b6860';ctxB.font=`10px 'JetBrains Mono',monospace`;
+    ctxB.textAlign='center';ctxB.textBaseline='top';
+    ctxB.fillText(states[i],x+bw/2,pad.t+ch+3);
+    ctxB.fillStyle=pr.colors[i];ctxB.font=`bold 10px 'JetBrains Mono',monospace`;
+    ctxB.textAlign='center';ctxB.textBaseline='bottom';
+    ctxB.fillText((d*100).toFixed(1)+'%',x+bw/2,pad.t+ch-bh-1);
+  });
+}
+
+function updateFb(){
+  const pr=PRESETS[preset];
+  // Compute steady state (power iteration result at large n)
+  document.getElementById('fb').innerHTML=
+    `<strong>马尔可夫链</strong>：每步转移只依赖当前状态，与历史无关（马尔可夫性质）。<br>
+    ${pr.desc}<br>
+    <strong>稳态分布 π</strong>：满足 π = πP，即 π 是转移矩阵的左特征向量（特征值=1）。<br>
+    当前第${step}步，分布${step>20?'已接近':'正在收敛至'}稳态。`;
+}
+
+window.addEventListener('resize',()=>{setupCanvases();drawGraph();drawBar();});
+setupCanvases();resetChain();
+</script>
+</body>
+</html>

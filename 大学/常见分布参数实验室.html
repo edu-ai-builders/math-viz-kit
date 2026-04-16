@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>常见分布参数实验室 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="概率统计">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="比较">
+  <meta name="desc" content="正态/泊松/二项/指数四种分布，调整参数实时观察PMF/PDF形态和统计特征">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .mode-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .mode-btn{flex:1;min-width:100px;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 概率统计 · 认知动作：比较</div>
+  <h1>常见分布参数实验室</h1>
+  <p class="sub">调整参数——看正态/泊松/二项/指数分布的形态如何随参数改变</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setDist(0,this)">正态 N(μ,σ²)</button>
+    <button class="mode-btn" onclick="setDist(1,this)">泊松 P(λ)</button>
+    <button class="mode-btn" onclick="setDist(2,this)">二项 B(n,p)</button>
+    <button class="mode-btn" onclick="setDist(3,this)">指数 Exp(λ)</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">期望 E[X]</div><div class="stat-val" id="sEx" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">方差 Var[X]</div><div class="stat-val" id="sVar" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">参数1</div><div class="stat-val" id="sP1" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">参数2</div><div class="stat-val" id="sP2" style="color:var(--ink)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl" id="sl1Lbl">参数1（μ）</div>
+      <div class="sl-val" id="sl1Val">0.0</div>
+      <input type="range" id="sl1" min="-5" max="5" step="0.5" value="0">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl" id="sl2Lbl">参数2（σ）</div>
+      <div class="sl-val" id="sl2Val">1.0</div>
+      <input type="range" id="sl2" min="0.2" max="3" step="0.2" value="1">
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 参数对分布形态的影响只有实时联动才能感受
+// PEDAGOGY V2 表征桥接: 图形 ↔ 期望/方差 ↔ 参数
+// PEDAGOGY V7 单一认知动作: 比较（不同参数下同种分布的差异）
+// PEDAGOGY V8 概念反馈: 揭示各分布的适用场景和参数意义
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=300;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+let distIdx=0;
+
+const DISTS=[
+  {
+    name:'正态 N(μ,σ²)',
+    type:'continuous',
+    p1:{name:'均值 μ',min:-5,max:5,step:0.5,def:0},
+    p2:{name:'标准差 σ',min:0.2,max:3,step:0.2,def:1},
+    pdf:(x,p1,p2)=>Math.exp(-0.5*((x-p1)/p2)**2)/(p2*Math.sqrt(2*Math.PI)),
+    xRange:(p1,p2)=>[p1-4*p2,p1+4*p2],
+    Ex:(p1,p2)=>p1,Var:(p1,p2)=>p2*p2,
+    desc:(p1,p2)=>`均值μ控制中心位置，σ控制胖瘦。σ越大曲线越平缓，但面积恒为1。经典"钟形曲线"，自然界中极为普遍（中心极限定理）。`
+  },
+  {
+    name:'泊松 P(λ)',
+    type:'discrete',
+    p1:{name:'速率 λ（均值）',min:0.5,max:10,step:0.5,def:3},
+    p2:{name:'（不使用）',min:0,max:1,step:1,def:0},
+    pmf:(k,lam)=>{
+      let logp=-lam;for(let i=1;i<=k;i++)logp+=Math.log(lam)-Math.log(i);
+      return Math.exp(logp);
+    },
+    xRange:(p1)=>[0,Math.max(20,Math.round(p1*3))],
+    Ex:(p1)=>p1,Var:(p1)=>p1,
+    desc:(p1,p2)=>`P(λ=${p1.toFixed(1)})：在固定时间段内，平均发生λ次随机事件的概率分布。λ既是均值也是方差。适合泊松过程（电话到达、放射性衰变等）。`
+  },
+  {
+    name:'二项 B(n,p)',
+    type:'discrete',
+    p1:{name:'试验次数 n',min:1,max:30,step:1,def:10},
+    p2:{name:'成功概率 p',min:0.05,max:0.95,step:0.05,def:0.4},
+    pmf:(k,n,p)=>{
+      let logp=0;for(let i=0;i<k;i++)logp+=Math.log(n-i)-Math.log(i+1);
+      logp+=k*Math.log(p)+(n-k)*Math.log(1-p);
+      return Math.exp(logp);
+    },
+    xRange:(n)=>[0,n],
+    Ex:(n,p)=>n*p,Var:(n,p)=>n*p*(1-p),
+    desc:(n,p)=>`B(n=${Math.round(n)}, p=${p.toFixed(2)})：n次独立伯努利试验中成功k次的概率。均值np=${(n*p).toFixed(2)}，方差np(1-p)=${(n*p*(1-p)).toFixed(2)}。n大p中时趋近正态（中心极限定理）。`
+  },
+  {
+    name:'指数 Exp(λ)',
+    type:'continuous',
+    p1:{name:'速率参数 λ',min:0.2,max:3,step:0.2,def:1},
+    p2:{name:'（不使用）',min:0,max:1,step:1,def:0},
+    pdf:(x,lam)=>x>=0?lam*Math.exp(-lam*x):0,
+    xRange:(lam)=>[0,6/lam],
+    Ex:(lam)=>1/lam,Var:(lam)=>1/(lam*lam),
+    desc:(lam,p2)=>`Exp(λ=${lam.toFixed(2)})：两次泊松事件间隔时间的分布。均值=1/λ=${(1/lam).toFixed(2)}。<strong>无记忆性</strong>：已等了t时间，再等s时间的概率与刚开始等s时间相同。`
+  },
+];
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setDist(i,btn){
+  distIdx=i;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const d=DISTS[i];
+  document.getElementById('sl1Lbl').textContent=d.p1.name;
+  document.getElementById('sl2Lbl').textContent=d.p2.name;
+  document.getElementById('sl1').min=d.p1.min;document.getElementById('sl1').max=d.p1.max;
+  document.getElementById('sl1').step=d.p1.step;document.getElementById('sl1').value=d.p1.def;
+  document.getElementById('sl2').min=d.p2.min;document.getElementById('sl2').max=d.p2.max;
+  document.getElementById('sl2').step=d.p2.step;document.getElementById('sl2').value=d.p2.def;
+  draw();
+}
+
+function erf(x){
+  const t=1/(1+0.3275911*Math.abs(x));
+  const poly=t*(0.254829592+t*(-0.284496736+t*(1.421413741+t*(-1.453152027+t*1.061405429))));
+  const r=1-poly*Math.exp(-x*x);
+  return x>=0?r:-r;
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const d=DISTS[distIdx];
+  const p1=parseFloat(document.getElementById('sl1').value);
+  const p2=parseFloat(document.getElementById('sl2').value);
+  document.getElementById('sl1Val').textContent=p1.toFixed(2);
+  document.getElementById('sl2Val').textContent=p2.toFixed(2);
+
+  const xr=d.xRange(p1,p2);
+  const margin={left:44,right:20,top:16,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const xToP=x=>margin.left+(x-xr[0])/(xr[1]-xr[0])*plotW;
+  let yMax=0;
+
+  if(d.type==='continuous'){
+    for(let px=0;px<=plotW;px+=2){
+      const x=xr[0]+(px/plotW)*(xr[1]-xr[0]);
+      yMax=Math.max(yMax,d.pdf(x,p1,p2));
+    }
+    yMax*=1.15;
+    const yToP=y=>margin.top+(1-y/yMax)*plotH;
+    // Grid
+    ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+    for(let g=0;g<=5;g++){
+      const y=margin.top+g*plotH/5;
+      ctx.beginPath();ctx.moveTo(margin.left,y);ctx.lineTo(margin.left+plotW,y);ctx.stroke();
+    }
+    // Fill
+    ctx.fillStyle=C.blue+'44';
+    ctx.beginPath();
+    ctx.moveTo(xToP(xr[0]),yToP(0));
+    for(let px=0;px<=plotW;px+=2){
+      const x=xr[0]+(px/plotW)*(xr[1]-xr[0]);
+      ctx.lineTo(xToP(x),yToP(d.pdf(x,p1,p2)));
+    }
+    ctx.lineTo(xToP(xr[1]),yToP(0));
+    ctx.closePath();ctx.fill();
+    // Curve
+    ctx.strokeStyle=C.blue;ctx.lineWidth=2.5;ctx.setLineDash([]);
+    ctx.beginPath();let first=true;
+    for(let px=0;px<=plotW;px+=2){
+      const x=xr[0]+(px/plotW)*(xr[1]-xr[0]);
+      const y=d.pdf(x,p1,p2);
+      first?(ctx.moveTo(xToP(x),yToP(y)),first=false):ctx.lineTo(xToP(x),yToP(y));
+    }
+    ctx.stroke();
+    // Mean line
+    const mu=d.Ex(p1,p2);
+    ctx.strokeStyle=C.amberD;ctx.lineWidth=2;ctx.setLineDash([5,4]);
+    ctx.beginPath();ctx.moveTo(xToP(mu),margin.top);ctx.lineTo(xToP(mu),margin.top+plotH);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.amberD;ctx.font=`bold 11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText(`μ=${mu.toFixed(2)}`,xToP(mu),margin.top+2);
+    // Axis labels
+    ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+    const ticks=5;
+    for(let i=0;i<=ticks;i++){
+      const x=xr[0]+i*(xr[1]-xr[0])/ticks;
+      ctx.fillText(x.toFixed(1),xToP(x),margin.top+plotH+3);
+    }
+  } else {
+    // Discrete PMF bars
+    const n=Math.round(xr[1]);
+    for(let k=0;k<=n;k++) yMax=Math.max(yMax,distIdx===1?d.pmf(k,p1):d.pmf(k,p1,p2));
+    yMax*=1.15;
+    const yToP=y=>margin.top+(1-y/yMax)*plotH;
+    const bw=(plotW/(n+2))*0.7;
+    for(let k=0;k<=n;k++){
+      const pmf=distIdx===1?d.pmf(k,p1):d.pmf(k,p1,p2);
+      const bx=xToP(k)-bw/2;
+      const by=yToP(pmf);
+      ctx.fillStyle=C.blue+'88';
+      ctx.fillRect(bx,by,bw,margin.top+plotH-by);
+      ctx.strokeStyle=C.blue;ctx.lineWidth=1;
+      ctx.strokeRect(bx,by,bw,margin.top+plotH-by);
+      if(bw>16&&pmf>yMax*0.05){
+        ctx.fillStyle=C.blue;ctx.font=`10px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+        ctx.fillText(`${(pmf*100).toFixed(0)}%`,bx+bw/2,by-1);
+      }
+      ctx.fillStyle=C.ink2;ctx.font=`10px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+      if(k%Math.max(1,Math.floor(n/15))===0) ctx.fillText(String(k),xToP(k),margin.top+plotH+3);
+    }
+    // Mean marker
+    const mu=d.Ex(p1,p2);
+    ctx.strokeStyle=C.amberD;ctx.lineWidth=2;ctx.setLineDash([5,4]);
+    ctx.beginPath();ctx.moveTo(xToP(mu),margin.top);ctx.lineTo(xToP(mu),margin.top+plotH);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.amberD;ctx.font=`bold 11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText(`μ=${mu.toFixed(2)}`,xToP(mu),margin.top+2);
+  }
+
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,margin.top+plotH);ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);ctx.stroke();
+
+  // Stats
+  const Ex=d.Ex(p1,p2);
+  const Var=d.Var(p1,p2);
+  document.getElementById('sEx').textContent=Ex.toFixed(3);
+  document.getElementById('sVar').textContent=Var.toFixed(3);
+  document.getElementById('sP1').textContent=p1.toFixed(2);
+  document.getElementById('sP2').textContent=d.p2.name==='（不使用）'?'—':p2.toFixed(2);
+
+  // Title
+  ctx.fillStyle=C.blue;ctx.font=`bold 13px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(d.name,margin.left+4,margin.top+4);
+
+  // PEDAGOGY V8
+  document.getElementById('fb').innerHTML=d.desc(p1,p2)+`<br>期望 E[X] = <strong>${Ex.toFixed(3)}</strong>，方差 Var[X] = <strong>${Var.toFixed(3)}</strong>，标准差 σ = ${Math.sqrt(Var).toFixed(3)}。`;
+}
+
+['sl1','sl2'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

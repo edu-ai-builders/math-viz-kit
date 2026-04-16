@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>抛物线焦点准线实验室 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="圆锥曲线">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="变换">
+  <meta name="desc" content="抛物线上的点到焦点距离等于到准线距离，动态拖拽验证定义，调整p值观察曲线变化">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:17px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:crosshair;}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .mode-row{display:flex;gap:6px;}
+    .mode-btn{flex:1;padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;}
+    .mode-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 圆锥曲线 · 认知动作：变换</div>
+  <h1>抛物线焦点准线实验室</h1>
+  <p class="sub">点 P 在抛物线上——到焦点的距离 = 到准线的距离，永远成立</p>
+</header>
+<main>
+  <div class="mode-row">
+    <button class="mode-btn active" onclick="setDir('right',this)">开口向右 x²=2py</button>
+    <button class="mode-btn" onclick="setDir('up',this)">开口向上 y²=2px</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">参数 p</div><div class="stat-val" id="sP" style="color:var(--blue)">2</div></div>
+    <div class="stat"><div class="stat-lbl">焦距 p/2</div><div class="stat-val" id="sFocal" style="color:var(--teal)">1</div></div>
+    <div class="stat"><div class="stat-lbl">到焦点 PF</div><div class="stat-val" id="sPF" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">到准线 PD</div><div class="stat-val" id="sPD" style="color:var(--amber)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">参数 p（焦距 = p/2）</div>
+      <div class="sl-val" id="pLabel">2.0</div>
+      <input type="range" id="pSl" min="0.5" max="4" step="0.5" value="2">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">点 P 的位置（拖拽画布）</div>
+      <div class="sl-val" id="ptLabel" style="color:var(--teal)">拖拽</div>
+      <input type="range" id="tSl" min="-3" max="3" step="0.1" value="2">
+    </div>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 焦点准线的定义只有动态才能验证
+// PEDAGOGY V3 分步揭示: 先看曲线，再拖点验证距离相等
+// PEDAGOGY V5 操作先于符号: 先看PF=PD，再理解方程
+// PEDAGOGY V6 动作-数学一致: 拖P点，两条距离线实时更新
+// PEDAGOGY V7 单一认知动作: 变换（P沿曲线移动，关系不变）
+// PEDAGOGY V8 概念反馈: 揭示"抛物线=到焦点和准线等距的点的轨迹"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=400;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+let dir='right'; // 'right': y²=2px, 'up': x²=2py
+let pVal=2;
+let tParam=2; // parameter t: P=(p*t²/2, p*t) for right, P=(p*t, p*t²/2) for up
+let dragging=false;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setDir(d,btn){
+  dir=d;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const p=parseFloat(document.getElementById('pSl').value);
+  const t=parseFloat(document.getElementById('tSl').value);
+  pVal=p;tParam=t;
+
+  const RANGE=5;
+  const margin={left:44,right:24,top:20,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const xToP=x=>margin.left+(x+RANGE)/(2*RANGE)*plotW;
+  const yToP=y=>margin.top+(RANGE-y)/(2*RANGE)*plotH;
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  for(let i=-RANGE;i<=RANGE;i++){
+    ctx.beginPath();ctx.moveTo(xToP(i),margin.top);ctx.lineTo(xToP(i),margin.top+plotH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(i));ctx.lineTo(margin.left+plotW,yToP(i));ctx.stroke();
+  }
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(0));ctx.lineTo(margin.left+plotW,yToP(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(0),margin.top);ctx.lineTo(xToP(0),margin.top+plotH);ctx.stroke();
+  ctx.fillStyle=C.ink2;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+  for(let i=-RANGE;i<=RANGE;i+=1){if(i!==0)ctx.fillText(String(i),xToP(i),yToP(0)+3);}
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let i=-RANGE;i<=RANGE;i+=1){if(i!==0)ctx.fillText(String(i),margin.left-3,yToP(i));}
+
+  let Fx,Fy,directrixFn,Px,Py;
+  if(dir==='right'){
+    // y²=2px, focus at (p/2, 0), directrix x=-p/2
+    Fx=p/2; Fy=0;
+    // directrix: x = -p/2
+    const dX=-p/2;
+    ctx.strokeStyle=C.amberD;ctx.lineWidth=2;ctx.setLineDash([8,5]);
+    ctx.beginPath();ctx.moveTo(xToP(dX),margin.top);ctx.lineTo(xToP(dX),margin.top+plotH);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.amberD;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='right';ctx.textBaseline='top';
+    ctx.fillText(`准线 x=${dX.toFixed(1)}`,xToP(dX)-4,margin.top+4);
+    // Parabola: x = y²/(2p)
+    ctx.strokeStyle=C.blue;ctx.lineWidth=2.5;ctx.setLineDash([]);
+    ctx.beginPath();let first=true;
+    for(let py=0;py<=plotH;py+=2){
+      const yv=RANGE-(py/plotH)*(2*RANGE);
+      const xv=yv*yv/(2*p);
+      if(xv>RANGE*1.2){first=true;continue;}
+      const cx=xToP(xv),cy=yToP(yv);
+      first?(ctx.moveTo(cx,cy),first=false):ctx.lineTo(cx,cy);
+    }
+    ctx.stroke();
+    // Point P on parabola: y=p*t, x=y²/(2p)=p*t²/2
+    Py=p*t; Px=Py*Py/(2*p);
+    directrixFn=()=>({x:-p/2,y:Py}); // foot of perpendicular from P to directrix
+  } else {
+    // x²=2py, focus at (0, p/2), directrix y=-p/2
+    Fx=0; Fy=p/2;
+    const dY=-p/2;
+    ctx.strokeStyle=C.amberD;ctx.lineWidth=2;ctx.setLineDash([8,5]);
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(dY));ctx.lineTo(margin.left+plotW,yToP(dY));ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.amberD;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+    ctx.fillText(`准线 y=${dY.toFixed(1)}`,margin.left+4,yToP(dY)+4);
+    // Parabola: y = x²/(2p)
+    ctx.strokeStyle=C.blue;ctx.lineWidth=2.5;ctx.setLineDash([]);
+    ctx.beginPath();let first=true;
+    for(let ppx=0;ppx<=plotW;ppx+=2){
+      const xv=(ppx/plotW)*(2*RANGE)-RANGE;
+      const yv=xv*xv/(2*p);
+      if(yv>RANGE*1.2){first=true;continue;}
+      const cx=xToP(xv),cy=yToP(yv);
+      first?(ctx.moveTo(cx,cy),first=false):ctx.lineTo(cx,cy);
+    }
+    ctx.stroke();
+    // Point P: x=p*t, y=x²/(2p)=p*t²/2
+    Px=p*t; Py=Px*Px/(2*p);
+    directrixFn=()=>({x:Px,y:-p/2});
+  }
+
+  // Focus point
+  ctx.fillStyle=C.teal;ctx.beginPath();ctx.arc(xToP(Fx),yToP(Fy),7,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=C.teal;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText('F',xToP(Fx)+8,yToP(Fy)-4);
+
+  // P point on parabola
+  const Pcx=xToP(Px),Pcy=yToP(Py);
+  const Fcx=xToP(Fx),Fcy=yToP(Fy);
+
+  // PF line
+  ctx.strokeStyle=C.blue;ctx.lineWidth=2;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(Pcx,Pcy);ctx.lineTo(Fcx,Fcy);ctx.stroke();
+  const PF=Math.sqrt((Px-Fx)**2+(Py-Fy)**2);
+
+  // PD line to directrix
+  const D=directrixFn();
+  const Dcx=xToP(D.x),Dcy=yToP(D.y);
+  ctx.strokeStyle=C.amberD;ctx.lineWidth=2;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(Pcx,Pcy);ctx.lineTo(Dcx,Dcy);ctx.stroke();
+  const PD=Math.sqrt((Px-D.x)**2+(Py-D.y)**2);
+
+  // Right angle marker at D
+  ctx.strokeStyle=C.amberD;ctx.lineWidth=1.5;
+  const sz=8;
+  if(dir==='right'){
+    // Horizontal line, right angle is vertical
+    ctx.strokeRect(Dcx-sz,Dcy-sz/2,sz,sz);
+  } else {
+    // Vertical line, right angle is horizontal
+    ctx.strokeRect(Dcx-sz/2,Dcy-sz,sz,sz);
+  }
+
+  // P dot
+  ctx.fillStyle=C.blue;ctx.beginPath();ctx.arc(Pcx,Pcy,7,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font=`bold 11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('P',Pcx,Pcy);
+  // D dot
+  ctx.fillStyle=C.amberD;ctx.beginPath();ctx.arc(Dcx,Dcy,5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=C.amberD;ctx.font=`bold 11px 'Noto Sans SC',sans-serif`;ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText('D',Dcx+6,Dcy-4);
+
+  // Distance labels
+  const midPFx=(Pcx+Fcx)/2,midPFy=(Pcy+Fcy)/2;
+  ctx.fillStyle=C.blue;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText(`PF=${PF.toFixed(2)}`,midPFx,midPFy-4);
+  const midPDx=(Pcx+Dcx)/2,midPDy=(Pcy+Dcy)/2;
+  ctx.fillStyle=C.amberD;ctx.textBaseline='bottom';
+  ctx.fillText(`PD=${PD.toFixed(2)}`,midPDx,midPDy-4);
+
+  // Equation
+  ctx.fillStyle=C.blue;ctx.font=`bold 13px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  const eq=dir==='right'?`y²=${2*p}x  焦点(${p/2},0)  准线x=${-p/2}`:
+    `x²=${2*p}y  焦点(0,${p/2})  准线y=${-p/2}`;
+  ctx.fillText(eq,margin.left+4,margin.top+4);
+
+  // Update stats
+  document.getElementById('sP').textContent=p.toFixed(1);
+  document.getElementById('sFocal').textContent=(p/2).toFixed(1);
+  document.getElementById('sPF').textContent=PF.toFixed(3);
+  document.getElementById('sPD').textContent=PD.toFixed(3);
+  document.getElementById('pLabel').textContent=p.toFixed(1);
+  document.getElementById('ptLabel').textContent=`t=${t.toFixed(1)}`;
+
+  // PEDAGOGY V8
+  const equal=Math.abs(PF-PD)<0.02;
+  document.getElementById('fb').innerHTML=
+    `PF = <strong>${PF.toFixed(3)}</strong>，PD = <strong>${PD.toFixed(3)}</strong>，两者${equal?'<span style="color:var(--teal)">相等 ✓</span>':'近似相等'}。<br>` +
+    `<strong>抛物线的焦点定义：</strong>平面上到定点（焦点F）距离等于到定直线（准线）距离的点的轨迹。<br>` +
+    `参数 p = ${p.toFixed(1)}，焦点在坐标轴上距顶点 <strong>${(p/2).toFixed(1)}</strong> 处，准线在距顶点 ${(p/2).toFixed(1)} 处（对侧）。<br>` +
+    `拖动滑杆改变 t（P点位置），验证无论在哪里 PF = PD 恒成立。`;
+}
+
+document.getElementById('pSl').addEventListener('input',draw);
+document.getElementById('tSl').addEventListener('input',draw);
+
+// Canvas click to set t
+cvs.addEventListener('pointerdown',e=>{
+  const rect=cvs.getBoundingClientRect();
+  const cx=e.clientX-rect.left;
+  const cy=e.clientY-rect.top;
+  const p=parseFloat(document.getElementById('pSl').value);
+  const RANGE=5;
+  const margin={left:44,right:24,top:20,bottom:36};
+  const W=rect.width;
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const xv=(cx-margin.left)/plotW*(2*RANGE)-RANGE;
+  const yv=RANGE-(cy-margin.top)/plotH*(2*RANGE);
+  let t;
+  if(dir==='right'){t=yv/p;}
+  else{t=xv/p;}
+  t=Math.max(-3,Math.min(3,t));
+  document.getElementById('tSl').value=t;
+  draw();
+});
+
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

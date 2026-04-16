@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>递推数列动画器 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="数列">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="递推数列a(n+1)=f(a(n))的蜘蛛网图，直观观察数列收敛/发散/振荡">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center;}
+    .stat-lbl{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:15px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .fn-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .fn-btn{padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:11px;font-family:'JetBrains Mono',monospace;cursor:pointer;background:var(--surface);transition:all .2s;text-align:center;}
+    .fn-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-lbl{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 数列 · 认知动作：累积</div>
+  <h1>递推数列动画器</h1>
+  <p class="sub">蜘蛛网图：a(n+1)=f(a(n)) 的迭代轨迹——一眼看出收敛/发散/周期振荡</p>
+</header>
+<main>
+  <div class="fn-row">
+    <button class="fn-btn active" onclick="setFn(0,this)">a(n+1)=r·a(n)</button>
+    <button class="fn-btn" onclick="setFn(1,this)">a(n+1)=√(a(n)+2)</button>
+    <button class="fn-btn" onclick="setFn(2,this)">a(n+1)=1+1/a(n)</button>
+    <button class="fn-btn" onclick="setFn(3,this)">Logistic: r·a(1-a)</button>
+    <button class="fn-btn" onclick="setFn(4,this)">a(n+1)=a(n)²−c</button>
+    <button class="fn-btn" onclick="setFn(5,this)">a(n+1)=cos(a(n))</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-lbl">初始值 a₁</div><div class="stat-val" id="sA1" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-lbl">第 n 项</div><div class="stat-val" id="sAn" style="color:var(--teal)">—</div></div>
+    <div class="stat"><div class="stat-lbl">迭代步数</div><div class="stat-val" id="sN" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-lbl">行为</div><div class="stat-val" id="sBehav" style="font-size:12px;color:var(--ink)">—</div></div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-lbl">初始值 a₁</div>
+      <div class="sl-val" id="a1Label">0.5</div>
+      <input type="range" id="a1Sl" min="-2" max="3" step="0.1" value="0.5">
+    </div>
+    <div class="sl-row">
+      <div class="sl-lbl">参数 r/c</div>
+      <div class="sl-val" id="rLabel" style="color:var(--amber)">0.8</div>
+      <input type="range" id="rSl" min="-3" max="4" step="0.1" value="0.8" style="accent-color:var(--amber)">
+    </div>
+  </div>
+  <div class="sl-row" style="padding:0">
+    <div style="font-size:13px;color:var(--ink2)">迭代步数</div>
+    <div style="font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue)" id="stepV">20</div>
+    <input type="range" id="stepSl" min="1" max="50" step="1" value="20" style="accent-color:var(--blue);cursor:pointer;width:100%">
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V1 动态跃迁: 蜘蛛网图的路径只有动态绘制才能理解递推过程
+// PEDAGOGY V3 分步揭示: 从少步开始，增加步数看行为趋势
+// PEDAGOGY V5 操作先于符号: 先看路径，再理解不动点和稳定性
+// PEDAGOGY V6 动作-数学一致: 滑杆=初始值位置
+// PEDAGOGY V7 单一认知动作: 累积（每步从前一项推下一项）
+// PEDAGOGY V8 概念反馈: 揭示不动点、收敛与发散的条件
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=380;
+const C={
+  blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',
+  amber:'#854f0b',amberD:'#c47a0e',amberL:'#faeeda',
+  ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',surf:'#fff'
+};
+
+const FNS=[
+  {label:'r·aₙ',        f:(a,r)=>r*a,      fp:(a,r)=>r,   xr:[-2,3]},
+  {label:'√(aₙ+2)',     f:(a,r)=>Math.sqrt(Math.max(0,a+2)), fp:(a,r)=>1/(2*Math.sqrt(Math.max(0.01,a+2))), xr:[-1,4]},
+  {label:'1+1/aₙ',      f:(a,r)=>a>0.01?1+1/a:1+1/0.01, fp:(a,r)=>-1/(a*a), xr:[0.1,3]},
+  {label:'r·aₙ(1−aₙ)', f:(a,r)=>r*a*(1-a), fp:(a,r)=>r*(1-2*a), xr:[-0.2,1.2]},
+  {label:'aₙ²−c',       f:(a,r)=>a*a-r,    fp:(a,r)=>2*a, xr:[-2.5,2.5]},
+  {label:'cos(aₙ)',      f:(a,r)=>Math.cos(a), fp:(a,r)=>-Math.sin(a), xr:[-2,3]},
+];
+
+let fnIdx=0;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function setFn(i,btn){
+  fnIdx=i;
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  draw();
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width;
+  ctx.clearRect(0,0,W,H);
+  const a1=parseFloat(document.getElementById('a1Sl').value);
+  const r=parseFloat(document.getElementById('rSl').value);
+  const steps=parseInt(document.getElementById('stepSl').value);
+  const fn=FNS[fnIdx];
+  const f=a=>fn.f(a,r);
+  const xr=fn.xr;
+
+  const margin={left:44,right:20,top:16,bottom:36};
+  const plotW=W-margin.left-margin.right;
+  const plotH=H-margin.top-margin.bottom;
+  const xToP=x=>margin.left+(x-xr[0])/(xr[1]-xr[0])*plotW;
+  // y range same as x range for square plot
+  const yToP=y=>margin.top+(xr[1]-y)/(xr[1]-xr[0])*plotH;
+
+  // Grid
+  ctx.strokeStyle=C.border;ctx.lineWidth=0.5;
+  const ticks=5;
+  for(let i=0;i<=ticks;i++){
+    const v=xr[0]+i*(xr[1]-xr[0])/ticks;
+    ctx.beginPath();ctx.moveTo(xToP(v),margin.top);ctx.lineTo(xToP(v),margin.top+plotH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(margin.left,yToP(v));ctx.lineTo(margin.left+plotW,yToP(v));ctx.stroke();
+    ctx.fillStyle=C.ink2;ctx.font=`10px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(v.toFixed(1),xToP(v),margin.top+plotH+3);
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(v.toFixed(1),margin.left-3,yToP(v));
+  }
+  // Axes
+  ctx.strokeStyle=C.ink2;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(margin.left,yToP(0));ctx.lineTo(margin.left+plotW,yToP(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(xToP(0),margin.top);ctx.lineTo(xToP(0),margin.top+plotH);ctx.stroke();
+
+  // y=x line
+  ctx.strokeStyle=C.ink3;ctx.lineWidth=1.5;ctx.setLineDash([5,4]);
+  ctx.beginPath();ctx.moveTo(xToP(xr[0]),yToP(xr[0]));ctx.lineTo(xToP(xr[1]),yToP(xr[1]));ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.ink3;ctx.font=`11px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText('y=x',xToP(xr[1]*0.9),yToP(xr[1]*0.9));
+
+  // Draw f(x) curve
+  ctx.strokeStyle=C.blue;ctx.lineWidth=2.5;ctx.setLineDash([]);
+  ctx.beginPath();let first=true;
+  for(let px=0;px<=plotW;px+=2){
+    const x=xr[0]+(px/plotW)*(xr[1]-xr[0]);
+    let y;try{y=f(x);}catch(e){first=true;continue;}
+    if(!isFinite(y)||y<xr[0]*2||y>xr[1]*2){first=true;continue;}
+    const ycl=Math.max(xr[0],Math.min(xr[1]*1.5,y));
+    first?(ctx.moveTo(xToP(x),yToP(ycl)),first=false):ctx.lineTo(xToP(x),yToP(ycl));
+  }
+  ctx.stroke();
+  ctx.fillStyle=C.blue;ctx.font=`bold 12px 'JetBrains Mono',monospace`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(`f(x)=${fn.label}`,margin.left+4,margin.top+4);
+  if(fnIdx<3) ctx.fillText(`r=${r.toFixed(1)}`,margin.left+4,margin.top+20);
+  else if(fnIdx===3) ctx.fillText(`r=${r.toFixed(1)}`,margin.left+4,margin.top+20);
+  else if(fnIdx===4) ctx.fillText(`c=${r.toFixed(1)}`,margin.left+4,margin.top+20);
+
+  // Spider web / cobweb diagram
+  const seq=[a1];
+  for(let i=0;i<steps;i++){
+    const last=seq[seq.length-1];
+    let next;try{next=f(last);}catch(e){break;}
+    if(!isFinite(next)||Math.abs(next)>100) break;
+    seq.push(next);
+  }
+
+  // Draw cobweb
+  ctx.strokeStyle=C.amberD;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(xToP(a1),yToP(0)); // start on x-axis
+  for(let i=0;i<seq.length-1;i++){
+    const an=seq[i];
+    const an1=seq[i+1];
+    if(!isFinite(an)||!isFinite(an1)) break;
+    const alpha=Math.max(0.2,1-i/(seq.length-1));
+    ctx.globalAlpha=alpha;
+    // Vertical: go to (an, f(an))
+    ctx.lineTo(xToP(an),yToP(an1));
+    // Horizontal: go to (an1, an1)
+    ctx.lineTo(xToP(an1),yToP(an1));
+  }
+  ctx.globalAlpha=1;
+  ctx.stroke();
+
+  // Start point
+  ctx.fillStyle=C.amberD;ctx.beginPath();ctx.arc(xToP(a1),yToP(0),6,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=C.amberD;ctx.font=`bold 11px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText(`a₁=${a1.toFixed(2)}`,xToP(a1),yToP(0)-8);
+
+  // End point
+  if(seq.length>1){
+    const last=seq[seq.length-1];
+    if(isFinite(last)&&last>=xr[0]&&last<=xr[1]){
+      ctx.fillStyle=C.teal;ctx.beginPath();ctx.arc(xToP(last),yToP(last),5,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  // Fixed points (where f(x)=x)
+  for(let px=0;px<plotW;px+=2){
+    const x1=xr[0]+px/plotW*(xr[1]-xr[0]);
+    const x2=xr[0]+(px+2)/plotW*(xr[1]-xr[0]);
+    let f1,f2;try{f1=f(x1)-x1;f2=f(x2)-x2;}catch(e){continue;}
+    if(isFinite(f1)&&isFinite(f2)&&f1*f2<0){
+      const xfp=(x1+x2)/2;
+      ctx.fillStyle=C.teal+'cc';ctx.beginPath();ctx.arc(xToP(xfp),yToP(xfp),5,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle=C.teal;ctx.lineWidth=1.5;ctx.setLineDash([3,2]);
+      ctx.beginPath();ctx.moveTo(xToP(xfp),margin.top);ctx.lineTo(xToP(xfp),yToP(xfp));ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle=C.teal;ctx.font=`10px 'JetBrains Mono',monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText(`不动点≈${xfp.toFixed(2)}`,xToP(xfp),margin.top+2);
+    }
+  }
+
+  // Update stats
+  const an=seq[seq.length-1];
+  const behavior=()=>{
+    if(seq.length<3) return '迭代中';
+    const d=Math.abs(seq[seq.length-1]-seq[seq.length-2]);
+    if(d<0.001) return '收敛 ✓';
+    if(d>100) return '发散 ✗';
+    const d2=Math.abs(seq[seq.length-2]-seq[seq.length-3]);
+    if(Math.abs(d-d2)<d*0.01) return '周期振荡';
+    return d<d2?'收敛中':'发散中';
+  };
+  document.getElementById('sA1').textContent=a1.toFixed(3);
+  document.getElementById('sAn').textContent=isFinite(an)?an.toFixed(4):'发散';
+  document.getElementById('sN').textContent=String(seq.length-1);
+  document.getElementById('sBehav').textContent=behavior();
+  document.getElementById('a1Label').textContent=a1.toFixed(2);
+  document.getElementById('rLabel').textContent=r.toFixed(2);
+  document.getElementById('stepV').textContent=String(steps);
+
+  // PEDAGOGY V8
+  const beh=behavior();
+  document.getElementById('fb').innerHTML=
+    `递推 a(n+1)=f(a(n))，a₁=${a1.toFixed(2)}，迭代 ${seq.length-1} 步后 aₙ ≈ ${isFinite(an)?an.toFixed(4):'∞'}（${beh}）。<br>` +
+    `<strong>蜘蛛网图：</strong>从 (a₁,0) 出发，垂直到曲线→水平到y=x→再垂直……每步揭示一次迭代。<br>` +
+    `<strong>不动点</strong>（青色点）处 f(a*)=a*，是数列可能收敛的目标。若 |f'(a*)|<1 则稳定，>1 则不稳定。<br>` +
+    `${fnIdx===3&&r>3?`r=${r.toFixed(1)}>3 时 Logistic 映射出现混沌，这是著名的蝴蝶效应！`:
+    fnIdx===3&&r>1?`r=${r.toFixed(1)} 时 Logistic 映射${r<3?'收敛到不动点':'发生周期倍增'}。`:
+    '调整参数 r/c 和初始值，观察收敛/发散/振荡的相变。'}`;
+}
+
+['a1Sl','rSl','stepSl'].forEach(id=>document.getElementById(id).addEventListener('input',draw));
+window.addEventListener('resize',()=>{setup();draw();});
+setup();draw();
+</script>
+</body>
+</html>

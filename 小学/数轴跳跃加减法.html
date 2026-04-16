@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数轴跳跃加减法 · 小学数学可视化</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    /* ── 1. CSS 变量 ─────────────────────────────── */
+    :root {
+      --bg: #f0f7ff;
+      --surface: #ffffff;
+      --surface2: #e8f3fd;
+      --ink: #1a2b3c;
+      --ink2: #4a6a8a;
+      --ink3: #8aaccc;
+      --border: #ccdff0;
+
+      --blue: #2a7bc8;
+      --blue-light: #dceeff;
+      --blue-dark: #1a5a9c;
+
+      --green: #1a8c5a;
+      --green-light: #d4f5e3;
+      --green-dark: #0d6040;
+
+      --amber: #c87820;
+      --amber-light: #fef0d4;
+      --amber-dark: #9a5810;
+
+      --red: #c83020;
+      --red-light: #fde8e4;
+
+      --radius: 14px;
+      --radius-sm: 8px;
+      --shadow: 0 2px 12px rgba(42, 123, 200, 0.10);
+    }
+
+    /* ── 2. 全局重置 ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Noto Sans SC', sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── 3. 头部 ─────────────────────────────────── */
+    header {
+      background: var(--surface);
+      border-bottom: 2px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: var(--shadow);
+    }
+    header .icon { font-size: 28px; }
+    header h1 { font-size: 18px; font-weight: 700; color: var(--blue-dark); }
+    header .tag {
+      font-size: 11px; font-weight: 600;
+      background: var(--blue-light); color: var(--blue-dark);
+      padding: 3px 10px; border-radius: 20px;
+    }
+
+    /* ── 4. 主体布局 ─────────────────────────────── */
+    main {
+      flex: 1;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      width: 100%;
+    }
+
+    /* ── 5. 卡片 ─────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      border: 1.5px solid var(--border);
+    }
+    .card-title {
+      font-size: 13px; font-weight: 600;
+      color: var(--ink2);
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── 6. 数轴画布区 ───────────────────────────── */
+    #canvasWrap {
+      width: 100%;
+      position: relative;
+    }
+    #numberlineCanvas {
+      width: 100%;
+      height: 160px;
+      display: block;
+      border-radius: var(--radius-sm);
+    }
+
+    /* ── 7. 控制区 ───────────────────────────────── */
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .ctrl-group label {
+      display: block;
+      font-size: 12px; font-weight: 600;
+      color: var(--ink2);
+      margin-bottom: 6px;
+    }
+    .number-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .number-input-wrap button {
+      width: 40px; height: 44px;
+      border: none; background: var(--surface2);
+      font-size: 20px; cursor: pointer;
+      color: var(--blue-dark);
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    .number-input-wrap button:hover { background: var(--blue-light); }
+    .number-input-wrap input {
+      flex: 1; height: 44px;
+      border: none; outline: none;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px; font-weight: 600;
+      color: var(--ink);
+      background: transparent;
+      -moz-appearance: textfield;
+    }
+    .number-input-wrap input::-webkit-outer-spin-button,
+    .number-input-wrap input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+    /* 运算符切换 */
+    .op-toggle {
+      display: flex;
+      gap: 8px;
+    }
+    .op-btn {
+      flex: 1; height: 44px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      font-size: 22px; font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: var(--ink2);
+    }
+    .op-btn.active-add { border-color: var(--green); background: var(--green-light); color: var(--green-dark); }
+    .op-btn.active-sub { border-color: var(--red); background: var(--red-light); color: var(--red); }
+
+    /* 执行按钮 */
+    .run-btn {
+      width: 100%; height: 52px;
+      border: none; border-radius: var(--radius);
+      background: var(--blue);
+      color: #fff;
+      font-family: 'Noto Sans SC', sans-serif;
+      font-size: 16px; font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: background 0.15s, transform 0.1s;
+      box-shadow: 0 3px 10px rgba(42, 123, 200, 0.3);
+    }
+    .run-btn:hover { background: var(--blue-dark); }
+    .run-btn:active { transform: scale(0.98); }
+    .run-btn:disabled { background: var(--ink3); cursor: not-allowed; box-shadow: none; }
+
+    /* 重置按钮 */
+    .reset-btn {
+      width: 100%; height: 40px;
+      border: 2px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--ink2);
+      font-family: 'Noto Sans SC', sans-serif;
+      font-size: 13px; font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .reset-btn:hover { border-color: var(--ink3); color: var(--ink); }
+
+    /* ── 8. 等式显示区（PEDAGOGY V3：默认隐藏） ───── */
+    #equationArea {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    #equationArea.visible { opacity: 1; }
+    .equation-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 28px; font-weight: 600;
+      color: var(--blue-dark);
+      text-align: center;
+    }
+    .equation-text .op-plus { color: var(--green-dark); }
+    .equation-text .op-minus { color: var(--red); }
+    .equation-text .result { color: var(--amber-dark); font-size: 32px; }
+    .equation-text .question-mark { color: var(--ink3); }
+
+    /* ── 9. 概念反馈区（PEDAGOGY V8） ────────────── */
+    #feedbackArea {
+      min-height: 52px;
+      background: var(--blue-light);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      font-size: 14px;
+      color: var(--blue-dark);
+      line-height: 1.6;
+      opacity: 0;
+      transition: opacity 0.4s ease 0.2s;
+      border-left: 4px solid var(--blue);
+    }
+    #feedbackArea.visible { opacity: 1; }
+    #feedbackArea.feedback-add { border-color: var(--green); background: var(--green-light); color: var(--green-dark); }
+    #feedbackArea.feedback-sub { border-color: var(--red); background: var(--red-light); color: var(--red); }
+
+    /* ── 10. 历史记录 ────────────────────────────── */
+    #historyList {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    #historyList li {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      padding: 6px 12px;
+      background: var(--surface2);
+      border-radius: var(--radius-sm);
+      color: var(--ink2);
+      display: flex;
+      justify-content: space-between;
+    }
+    #historyList li .hist-result { font-weight: 600; color: var(--blue-dark); }
+
+    /* ── 11. 响应式 ──────────────────────────────── */
+    @media (max-width: 480px) {
+      main { padding: 16px 12px; gap: 14px; }
+      .controls { grid-template-columns: 1fr; }
+      .equation-text { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="icon">🐸</span>
+  <h1>数轴跳跃加减法</h1>
+  <span class="tag">小学 · 数与运算</span>
+</header>
+
+<main>
+
+  <!-- 数轴画布 -->
+  <div class="card">
+    <div class="card-title">数轴</div>
+    <div id="canvasWrap">
+      <canvas id="numberlineCanvas"></canvas>
+    </div>
+  </div>
+
+  <!-- 等式显示（PEDAGOGY V3：动画前隐藏） -->
+  <div class="card">
+    <div id="equationArea">
+      <div class="equation-text" id="equationText"></div>
+    </div>
+  </div>
+
+  <!-- 控制区 -->
+  <div class="card">
+    <div class="card-title">设置计算</div>
+    <div class="controls">
+      <div class="ctrl-group">
+        <label>起始数字</label>
+        <div class="number-input-wrap">
+          <button onclick="changeVal('start', -1)">−</button>
+          <input type="number" id="startVal" value="5" min="-10" max="20">
+          <button onclick="changeVal('start', 1)">+</button>
+        </div>
+      </div>
+      <div class="ctrl-group">
+        <label>跳跃步数</label>
+        <div class="number-input-wrap">
+          <button onclick="changeVal('steps', -1)">−</button>
+          <input type="number" id="stepsVal" value="3" min="1" max="10">
+          <button onclick="changeVal('steps', 1)">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ctrl-group" style="margin-top:14px">
+      <label>运算符</label>
+      <div class="op-toggle">
+        <button class="op-btn active-add" id="btnAdd" onclick="setOp('add')">＋ 加法</button>
+        <button class="op-btn" id="btnSub" onclick="setOp('sub')">－ 减法</button>
+      </div>
+    </div>
+
+    <div style="margin-top:16px; display:flex; flex-direction:column; gap:8px;">
+      <button class="run-btn" id="runBtn" onclick="runAnimation()">🐸 出发跳跃！</button>
+      <button class="reset-btn" onclick="resetAll()">↺ 重置</button>
+    </div>
+  </div>
+
+  <!-- 概念反馈（PEDAGOGY V8） -->
+  <div class="card">
+    <div class="card-title">你发现了什么？</div>
+    <div id="feedbackArea"></div>
+  </div>
+
+  <!-- 历史记录 -->
+  <div class="card" id="historyCard" style="display:none">
+    <div class="card-title">计算记录</div>
+    <ul id="historyList"></ul>
+  </div>
+
+</main>
+
+<script>
+// ══════════════════════════════════════════════════════
+// 0. 教学法标注
+// ══════════════════════════════════════════════════════
+// 学段：小学（2–4年级）
+// 认知动作：变换（用位置移动表示加减运算）
+// 核心动态关系：起始位置 + 跳跃步数 = 终止位置（位置变化直观反映运算结果）
+//
+// PEDAGOGY V1：加减法是"位置的变化"，静态写算式无法传递"移动"的直觉
+// PEDAGOGY V3：等式和答案在动画完成后才出现，学生先看到"跳"的过程
+// PEDAGOGY V6：加法向右跳，减法向左跳（与数轴正方向一致）
+// PEDAGOGY V7：只做一件事：用数轴表示加减法，不讲乘除或小数
+// PEDAGOGY V8：反馈说"你向右跳了3格"，而不是只显示"✓"
+// ══════════════════════════════════════════════════════
+
+// ── 1. 常量与配置 ──────────────────────────────────
+const MIN_VAL = -10;
+const MAX_VAL = 20;
+const FROG_EMOJI = '🐸';
+const HOP_DURATION = 160;   // 每步动画时长（毫秒）
+const HOP_HEIGHT = 28;       // 每步跳跃弧高（像素）
+
+// ── 2. 状态变量 ────────────────────────────────────
+let currentPos = 5;          // 当前青蛙位置
+let animating = false;
+let op = 'add';              // 'add' | 'sub'
+let history = [];
+
+// Canvas 相关
+const canvas = document.getElementById('numberlineCanvas');
+const ctx = canvas.getContext('2d');
+let DPR = window.devicePixelRatio || 1;
+
+// ── 3. 核心数学函数 ─────────────────────────────────
+function calcResult(start, steps, operation) {
+  return operation === 'add' ? start + steps : start - steps;
+}
+
+// 数值 → Canvas X 坐标
+function valToX(val) {
+  const W = canvas.width / DPR;
+  const PAD = 32;
+  const range = MAX_VAL - MIN_VAL;
+  return PAD + ((val - MIN_VAL) / range) * (W - PAD * 2);
+}
+
+// ── 4. 渲染函数 ────────────────────────────────────
+function initCanvas() {
+  const wrap = document.getElementById('canvasWrap');
+  const W = wrap.clientWidth;
+  const H = 160;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.scale(DPR, DPR);
+}
+
+function drawNumberline(frogX, frogY, hopPath, highlightRange) {
+  const W = canvas.width / DPR;
+  const H = canvas.height / DPR;
+  const AXIS_Y = H * 0.62;
+  ctx.clearRect(0, 0, W, H);
+
+  // 背景渐变
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#f0f7ff');
+  bg.addColorStop(1, '#e0edfa');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // 高亮跳跃区间（PEDAGOGY V4：只高亮核心关系）
+  if (highlightRange) {
+    const x1 = valToX(highlightRange.from);
+    const x2 = valToX(highlightRange.to);
+    const xL = Math.min(x1, x2);
+    const xR = Math.max(x1, x2);
+    ctx.fillStyle = op === 'add' ? 'rgba(26,140,90,0.12)' : 'rgba(200,48,32,0.10)';
+    ctx.fillRect(xL, AXIS_Y - 22, xR - xL, 44);
+  }
+
+  // 数轴主线
+  ctx.strokeStyle = '#2a7bc8';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(valToX(MIN_VAL) - 6, AXIS_Y);
+  ctx.lineTo(valToX(MAX_VAL) + 6, AXIS_Y);
+  ctx.stroke();
+
+  // 箭头
+  ctx.fillStyle = '#2a7bc8';
+  const arrowX = valToX(MAX_VAL) + 6;
+  ctx.beginPath();
+  ctx.moveTo(arrowX + 8, AXIS_Y);
+  ctx.lineTo(arrowX - 2, AXIS_Y - 5);
+  ctx.lineTo(arrowX - 2, AXIS_Y + 5);
+  ctx.closePath();
+  ctx.fill();
+
+  // 刻度和数字
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (let v = MIN_VAL; v <= MAX_VAL; v++) {
+    const x = valToX(v);
+    const isMajor = v % 5 === 0;
+    const tickH = isMajor ? 10 : 5;
+
+    ctx.strokeStyle = isMajor ? '#2a7bc8' : '#8aaccc';
+    ctx.lineWidth = isMajor ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.moveTo(x, AXIS_Y - tickH);
+    ctx.lineTo(x, AXIS_Y + tickH);
+    ctx.stroke();
+
+    if (isMajor || v % 2 === 0) {
+      ctx.fillStyle = v === 0 ? '#1a5a9c' : '#4a6a8a';
+      ctx.font = `${isMajor ? 600 : 400} ${isMajor ? 12 : 10}px 'Noto Sans SC', sans-serif`;
+      ctx.fillText(v, x, AXIS_Y + tickH + 3);
+    }
+  }
+
+  // 跳跃弧线
+  if (hopPath && hopPath.length > 1) {
+    ctx.strokeStyle = op === 'add' ? 'rgba(26,140,90,0.5)' : 'rgba(200,48,32,0.5)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    for (let i = 0; i < hopPath.length - 1; i++) {
+      const x1 = valToX(hopPath[i]);
+      const x2 = valToX(hopPath[i + 1]);
+      const midX = (x1 + x2) / 2;
+      const midY = AXIS_Y - HOP_HEIGHT;
+      ctx.moveTo(x1, AXIS_Y);
+      ctx.quadraticCurveTo(midX, midY, x2, AXIS_Y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // 起始位置标记
+  const startVal = parseInt(document.getElementById('startVal').value);
+  if (!isNaN(startVal)) {
+    const sx = valToX(startVal);
+    ctx.fillStyle = '#8aaccc';
+    ctx.beginPath();
+    ctx.arc(sx, AXIS_Y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 青蛙
+  ctx.font = `${Math.round(26 * DPR) / DPR}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  const fx = frogX !== undefined ? valToX(frogX) : valToX(currentPos);
+  const fy = frogY !== undefined ? frogY : AXIS_Y - 4;
+  ctx.fillText(FROG_EMOJI, fx, fy);
+
+  // 当前位置数字标注
+  ctx.font = `600 13px 'JetBrains Mono', monospace`;
+  ctx.fillStyle = '#1a5a9c';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(frogX !== undefined ? frogX : currentPos, fx, fy - 24);
+}
+
+// ── 5. 交互事件处理 ─────────────────────────────────
+function changeVal(field, delta) {
+  const id = field === 'start' ? 'startVal' : 'stepsVal';
+  const input = document.getElementById(id);
+  let val = parseInt(input.value) + delta;
+  if (field === 'start') val = Math.max(MIN_VAL, Math.min(MAX_VAL - 1, val));
+  if (field === 'steps') val = Math.max(1, Math.min(10, val));
+  input.value = val;
+
+  if (!animating) {
+    currentPos = parseInt(document.getElementById('startVal').value);
+    drawNumberline();
+    hideResultAreas();
+  }
+}
+
+function setOp(newOp) {
+  op = newOp;
+  document.getElementById('btnAdd').className = 'op-btn' + (op === 'add' ? ' active-add' : '');
+  document.getElementById('btnSub').className = 'op-btn' + (op === 'sub' ? ' active-sub' : '');
+  if (!animating) {
+    currentPos = parseInt(document.getElementById('startVal').value);
+    drawNumberline();
+    hideResultAreas();
+  }
+}
+
+function hideResultAreas() {
+  document.getElementById('equationArea').classList.remove('visible');
+  document.getElementById('feedbackArea').classList.remove('visible');
+  document.getElementById('feedbackArea').className = '';
+}
+
+// PEDAGOGY V3：分步揭示——动画完成后再显示等式和反馈
+function runAnimation() {
+  if (animating) return;
+
+  const startVal = parseInt(document.getElementById('startVal').value);
+  const stepsVal = parseInt(document.getElementById('stepsVal').value);
+
+  if (isNaN(startVal) || isNaN(stepsVal)) return;
+
+  const result = calcResult(startVal, stepsVal, op);
+  if (result < MIN_VAL || result > MAX_VAL) {
+    showFeedback(`结果超出数轴范围，请调整数字再试！`, 'neutral');
+    return;
+  }
+
+  animating = true;
+  document.getElementById('runBtn').disabled = true;
+  hideResultAreas();
+
+  // 显示等式（带问号，等待动画揭示答案）
+  showEquation(startVal, stepsVal, op, null);
+
+  // 构建跳跃路径
+  const hopPath = [startVal];
+  for (let i = 1; i <= stepsVal; i++) {
+    hopPath.push(op === 'add' ? startVal + i : startVal - i);
+  }
+
+  const AXIS_Y = (canvas.height / DPR) * 0.62;
+  let step = 0;
+  let frameStart = null;
+
+  function animateHop(ts) {
+    if (!frameStart) frameStart = ts;
+    const elapsed = ts - frameStart;
+    const progress = Math.min(elapsed / HOP_DURATION, 1);
+
+    const fromX = hopPath[step];
+    const toX   = hopPath[step + 1];
+    // 抛物线插值
+    const t = progress;
+    const interpX = fromX + (toX - fromX) * t;
+    const interpY = AXIS_Y - HOP_HEIGHT * 4 * t * (1 - t) - 4;
+
+    drawNumberline(interpX, interpY, hopPath.slice(0, step + 1), { from: startVal, to: toX });
+
+    if (progress < 1) {
+      requestAnimationFrame(animateHop);
+    } else {
+      step++;
+      currentPos = hopPath[step];
+      if (step < stepsVal) {
+        frameStart = null;
+        requestAnimationFrame(animateHop);
+      } else {
+        // 动画结束
+        drawNumberline(currentPos, undefined, hopPath, { from: startVal, to: result });
+        animating = false;
+        document.getElementById('runBtn').disabled = false;
+
+        // PEDAGOGY V3：动画完成后才显示完整等式
+        showEquation(startVal, stepsVal, op, result);
+
+        // PEDAGOGY V8：概念反馈
+        const dir = op === 'add' ? '向右' : '向左';
+        const feedbackClass = op === 'add' ? 'feedback-add' : 'feedback-sub';
+        showFeedback(
+          `你${dir}跳了 ${stepsVal} 格，从 ${startVal} 到达了 ${result}。` +
+          `所以 ${startVal} ${op === 'add' ? '+' : '−'} ${stepsVal} = ${result}。`,
+          feedbackClass
+        );
+
+        // 加入历史
+        addHistory(startVal, stepsVal, op, result);
+      }
+    }
+  }
+
+  requestAnimationFrame(animateHop);
+}
+
+function showEquation(a, b, operation, result) {
+  const eq = document.getElementById('equationText');
+  const opSymbol = operation === 'add' ? '<span class="op-plus">＋</span>' : '<span class="op-minus">－</span>';
+  const resultPart = result !== null
+    ? `<span class="result">${result}</span>`
+    : `<span class="question-mark">？</span>`;
+  eq.innerHTML = `${a} ${opSymbol} ${b} ＝ ${resultPart}`;
+  document.getElementById('equationArea').classList.add('visible');
+}
+
+function showFeedback(text, cls) {
+  const fb = document.getElementById('feedbackArea');
+  fb.textContent = text;
+  fb.className = cls || '';
+  fb.classList.add('visible');
+}
+
+function addHistory(a, b, op, result) {
+  history.unshift({ a, b, op, result });
+  if (history.length > 8) history.pop();
+  renderHistory();
+}
+
+function renderHistory() {
+  const card = document.getElementById('historyCard');
+  const list = document.getElementById('historyList');
+  if (history.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  list.innerHTML = history.map(h =>
+    `<li>
+      <span>${h.a} ${h.op === 'add' ? '＋' : '－'} ${h.b} ＝</span>
+      <span class="hist-result">${h.result}</span>
+    </li>`
+  ).join('');
+}
+
+function resetAll() {
+  if (animating) return;
+  document.getElementById('startVal').value = 5;
+  document.getElementById('stepsVal').value = 3;
+  op = 'add';
+  document.getElementById('btnAdd').className = 'op-btn active-add';
+  document.getElementById('btnSub').className = 'op-btn';
+  currentPos = 5;
+  history = [];
+  renderHistory();
+  hideResultAreas();
+  drawNumberline();
+}
+
+// ── 6. 初始化 ───────────────────────────────────────
+window.addEventListener('load', () => {
+  initCanvas();
+  drawNumberline();
+});
+
+window.addEventListener('resize', () => {
+  initCanvas();
+  drawNumberline();
+});
+
+// 输入框直接修改也更新数轴
+['startVal', 'stepsVal'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    if (!animating) {
+      currentPos = parseInt(document.getElementById('startVal').value);
+      drawNumberline();
+      hideResultAreas();
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>中心极限定理模拟器 · 数学可视化</title>
+  <meta name="grade" content="大学">
+  <meta name="topic" content="概率统计">
+  <meta name="difficulty" content="高">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="重复抽样模拟CLT，任意分布的样本均值趋向正态分布">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;text-align:center;}
+    .stat-label{font-size:11px;color:var(--ink2);}
+    .stat-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    .canvas-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    canvas{width:100%;height:200px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:4px;}
+    .sl-label{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .dist-btns{display:flex;gap:6px;flex-wrap:wrap;}
+    .dist-btn{padding:6px 12px;border:1px solid var(--border);border-radius:20px;font-size:13px;font-family:inherit;cursor:pointer;background:var(--surface);transition:all .2s;color:var(--ink2);}
+    .dist-btn.active,.dist-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .btns{display:flex;gap:8px;}
+    .btn{flex:1;padding:11px;border:none;border-radius:var(--radius);font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;transition:all .2s;}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-primary:hover{background:var(--blue-dark);}
+    .btn-secondary{background:var(--surface);color:var(--blue);border:2px solid var(--blue);}
+    .btn-secondary:hover{background:var(--blue-light);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.canvas-row{grid-template-columns:1fr;}.stats-row{grid-template-columns:1fr 1fr;}.controls{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">大学 · 概率统计 · 认知动作：累积</div>
+  <h1>中心极限定理模拟器</h1>
+  <p class="sub">不管原始分布长什么样，大量样本的均值都趋向正态分布</p>
+</header>
+<main>
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">已抽样次数</div>
+      <div class="stat-val" id="sampleCount" style="color:var(--blue)">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">样本量 n</div>
+      <div class="stat-val" id="nCard" style="color:var(--ink2)">30</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">均值的均值</div>
+      <div class="stat-val" id="meanOfMeans" style="color:var(--teal)">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">均值的标准差</div>
+      <div class="stat-val" id="stdOfMeans" style="color:var(--amber)">—</div>
+    </div>
+  </div>
+  <div class="canvas-row">
+    <div>
+      <div style="font-size:12px;color:var(--ink2);margin-bottom:4px;padding-left:4px;">原始分布（总体）</div>
+      <canvas id="distCvs"></canvas>
+    </div>
+    <div>
+      <div style="font-size:12px;color:var(--ink2);margin-bottom:4px;padding-left:4px;">样本均值分布（越抽越像正态）</div>
+      <canvas id="meanCvs"></canvas>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-label">每次样本量 n</div>
+      <div class="sl-val" id="nLabel">30</div>
+      <input type="range" id="nSl" min="2" max="100" value="30">
+    </div>
+    <div class="sl-row">
+      <div class="sl-label">原始分布形状</div>
+      <div class="dist-btns">
+        <button class="dist-btn active" onclick="setDist('uniform',this)">均匀</button>
+        <button class="dist-btn" onclick="setDist('exp',this)">指数</button>
+        <button class="dist-btn" onclick="setDist('bimodal',this)">双峰</button>
+        <button class="dist-btn" onclick="setDist('skew',this)">偏态</button>
+      </div>
+    </div>
+  </div>
+  <div class="btns">
+    <button class="btn btn-primary" id="sampleBtn" onclick="sample(1)">抽 1 次样本</button>
+    <button class="btn btn-secondary" onclick="sample(100)">快速抽 100 次</button>
+    <button class="btn btn-secondary" onclick="resetAll()">重置</button>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：累积
+// V1 动态跃迁：每次抽样后均值分布逐渐趋向正态，过程积累可见
+// V3 分步揭示：从0次开始，逐步增加样本数量
+// V7 单一认知动作：累积（多次抽样的均值在积累）
+// V8 概念反馈：揭示CLT：n大时，样本均值近似正态 N(μ, σ²/n)
+
+const dCvs=document.getElementById('distCvs'), mCvs=document.getElementById('meanCvs');
+const dCtx=dCvs.getContext('2d'), mCtx=mCvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let distType='uniform', sampleSize=30;
+let sampleMeans=[], animId=null;
+
+// Population distributions
+const DISTS={
+  uniform:{sample:()=>Math.random(),mean:0.5,std:Math.sqrt(1/12),label:'均匀分布 U(0,1)'},
+  exp:{sample:()=>-Math.log(1-Math.random()),mean:1,std:1,label:'指数分布 Exp(1)'},
+  bimodal:{sample:()=>Math.random()<0.5?0.2+Math.random()*0.2:0.6+Math.random()*0.2,mean:0.5,std:0.22,label:'双峰分布'},
+  skew:{sample:()=>{const u=Math.random(),v=Math.random();return Math.min(u,v);},mean:1/3,std:Math.sqrt(1/18),label:'偏态分布'},
+};
+
+function setup(){
+  [dCvs,mCvs].forEach(cvs=>{
+    const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+    cvs.width=r.width*dpr; cvs.height=200*dpr;
+    cvs.getContext('2d').scale(dpr,dpr); cvs.style.height='200px';
+  });
+}
+
+function drawPopulation(){
+  const W=dCvs.getBoundingClientRect().width, H=200;
+  dCtx.clearRect(0,0,W,H);
+  const d=DISTS[distType];
+  // Simulate 5000 draws to show distribution shape
+  const bins=40, counts=new Array(bins).fill(0);
+  const range=[distType==='exp'?0:0, distType==='exp'?5:1];
+  for(let i=0;i<5000;i++){
+    const v=d.sample();
+    const b=Math.floor((v-range[0])/(range[1]-range[0])*bins);
+    if(b>=0&&b<bins)counts[b]++;
+  }
+  const maxC=Math.max(...counts);
+  const margin={l:30,r:10,t:20,b:30};
+  const plotW=W-margin.l-margin.r, plotH=H-margin.t-margin.b;
+  const bw=plotW/bins;
+  counts.forEach((c,i)=>{
+    const bh=c/maxC*plotH;
+    dCtx.fillStyle=C.blue+'88';
+    dCtx.fillRect(margin.l+i*bw,margin.t+plotH-bh,bw-1,bh);
+  });
+  // Axis
+  dCtx.strokeStyle=C.ink2; dCtx.lineWidth=1;
+  dCtx.beginPath();dCtx.moveTo(margin.l,margin.t+plotH);dCtx.lineTo(margin.l+plotW,margin.t+plotH);dCtx.stroke();
+  dCtx.fillStyle=C.ink2;dCtx.font=`11px 'Noto Sans SC',sans-serif`;dCtx.textAlign='center';dCtx.textBaseline='top';
+  dCtx.fillText(d.label,W/2,H-16);
+}
+
+function drawMeans(){
+  const W=mCvs.getBoundingClientRect().width, H=200;
+  mCtx.clearRect(0,0,W,H);
+  if(sampleMeans.length===0){
+    mCtx.fillStyle=C.ink3; mCtx.font=`13px 'Noto Sans SC',sans-serif`; mCtx.textAlign='center'; mCtx.textBaseline='middle';
+    mCtx.fillText('点击"抽样"开始',W/2,H/2); return;
+  }
+  const d=DISTS[distType];
+  // Histogram of means
+  const allMeans=sampleMeans;
+  const theorMean=d.mean, theorStd=d.std/Math.sqrt(sampleSize);
+  const rMin=theorMean-4*theorStd, rMax=theorMean+4*theorStd;
+  const bins=30, counts=new Array(bins).fill(0);
+  allMeans.forEach(m=>{
+    const b=Math.floor((m-rMin)/(rMax-rMin)*bins);
+    if(b>=0&&b<bins)counts[b]++;
+  });
+  const maxC=Math.max(...counts,1);
+  const margin={l:30,r:10,t:20,b:30};
+  const plotW=W-margin.l-margin.r, plotH=H-margin.t-margin.b;
+  const bw=plotW/bins;
+  counts.forEach((c,i)=>{
+    const bh=c/maxC*plotH;
+    mCtx.fillStyle=C.teal+'99';
+    mCtx.fillRect(margin.l+i*bw,margin.t+plotH-bh,bw-1,bh);
+  });
+
+  // Theoretical normal curve
+  if(allMeans.length>20){
+    mCtx.strokeStyle=C.amber; mCtx.lineWidth=2.5;
+    mCtx.beginPath();
+    for(let x=rMin;x<=rMax;x+=(rMax-rMin)/200){
+      const z=(x-theorMean)/theorStd;
+      const dens=Math.exp(-z*z/2)/(Math.sqrt(2*Math.PI)*theorStd);
+      const normH=dens*(rMax-rMin)/bins*allMeans.length;
+      const px=margin.l+(x-rMin)/(rMax-rMin)*plotW;
+      const py=margin.t+plotH-normH/maxC*plotH;
+      x===rMin?mCtx.moveTo(px,py):mCtx.lineTo(px,py);
+    }
+    mCtx.stroke();
+  }
+
+  // Axis
+  mCtx.strokeStyle=C.ink2; mCtx.lineWidth=1;
+  mCtx.beginPath();mCtx.moveTo(margin.l,margin.t+plotH);mCtx.lineTo(margin.l+plotW,margin.t+plotH);mCtx.stroke();
+  const meanX=margin.l+(theorMean-rMin)/(rMax-rMin)*plotW;
+  mCtx.strokeStyle=C.blue+'66'; mCtx.lineWidth=1; mCtx.setLineDash([3,3]);
+  mCtx.beginPath();mCtx.moveTo(meanX,margin.t);mCtx.lineTo(meanX,margin.t+plotH);mCtx.stroke();
+  mCtx.setLineDash([]);
+  mCtx.fillStyle=C.ink2;mCtx.font=`11px 'Noto Sans SC',sans-serif`;mCtx.textAlign='center';mCtx.textBaseline='top';
+  mCtx.fillText(`n=${sampleSize} 次抽样的均值分布 (${allMeans.length}个样本)`,W/2,H-16);
+}
+
+function takeSamples(times){
+  const d=DISTS[distType];
+  for(let t=0;t<times;t++){
+    let sum=0;
+    for(let i=0;i<sampleSize;i++) sum+=d.sample();
+    sampleMeans.push(sum/sampleSize);
+  }
+}
+
+function updateStats(){
+  const n=sampleMeans.length;
+  document.getElementById('sampleCount').textContent=n;
+  document.getElementById('nCard').textContent=sampleSize;
+  if(n>0){
+    const m=sampleMeans.reduce((a,b)=>a+b)/n;
+    const s=Math.sqrt(sampleMeans.reduce((a,v)=>a+(v-m)*(v-m),0)/n);
+    document.getElementById('meanOfMeans').textContent=m.toFixed(4);
+    document.getElementById('stdOfMeans').textContent=s.toFixed(4);
+    // V8 feedback
+    const d=DISTS[distType];
+    const theorStd=d.std/Math.sqrt(sampleSize);
+    const fb=document.getElementById('fb');
+    fb.innerHTML=`已抽取 <strong>${n}</strong> 个样本（每个含 <strong>${sampleSize}</strong> 次观测）。<br>
+    样本均值的均值: <strong>${m.toFixed(4)}</strong>（理论: ${d.mean.toFixed(4)}），标准差: <strong>${s.toFixed(4)}</strong>（理论: ${theorStd.toFixed(4)}）。<br>
+    ${n>200?'👀 看！即使原始分布是"'+d.label+'"，样本均值的分布已经接近橙色<strong>正态曲线</strong>了！这就是中心极限定理。':n>50?'再多抽一些，样本均值分布将趋向正态曲线（橙色）。':'继续抽样，观察均值分布的形状变化。'}`;
+  }
+}
+
+function sample(times){
+  takeSamples(times);
+  drawMeans(); updateStats();
+}
+
+function setDist(type,btn){
+  distType=type;
+  document.querySelectorAll('.dist-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  sampleMeans=[];
+  setup(); drawPopulation(); drawMeans(); updateStats();
+}
+
+function resetAll(){
+  sampleMeans=[];
+  document.getElementById('meanOfMeans').textContent='—';
+  document.getElementById('stdOfMeans').textContent='—';
+  document.getElementById('sampleCount').textContent='0';
+  drawMeans();
+  const fb=document.getElementById('fb');
+  fb.innerHTML='点击"抽 1 次样本"或"快速抽 100 次"，观察样本均值分布如何逐渐变成正态分布。';
+}
+
+document.getElementById('nSl').addEventListener('input',e=>{
+  sampleSize=parseInt(e.target.value);
+  document.getElementById('nLabel').textContent=sampleSize;
+  resetAll();
+});
+window.addEventListener('resize',()=>{setup();drawPopulation();drawMeans();});
+setup(); drawPopulation();
+document.getElementById('fb').innerHTML='点击"抽 1 次样本"或"快速抽 100 次"，观察样本均值分布如何逐渐变成正态分布。';
+</script>
+</body>
+</html>

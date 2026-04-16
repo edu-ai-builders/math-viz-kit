@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>导数切线动画 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="导数">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="逼近">
+  <meta name="desc" content="割线趋近切线动画演示导数定义，直观理解瞬时变化率">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:760px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:760px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .info-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+    .info-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;text-align:center;}
+    .info-label{font-size:12px;color:var(--ink2);}
+    .info-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    canvas{width:100%;height:360px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);cursor:crosshair;}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:6px;}
+    .sl-label{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .fn-btns{display:flex;gap:6px;flex-wrap:wrap;}
+    .fn-btn{padding:6px 12px;border:2px solid var(--border);border-radius:20px;font-size:13px;font-family:'JetBrains Mono',monospace;background:var(--surface);cursor:pointer;transition:all .2s;}
+    .fn-btn.active,.fn-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .btns{display:flex;gap:8px;}
+    .btn{flex:1;padding:11px;border:none;border-radius:var(--radius);font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;transition:all .2s;background:var(--blue);color:#fff;}
+    .btn:hover{background:var(--blue-dark);}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;}
+    @media(max-width:500px){.info-row{grid-template-columns:1fr 1fr;}.controls{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 导数 · 认知动作：逼近</div>
+  <h1>导数切线动画器</h1>
+  <p class="sub">看割线如何趋近切线，体验"极限"的过程</p>
+</header>
+<main>
+  <div class="info-row">
+    <div class="info-card">
+      <div class="info-label">切点 x₀</div>
+      <div class="info-val" id="x0Val" style="color:var(--blue)">1.00</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">步长 h</div>
+      <div class="info-val" id="hVal" style="color:var(--amber)">0.50</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">割线斜率 Δy/Δx</div>
+      <div class="info-val" id="secSlope" style="color:var(--amber)">—</div>
+    </div>
+  </div>
+  <canvas id="cvs"></canvas>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-label">切点位置 x₀</div>
+      <div class="sl-val" id="x0Label">1.0</div>
+      <input type="range" id="x0Sl" min="-2" max="2" value="1" step="0.1">
+    </div>
+    <div class="sl-row">
+      <div class="sl-label">步长 h（趋近0）</div>
+      <div class="sl-val" id="hLabel">0.5</div>
+      <input type="range" id="hSl" min="0.01" max="2" value="0.5" step="0.01">
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <span style="font-size:13px;color:var(--ink2)">函数：</span>
+    <div class="fn-btns">
+      <button class="fn-btn active" onclick="setFn(0,this)">x²</button>
+      <button class="fn-btn" onclick="setFn(1,this)">x³</button>
+      <button class="fn-btn" onclick="setFn(2,this)">sin(x)</button>
+      <button class="fn-btn" onclick="setFn(3,this)">eˣ</button>
+      <button class="fn-btn" onclick="setFn(4,this)">√x</button>
+    </div>
+  </div>
+  <div class="btns">
+    <button class="btn" id="animBtn" onclick="shrinkH()">h → 0 动画（割线趋近切线）</button>
+  </div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：逼近
+// V1 动态跃迁：h→0时割线旋转趋近切线，极限过程可视化
+// V3 分步揭示：先手动调h感受，再点动画看极限
+// V5 操作先于符号：先拖滑杆，再看导数公式
+// V6 动作-数学一致：h减小=割线旋转靠近切线=斜率趋近导数
+// V7 单一认知动作：逼近
+// V8 概念反馈：揭示"导数=切线斜率=瞬时变化率"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+const FNS=[
+  {fn:x=>x*x,dfn:x=>2*x,label:'f(x)=x²',dlabel:"f'(x)=2x"},
+  {fn:x=>x*x*x,dfn:x=>3*x*x,label:'f(x)=x³',dlabel:"f'(x)=3x²"},
+  {fn:x=>Math.sin(x),dfn:x=>Math.cos(x),label:'f(x)=sin(x)',dlabel:"f'(x)=cos(x)"},
+  {fn:x=>Math.exp(x),dfn:x=>Math.exp(x),label:'f(x)=eˣ',dlabel:"f'(x)=eˣ"},
+  {fn:x=>x<0?NaN:Math.sqrt(x),dfn:x=>x<=0?NaN:0.5/Math.sqrt(x),label:'f(x)=√x',dlabel:"f'(x)=1/(2√x)"},
+];
+let fnIdx=0,x0=1,h=0.5,animId2=null;
+
+function f(x){return FNS[fnIdx].fn(x);}
+function df(x){return FNS[fnIdx].dfn(x);}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=360*dpr; ctx.scale(dpr,dpr); cvs.style.height='360px';
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=360;
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2, cy=H/2, scale=50;
+
+  // Grid
+  ctx.strokeStyle=C.border; ctx.lineWidth=0.5;
+  for(let gx=Math.ceil(-cx/scale);gx<=cx/scale;gx++){ctx.beginPath();ctx.moveTo(cx+gx*scale,0);ctx.lineTo(cx+gx*scale,H);ctx.stroke();}
+  for(let gy=Math.ceil(-cy/scale);gy<=cy/scale;gy++){ctx.beginPath();ctx.moveTo(0,cy-gy*scale);ctx.lineTo(W,cy-gy*scale);ctx.stroke();}
+
+  // Axes
+  ctx.strokeStyle=C.ink2; ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();
+
+  // Function curve
+  ctx.strokeStyle=C.ink; ctx.lineWidth=2;
+  ctx.beginPath();
+  let first=true;
+  for(let px=0;px<W;px++){
+    const xv=(px-cx)/scale, yv=f(xv);
+    if(isNaN(yv)||!isFinite(yv)){first=true;continue;}
+    const py=cy-yv*scale;
+    if(py>-50&&py<H+50){first?ctx.moveTo(px,py):ctx.lineTo(px,py);first=false;}
+    else first=true;
+  }
+  ctx.stroke();
+
+  const y0=f(x0), y1=f(x0+h);
+  const p0x=cx+x0*scale, p0y=cy-y0*scale;
+  const p1x=cx+(x0+h)*scale, p1y=cy-y1*scale;
+
+  // Secant line
+  if(!isNaN(y0)&&!isNaN(y1)){
+    const secSlope=(y1-y0)/h;
+    const secExtend=4;
+    ctx.strokeStyle=C.amber; ctx.lineWidth=2; ctx.setLineDash([5,4]);
+    const sx0=cx+(x0-secExtend)*scale, sy0=cy-(y0+secSlope*(-(secExtend)))*scale;
+    const sx1=cx+(x0+secExtend+h)*scale, sy1=cy-(y0+secSlope*(secExtend+h))*scale;
+    ctx.beginPath(); ctx.moveTo(sx0,sy0); ctx.lineTo(sx1,sy1); ctx.stroke();
+    ctx.setLineDash([]);
+    document.getElementById('secSlope').textContent=secSlope.toFixed(3);
+  }
+
+  // Tangent line
+  if(!isNaN(y0)){
+    const slope=df(x0);
+    if(!isNaN(slope)&&isFinite(slope)){
+      const te=3;
+      ctx.strokeStyle=C.blue; ctx.lineWidth=2.5;
+      ctx.beginPath();
+      ctx.moveTo(cx+(x0-te)*scale, cy-(y0+slope*(-te))*scale);
+      ctx.lineTo(cx+(x0+te)*scale, cy-(y0+slope*te)*scale);
+      ctx.stroke();
+      // Tangent slope label
+      ctx.fillStyle=C.blue; ctx.font=`bold 13px 'JetBrains Mono',monospace`; ctx.textAlign='left'; ctx.textBaseline='bottom';
+      ctx.fillText(`切线斜率 f'(${x0})=${slope.toFixed(3)}`,p0x+8,p0y-4);
+    }
+  }
+
+  // Points
+  if(!isNaN(y0)){
+    ctx.fillStyle=C.blue; ctx.beginPath(); ctx.arc(p0x,p0y,6,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(p0x,p0y,2.5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=C.blue; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillText(`x₀=${x0}`,p0x,p0y+8);
+  }
+  if(!isNaN(y1)&&Math.abs(h)>0.05){
+    ctx.fillStyle=C.amber; ctx.beginPath(); ctx.arc(p1x,p1y,6,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(p1x,p1y,2.5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=C.amber; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillText(`x₀+h`,p1x,p1y+8);
+  }
+
+  // Δy, Δx annotation
+  if(!isNaN(y0)&&!isNaN(y1)&&Math.abs(h)>0.05){
+    ctx.strokeStyle=C.teal+'88'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(p0x,p0y); ctx.lineTo(p1x,p0y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p1x,p0y); ctx.lineTo(p1x,p1y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.teal; ctx.font=`11px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(`Δx=${h.toFixed(2)}`,(p0x+p1x)/2,p0y-2);
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(`Δy=${(y1-y0).toFixed(2)}`,p1x-2,(p0y+p1y)/2);
+  }
+
+  // Function label
+  ctx.fillStyle=C.ink; ctx.font=`bold 13px 'JetBrains Mono',monospace`; ctx.textAlign='right'; ctx.textBaseline='top';
+  ctx.fillText(FNS[fnIdx].label,W-8,8);
+  ctx.font=`12px 'JetBrains Mono',monospace`; ctx.fillStyle=C.blue;
+  ctx.fillText(FNS[fnIdx].dlabel,W-8,28);
+}
+
+function updateDisplay(){
+  document.getElementById('x0Val').textContent=x0.toFixed(2);
+  document.getElementById('hVal').textContent=h.toFixed(3);
+  document.getElementById('x0Label').textContent=x0.toFixed(1);
+  document.getElementById('hLabel').textContent=h.toFixed(2);
+
+  const slope=df(x0);
+  const secSlope=h!==0?(f(x0+h)-f(x0))/h:NaN;
+
+  // V8 feedback
+  const fb=document.getElementById('fb');
+  fb.innerHTML=`<strong>割线斜率</strong>（从 x₀=${x0} 到 x₀+h=${(x0+h).toFixed(2)}）= Δy/Δx = <strong>${isNaN(secSlope)?'—':secSlope.toFixed(4)}</strong><br>
+  当 h → 0，割线斜率 → <strong>切线斜率</strong> = ${FNS[fnIdx].dlabel.replace("f'(x)","f'("+x0+")")} = <strong>${isNaN(slope)?'未定义':slope.toFixed(4)}</strong><br>
+  这就是导数的定义：<strong>f'(x₀) = lim(h→0) [f(x₀+h)−f(x₀)] / h</strong>`;
+  draw();
+}
+
+function shrinkH(){
+  if(animId2){clearTimeout(animId2);animId2=null;return;}
+  let hv=2;
+  function tick(){
+    hv*=0.75;
+    if(hv<0.002){hv=0.001;h=hv;updateDisplay();return;}
+    h=hv;
+    document.getElementById('hSl').value=hv;
+    updateDisplay();
+    animId2=setTimeout(tick,80);
+  }
+  tick();
+}
+
+function setFn(idx,btn){
+  fnIdx=idx;
+  document.querySelectorAll('.fn-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(animId2){clearTimeout(animId2);animId2=null;}
+  h=0.5; document.getElementById('hSl').value=h;
+  updateDisplay();
+}
+
+cvs.addEventListener('click',e=>{
+  const rect=cvs.getBoundingClientRect();
+  const W=rect.width;
+  x0=Math.round(((e.clientX-rect.left)-W/2)/50*10)/10;
+  x0=Math.max(-2.5,Math.min(2.5,x0));
+  document.getElementById('x0Sl').value=x0;
+  updateDisplay();
+});
+
+document.getElementById('x0Sl').addEventListener('input',e=>{x0=parseFloat(e.target.value);updateDisplay();});
+document.getElementById('hSl').addEventListener('input',e=>{h=parseFloat(e.target.value);updateDisplay();});
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); updateDisplay();
+</script>
+</body>
+</html>

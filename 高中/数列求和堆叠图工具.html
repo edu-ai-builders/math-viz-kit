@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数列求和堆叠图工具 · 数学可视化</title>
+  <meta name="grade" content="高中">
+  <meta name="topic" content="数列">
+  <meta name="difficulty" content="中">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="累积">
+  <meta name="desc" content="前n项和Sn的条形堆叠图，直观理解等差/等比数列求和公式，点击查看每一项的贡献">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:680px;padding:24px 20px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:680px;padding:14px 20px 32px;display:flex;flex-direction:column;gap:10px;}
+    .type-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .type-btn{padding:9px;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--surface);font-size:13px;font-weight:700;text-align:center;transition:all .2s;}
+    .type-btn small{display:block;font-size:11px;font-weight:400;color:var(--ink2);}
+    .type-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+    .type-btn.active small{color:rgba(255,255,255,.75);}
+    .param-row{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;display:flex;gap:16px;flex-wrap:wrap;}
+    .param-group{display:flex;align-items:center;gap:8px;}
+    .param-label{font-size:13px;color:var(--ink2);}
+    input[type=range]{accent-color:var(--blue);width:100px;}
+    .param-val{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--blue);min-width:36px;}
+    canvas{width:100%;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .formula-box{background:var(--blue-light);border-radius:var(--radius-sm);padding:10px;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--blue);text-align:center;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;line-height:1.7;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">高中 · 数列 · 认知动作：累积</div>
+  <h1>数列求和堆叠图工具</h1>
+  <p class="sub">累积条形图展示前n项和，理解求和公式的"形状"</p>
+</header>
+<main>
+  <div class="type-row">
+    <button class="type-btn active" onclick="setType('arith',this)">等差数列<small>an = a₁+(n-1)d</small></button>
+    <button class="type-btn" onclick="setType('geo',this)">等比数列<small>an = a₁·qⁿ⁻¹</small></button>
+    <button class="type-btn" onclick="setType('square',this)">平方数列<small>an = n²</small></button>
+  </div>
+  <div class="param-row" id="paramRow"></div>
+  <canvas id="cvs"></canvas>
+  <div class="formula-box" id="formulaBox"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// PEDAGOGY V3 分步揭示: 逐项堆叠，Sn随n增加而累积
+// PEDAGOGY V4 信号聚焦: 每项用不同深浅蓝色，最新加入的项高亮显示
+// PEDAGOGY V7 单一认知动作: 累积（每一项叠加到总和上）
+// PEDAGOGY V8 概念反馈: "每加一项，Sn增加aₙ；这就是求和的本质"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const H=300;
+const N=12;
+
+let type='arith';
+let params={a1:2,d:3,q:2};
+let hoverN=null;
+
+function setType(t,btn){
+  type=t;
+  document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  buildParams();
+  draw();
+}
+
+function buildParams(){
+  const pr=document.getElementById('paramRow');
+  if(type==='arith'){
+    pr.innerHTML=`
+      <div class="param-group"><span class="param-label">首项 a₁ =</span>
+        <input type="range" min="-5" max="10" step="1" value="${params.a1}" oninput="params.a1=+this.value;document.getElementById('va1').textContent=params.a1;draw()">
+        <span class="param-val" id="va1">${params.a1}</span></div>
+      <div class="param-group"><span class="param-label">公差 d =</span>
+        <input type="range" min="-4" max="6" step="1" value="${params.d}" oninput="params.d=+this.value;document.getElementById('vd').textContent=params.d;draw()">
+        <span class="param-val" id="vd">${params.d}</span></div>`;
+  } else if(type==='geo'){
+    pr.innerHTML=`
+      <div class="param-group"><span class="param-label">首项 a₁ =</span>
+        <input type="range" min="1" max="5" step="1" value="${params.a1}" oninput="params.a1=+this.value;document.getElementById('va1g').textContent=params.a1;draw()">
+        <span class="param-val" id="va1g">${params.a1}</span></div>
+      <div class="param-group"><span class="param-label">公比 q =</span>
+        <input type="range" min="-3" max="3" step="0.5" value="${params.q}" oninput="params.q=+this.value;document.getElementById('vq').textContent=params.q;draw()">
+        <span class="param-val" id="vq">${params.q}</span></div>`;
+  } else {
+    pr.innerHTML=`<div class="param-group"><span class="param-label">aₙ = n²（固定）</span></div>`;
+  }
+}
+
+function getTerms(){
+  const terms=[];
+  for(let n=1;n<=N;n++){
+    let a;
+    if(type==='arith') a=params.a1+(n-1)*params.d;
+    else if(type==='geo') a=params.a1*Math.pow(params.q,n-1);
+    else a=n*n;
+    terms.push(a);
+  }
+  return terms;
+}
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr;cvs.height=H*dpr;
+  ctx.scale(dpr,dpr);cvs.style.height=H+'px';
+}
+
+function draw(){
+  const r=cvs.getBoundingClientRect();
+  const W=r.width;
+  ctx.clearRect(0,0,W,H);
+  const terms=getTerms();
+  const sums=terms.map((_,i)=>terms.slice(0,i+1).reduce((a,b)=>a+b,0));
+  const maxS=Math.max(...sums.map(Math.abs),1);
+  const minS=Math.min(...sums,0);
+  const range=maxS-minS;
+
+  const pad={l:50,r:10,t:20,b:30};
+  const cw=W-pad.l-pad.r;
+  const ch=H-pad.t-pad.b;
+  const barW=cw/N*0.7, gap=cw/N*0.3;
+
+  function toY(v){return pad.t+ch-(v-minS)/range*ch;}
+  const zero_y=toY(0);
+
+  // Grid
+  ctx.strokeStyle='#e4e2da';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(pad.l,zero_y);ctx.lineTo(W-pad.r,zero_y);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Axis
+  ctx.strokeStyle='#6b6860';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(pad.l,pad.t);ctx.lineTo(pad.l,pad.t+ch);ctx.lineTo(W-pad.r,pad.t+ch);ctx.stroke();
+
+  // Bars (cumulative)
+  terms.forEach((a,i)=>{
+    const x=pad.l+(i*(cw/N)+gap/2);
+    const sn=sums[i];
+    const alpha_=1-i*0.04;
+    const isHover=hoverN===i+1;
+
+    // Full Sn bar
+    ctx.fillStyle=isHover?'#1a3d7a':'#2a5c8f';
+    ctx.globalAlpha=isHover?1:0.6+i*0.04/N;
+    const barH=Math.abs(sn)/range*ch;
+    const by=a>=0?toY(sn):toY(0);
+    ctx.fillRect(x,Math.min(toY(sn),zero_y),barW,barH);
+    ctx.globalAlpha=1;
+    ctx.strokeStyle=isHover?'#0c447c':'#2a5c8f';ctx.lineWidth=1;
+    ctx.strokeRect(x,Math.min(toY(sn),zero_y),barW,barH);
+
+    // Highlight newest term
+    if(i>0){
+      const prev=sums[i-1];
+      const termH=Math.abs(a)/range*ch;
+      ctx.fillStyle=a>=0?'#e8f0f8':'#fee2e2';
+      ctx.fillStyle=a>=0?'#1a5cb5cc':'#dc2626cc';
+      ctx.fillRect(x,Math.min(toY(sn),toY(prev)),barW,Math.abs(toY(sn)-toY(prev)));
+    }
+
+    // n label
+    ctx.fillStyle='#6b6860';ctx.font=`10px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(i+1,x+barW/2,pad.t+ch+4);
+
+    // Sn value
+    if(isHover||i===N-1){
+      ctx.fillStyle='#2a5c8f';ctx.font=`bold 11px 'JetBrains Mono',monospace`;
+      ctx.textAlign='center';ctx.textBaseline=sn>=0?'bottom':'top';
+      ctx.fillText(`S${i+1}=${sn.toFixed(0)}`,x+barW/2,toY(sn)+(sn>=0?-2:2));
+    }
+  });
+
+  // Hover info
+  if(hoverN){
+    const n=hoverN;
+    const sn=sums[n-1];
+    const an=terms[n-1];
+    ctx.fillStyle='#1a1814';ctx.font=`12px 'Noto Sans SC',sans-serif`;
+    ctx.textAlign='left';ctx.textBaseline='top';
+    ctx.fillText(`n=${n}：a${n}=${an.toFixed(1)}，S${n}=${sn.toFixed(2)}`,pad.l+4,4);
+  }
+
+  // Y axis labels
+  [-maxS/2,0,maxS/2,maxS].forEach(v=>{
+    if(v<minS||v>maxS) return;
+    ctx.fillStyle='#a8a69f';ctx.font=`10px 'JetBrains Mono',monospace`;
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(v.toFixed(0),pad.l-4,toY(v));
+  });
+
+  // Update formula and info
+  updateFormula(terms,sums);
+}
+
+function updateFormula(terms,sums){
+  const Sn=sums[N-1];
+  let formula='';
+  if(type==='arith'){
+    const n=N;
+    const a1=params.a1,d=params.d;
+    formula=`S${n} = n/2·[2a₁+(n-1)d] = ${n}/2·[${2*a1}+${(n-1)*d}] = ${Sn.toFixed(0)}`;
+  } else if(type==='geo'){
+    const q=params.q;
+    if(Math.abs(q-1)<0.01) formula=`Sn = n·a₁ = ${N*params.a1}`;
+    else formula=`Sn = a₁(1-qⁿ)/(1-q)，S${N} = ${Sn.toFixed(2)}`;
+  } else {
+    formula=`Sn = n(n+1)(2n+1)/6，S${N} = ${Sn.toFixed(0)}`;
+  }
+  document.getElementById('formulaBox').textContent=formula;
+  document.getElementById('fb').innerHTML=
+    `<strong>累积求和</strong>：Sₙ = a₁ + a₂ + ⋯ + aₙ，柱形从下往上堆叠，高度=Sₙ。<br>` +
+    `每根柱比上一根高 aₙ（深蓝色部分）。悬停柱形查看 aₙ 和 Sₙ 的值。<br>` +
+    (type==='arith'?`等差数列：aₙ = ${params.a1}+(n-1)×${params.d}，Sₙ = n/2×(a₁+aₙ)，图像是开口${params.d>0?'向上的抛物线状':'向下的抛物线状'}。`:
+     type==='geo'?`等比数列：aₙ = ${params.a1}×${params.q}ⁿ⁻¹，${Math.abs(params.q)>1?'Sₙ指数级增长':'|q|<1时Sₙ趋近有限极限'}。`:
+     'n²数列：Sₙ = n(n+1)(2n+1)/6，增长速度比等差快但比指数慢。');
+}
+
+cvs.addEventListener('mousemove',e=>{
+  const r=cvs.getBoundingClientRect();
+  const mx=e.clientX-r.left;
+  const cw=r.width-60;
+  const idx=Math.floor((mx-50)/(cw/N));
+  hoverN=(idx>=0&&idx<N)?idx+1:null;
+  draw();
+});
+cvs.addEventListener('mouseleave',()=>{hoverN=null;draw();});
+window.addEventListener('resize',()=>{setup();draw();});
+setup();
+buildParams();
+draw();
+</script>
+</body>
+</html>

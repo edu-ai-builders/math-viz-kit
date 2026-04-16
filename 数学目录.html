@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数学可视化工具目录</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;
+      --border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;
+      --teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;
+      --red:#b84040;--radius:12px;--radius-sm:8px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{height:100%;overflow:hidden;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);display:flex;flex-direction:column;}
+    /* ── Header ── */
+    header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 20px;flex-shrink:0;z-index:100;}
+    .header-inner{display:flex;flex-direction:column;gap:10px;}
+    .title-row{display:flex;align-items:baseline;gap:12px;}
+    h1{font-size:20px;font-weight:700;}
+    .count-badge{background:var(--blue);color:#fff;border-radius:20px;padding:3px 10px;font-size:13px;font-family:'JetBrains Mono',monospace;}
+    .search-row{display:flex;gap:8px;flex-wrap:wrap;}
+    .search-box{flex:1;min-width:160px;padding:7px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none;transition:border-color .2s;}
+    .search-box:focus{border-color:var(--blue);}
+    .filter-row{display:flex;gap:5px;flex-wrap:wrap;}
+    .filter-btn{padding:4px 10px;border:2px solid var(--border);border-radius:20px;font-size:11px;font-family:inherit;cursor:pointer;background:var(--surface);color:var(--ink2);transition:all .2s;white-space:nowrap;}
+    .filter-btn.active{color:#fff;border-color:transparent;}
+    .filter-btn[data-group="grade"].active{background:var(--blue);}
+    .filter-btn[data-group="diff"].active{background:var(--teal);}
+    .filter-btn[data-group="cogn"].active{background:var(--amber);}
+    .filter-btn[data-group="prio"].active{background:var(--red);}
+    /* ── Workspace ── */
+    .workspace{flex:1;display:flex;overflow:hidden;min-height:0;}
+    /* ── Card panel ── */
+    .card-panel{width:400px;min-width:240px;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border);display:flex;flex-direction:column;}
+    .sort-row{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0;background:var(--surface);}
+    .sort-lbl{font-size:12px;color:var(--ink2);}
+    .sort-btn{padding:4px 10px;border:2px solid var(--border);border-radius:20px;font-size:11px;font-family:inherit;cursor:pointer;background:var(--surface);color:var(--ink2);transition:all .2s;}
+    .sort-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+    .results-info{font-size:11px;color:var(--ink3);margin-left:auto;}
+    .grid{padding:10px 12px;display:grid;grid-template-columns:1fr;gap:10px;flex:1;}
+    .card{background:var(--surface);border:2px solid var(--border);border-radius:var(--radius-sm);display:flex;flex-direction:column;cursor:pointer;transition:border-color .15s,box-shadow .15s;position:relative;overflow:hidden;}
+    .card:hover{border-color:#b8cfe8;box-shadow:0 2px 10px rgba(42,92,143,.1);}
+    .card.selected{border-color:var(--blue);}
+    /* thumbnail */
+    .thumb{width:100%;height:150px;overflow:hidden;position:relative;background:var(--bg);border-bottom:1px solid var(--border);flex-shrink:0;}
+    .thumb iframe{width:800px;height:520px;border:none;transform-origin:top left;transform:scale(var(--ts,0.44));pointer-events:none;position:absolute;top:0;left:0;}
+    .thumb-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink3);background:var(--bg);}
+    /* card body */
+    .card-body{padding:10px 12px;display:flex;flex-direction:column;gap:5px;}
+    .card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;}
+    .card-title{font-size:13px;font-weight:700;line-height:1.4;flex:1;}
+    .card-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;}
+    .card-prio{font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;}
+    .prio-A{background:var(--amber-light);color:var(--amber);}
+    .prio-B{background:var(--blue-light);color:var(--blue);}
+    .prio-C{background:#f0f0f0;color:var(--ink2);}
+    .card-open-btn{font-size:13px;color:var(--ink3);text-decoration:none;line-height:1;padding:2px 4px;border-radius:4px;transition:color .15s,background .15s;}
+    .card-open-btn:hover{color:var(--blue);background:var(--blue-light);}
+    .card-desc{font-size:11px;color:var(--ink2);line-height:1.55;}
+    .card-tags{display:flex;gap:4px;flex-wrap:wrap;}
+    .tag{font-size:10px;padding:2px 7px;border-radius:10px;}
+    .tag-grade-大学{background:#f3e8ff;color:#7b3f9e;}
+    .tag-grade-高中{background:var(--teal-light);color:var(--teal);}
+    .tag-grade-初中{background:var(--blue-light);color:var(--blue);}
+    .tag-grade-小学{background:#fff8e0;color:#a07000;}
+    .tag-topic{background:var(--bg);color:var(--ink2);border:1px solid var(--border);}
+    .tag-diff-高{background:#fee;color:var(--red);}
+    .tag-diff-中{background:var(--amber-light);color:var(--amber);}
+    .tag-diff-低{background:var(--teal-light);color:var(--teal);}
+    .tag-cogn{background:#f0f0f0;color:var(--ink2);}
+    .no-results{text-align:center;padding:40px 16px;color:var(--ink2);font-size:14px;}
+    .section-header{font-size:13px;font-weight:700;color:var(--ink2);margin:10px 0 4px;padding-bottom:4px;border-bottom:2px solid var(--border);}
+    /* ── Preview panel ── */
+    .preview-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;background:#f0ede8;}
+    .preview-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--ink3);user-select:none;}
+    .preview-empty-icon{font-size:48px;opacity:.35;}
+    .preview-empty-text{font-size:14px;}
+    .preview-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;min-height:52px;}
+    .preview-bar-title{font-size:14px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .preview-bar-tags{display:flex;gap:4px;flex-shrink:0;}
+    .preview-new-tab{font-size:12px;color:var(--blue);text-decoration:none;padding:5px 12px;border:1px solid var(--blue);border-radius:20px;white-space:nowrap;transition:background .15s;}
+    .preview-new-tab:hover{background:var(--blue-light);}
+    .preview-frame-wrap{flex:1;position:relative;overflow:hidden;}
+    .preview-frame-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;}
+    .preview-loader{position:absolute;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--ink2);transition:opacity .3s;}
+    .preview-loader.hidden{opacity:0;pointer-events:none;}
+    /* ── Mobile modal ── */
+    .preview-modal{display:none;position:fixed;inset:0;z-index:200;flex-direction:column;background:var(--surface);}
+    .preview-modal.open{display:flex;}
+    .modal-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0;}
+    .modal-title{font-size:14px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .modal-close{font-size:20px;background:none;border:none;cursor:pointer;color:var(--ink2);line-height:1;padding:2px 6px;}
+    .modal-open{font-size:12px;color:var(--blue);text-decoration:none;padding:5px 12px;border:1px solid var(--blue);border-radius:20px;}
+    .modal-frame{flex:1;border:none;width:100%;}
+    /* ── View toggle buttons ── */
+    .view-toggle{display:flex;gap:4px;margin-left:auto;}
+    .view-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;border:2px solid var(--border);border-radius:20px;font-size:12px;font-family:inherit;cursor:pointer;background:var(--surface);color:var(--ink2);transition:all .2s;white-space:nowrap;}
+    .view-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+    /* ── Grid mode ── */
+    body.view-grid .card-panel{width:100%;border-right:none;}
+    body.view-grid .preview-panel{display:none!important;}
+    body.view-grid .grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));padding:16px 20px;gap:14px;}
+    body.view-grid .thumb{height:175px;}
+    body.view-grid .sort-row{max-width:none;}
+    /* ── Responsive ── */
+    @media(max-width:720px){
+      .preview-panel{display:none!important;}
+      .card-panel{width:100%;border-right:none;}
+    }
+    @media(min-width:721px){
+      .preview-modal{display:none!important;}
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div class="title-row">
+      <h1>📐 数学可视化工具目录</h1>
+      <span class="count-badge" id="countBadge">127个工具</span>
+    </div>
+    <div class="search-row">
+      <input class="search-box" id="searchInput" type="text" placeholder="搜索工具名称、描述或知识点...">
+    </div>
+    <div class="filter-row">
+      <span style="font-size:11px;color:var(--ink2);margin-right:2px">学段：</span>
+      <button class="filter-btn active" data-group="grade" data-value="">全部</button>
+      <button class="filter-btn" data-group="grade" data-value="小学">小学</button>
+      <button class="filter-btn" data-group="grade" data-value="初中">初中</button>
+      <button class="filter-btn" data-group="grade" data-value="高中">高中</button>
+      <button class="filter-btn" data-group="grade" data-value="大学">大学</button>
+    </div>
+    <div class="filter-row">
+      <span style="font-size:11px;color:var(--ink2);margin-right:2px">认知：</span>
+      <button class="filter-btn active" data-group="cogn" data-value="">全部</button>
+      <button class="filter-btn" data-group="cogn" data-value="变换">变换</button>
+      <button class="filter-btn" data-group="cogn" data-value="比较">比较</button>
+      <button class="filter-btn" data-group="cogn" data-value="分解">分解</button>
+      <button class="filter-btn" data-group="cogn" data-value="逼近">逼近</button>
+      <button class="filter-btn" data-group="cogn" data-value="累积">累积</button>
+      <button class="filter-btn" data-group="cogn" data-value="缩放">缩放</button>
+      <button class="filter-btn" data-group="cogn" data-value="投影">投影</button>
+      <button class="filter-btn" data-group="cogn" data-value="模拟">模拟</button>
+      <span style="font-size:11px;color:var(--ink2);margin-left:8px;margin-right:2px">难度：</span>
+      <button class="filter-btn active" data-group="diff" data-value="">全部</button>
+      <button class="filter-btn" data-group="diff" data-value="低">低</button>
+      <button class="filter-btn" data-group="diff" data-value="中">中</button>
+      <button class="filter-btn" data-group="diff" data-value="高">高</button>
+    </div>
+  </div>
+</header>
+
+<div class="workspace">
+  <!-- Left: card list -->
+  <div class="card-panel">
+    <div class="sort-row">
+      <span class="sort-lbl">排序：</span>
+      <button class="sort-btn active" data-sort="grade">学段</button>
+      <button class="sort-btn" data-sort="prio">优先级</button>
+      <button class="sort-btn" data-sort="cogn">认知</button>
+      <button class="sort-btn" data-sort="name">名称</button>
+      <span class="results-info" id="resultsInfo"></span>
+      <div class="view-toggle">
+        <button class="view-btn active" data-view="grid" onclick="setView('grid')" title="网格视图">⊞ 网格</button>
+        <button class="view-btn" data-view="sidebar" onclick="setView('sidebar')" title="侧栏视图">▤ 侧栏</button>
+      </div>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="no-results" id="noResults" style="display:none">没有找到匹配的工具，试试清除筛选条件。</div>
+  </div>
+
+  <!-- Right: preview pane -->
+  <div class="preview-panel" id="previewPanel">
+    <div class="preview-empty" id="previewEmpty">
+      <div class="preview-empty-icon">🔍</div>
+      <div class="preview-empty-text">点击左侧工具卡片预览</div>
+    </div>
+    <div id="previewActive" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+      <div class="preview-bar" id="previewBar">
+        <span class="preview-bar-title" id="previewTitle"></span>
+        <div class="preview-bar-tags" id="previewTags"></div>
+        <a class="preview-new-tab" id="previewNewTab" href="#" target="_blank">↗ 新标签打开</a>
+      </div>
+      <div class="preview-frame-wrap">
+        <div class="preview-loader" id="previewLoader">加载中…</div>
+        <iframe id="previewFrame" src="" allowfullscreen></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Mobile modal -->
+<div class="preview-modal" id="previewModal">
+  <div class="modal-bar">
+    <span class="modal-title" id="modalTitle"></span>
+    <a class="modal-open" id="modalNewTab" href="#" target="_blank">↗</a>
+    <button class="modal-close" onclick="closeModal()">✕</button>
+  </div>
+  <iframe class="modal-frame" id="modalFrame" src="" allowfullscreen></iframe>
+</div>
+<script>
+const TOOLS = [
+  // 小学
+  {file:'小学/数轴跳跃加减法.html',title:'数轴跳跃加减法',grade:'小学',topic:'加减法',diff:'低',prio:'A',cogn:'变换',desc:'角色在数轴上跳跃演示加减法，建立数轴位置与运算的直觉联系'},
+  {file:'小学/凑十法与破十法.html',title:'凑十法与破十法',grade:'小学',topic:'加减法',diff:'低',prio:'A',cogn:'变换',desc:'动画演示凑十法（进位加法）与破十法（退位减法）的操作过程'},
+  {file:'小学/进位加减法.html',title:'进位加减法竖式实验室',grade:'小学',topic:'加减法',diff:'低',prio:'A',cogn:'变换',desc:'动态竖式展示进位与退位过程，理解十进制进退位的本质'},
+  {file:'小学/数的分解与组成.html',title:'数的分解与组成',grade:'小学',topic:'数与运算',diff:'低',prio:'A',cogn:'分解',desc:'拖动分割线把一排方块分成两组，先操作再看算式，理解数的分解与守恒'},
+  {file:'小学/位值系统积木.html',title:'位值系统积木',grade:'小学',topic:'数与运算',diff:'低',prio:'A',cogn:'分解',desc:'用积木直观展示个十百位的位值概念，理解数的组成'},
+  {file:'小学/乘法数组实验室.html',title:'乘法数组实验室',grade:'小学',topic:'乘法',diff:'低',prio:'A',cogn:'比较',desc:'点阵旋转演示乘法交换律，理解几行几列与几个几的关系'},
+  {file:'小学/面积铺砖模型.html',title:'面积铺砖模型',grade:'小学',topic:'面积',diff:'低',prio:'A',cogn:'累积',desc:'用单位方格铺满矩形，理解面积=长×宽的几何本质'},
+  {file:'小学/周长走边框.html',title:'周长走边框',grade:'小学',topic:'周长',diff:'低',prio:'A',cogn:'累积',desc:'小虫沿矩形边行走，逐段累加边长，直观理解周长的含义'},
+  {file:'小学/平均分与除法.html',title:'平均分与除法',grade:'小学',topic:'除法',diff:'低',prio:'A',cogn:'分解',desc:'动画演示糖果平均分组，理解除法是等分的过程'},
+  {file:'小学/有余数除法.html',title:'有余数除法',grade:'小学',topic:'除法',diff:'低',prio:'B',cogn:'分解',desc:'动画演示带余数的分组过程，理解余数的含义'},
+  {file:'小学/分数条比较器.html',title:'分数条比较器',grade:'小学',topic:'分数',diff:'低',prio:'A',cogn:'比较',desc:'用等长分数条直观比较分数大小，理解分子分母对大小的影响'},
+  {file:'小学/同分母分数比较.html',title:'同分母分数比较',grade:'小学',topic:'分数',diff:'低',prio:'A',cogn:'比较',desc:'分数条长度可视化比较同分母分数大小，直观理解分子越大分数越大'},
+  {file:'小学/披萨分数实验室.html',title:'披萨分数实验室',grade:'小学',topic:'分数',diff:'低',prio:'A',cogn:'分解',desc:'切分圆形披萨理解分数，拖动扇形体会分子分母含义'},
+  {file:'小学/角度测量器.html',title:'角度测量器',grade:'小学',topic:'图形与几何',diff:'低',prio:'B',cogn:'变换',desc:'拖动角的一条边，用量角器联动展示角的大小变化'},
+  {file:'小学/小数数轴放大镜.html',title:'小数数轴放大镜',grade:'小学',topic:'小数',diff:'中',prio:'B',cogn:'缩放',desc:'用局部放大数轴理解小数的位置，感受0到1之间的结构'},
+  {file:'小学/百分数折扣模拟器.html',title:'百分数折扣模拟器',grade:'小学',topic:'百分数',diff:'中',prio:'A',cogn:'缩放',desc:'商品打折购物情境，直观理解百分数与折扣的关系'},
+  {file:'小学/坐标寻宝初步.html',title:'坐标寻宝初步',grade:'小学',topic:'坐标系',diff:'低',prio:'A',cogn:'投影',desc:'在坐标系中点击找宝藏，建立(x,y)坐标与位置的直觉联系'},
+  {file:'小学/规律接龙.html',title:'规律接龙',grade:'小学',topic:'规律与代数',diff:'低',prio:'B',cogn:'比较',desc:'发现数字或图形规律，预测下一项，训练模式识别思维'},
+  {file:'小学/人民币购物找零.html',title:'人民币购物找零',grade:'小学',topic:'人民币',diff:'中',prio:'A',cogn:'模拟',desc:'超市购物模拟：选商品→算总价→选择付钱面值→动画显示找零过程'},
+  {file:'小学/平行四边形三角形面积剪拼.html',title:'平行四边形与三角形面积剪拼',grade:'小学',topic:'面积',diff:'中',prio:'A',cogn:'分解',desc:'动画演示平行四边形剪拼成长方形、三角形剪拼成平行四边形，面积公式从几何变换中自然涌现'},
+  {file:'小学/数数与数量对应.html',title:'数数与数量对应',grade:'小学',topic:'数与运算',diff:'低',prio:'B',cogn:'比较',desc:'点击苹果逐个计数，数字与实物一一对应高亮，建立数量与符号的直觉联系'},
+  {file:'小学/时间与钟表.html',title:'时间与钟表',grade:'小学',topic:'时间',diff:'低',prio:'B',cogn:'变换',desc:'拖动时针分针设置时刻，数字时间与表盘实时联动，整点/半点/一刻概念可视化'},
+  {file:'小学/条形图生成器.html',title:'条形图生成器',grade:'小学',topic:'统计与图表',diff:'低',prio:'B',cogn:'比较',desc:'输入数据自动生成条形图，拖动条高改变数值，理解数据→图表的对应关系'},
+  // 初中
+  {file:'初中/有理数数轴实验室.html',title:'有理数数轴实验室',grade:'初中',topic:'有理数',diff:'低',prio:'A',cogn:'比较',desc:'在数轴上标注正负有理数，体验绝对值、相反数、大小比较的几何含义'},
+  {file:'初中/绝对值距离模型.html',title:'绝对值距离模型',grade:'初中',topic:'数轴与绝对值',diff:'低',prio:'A',cogn:'变换',desc:'绝对值=点到原点的距离，动态拖拽数轴上的点理解|x|的几何意义'},
+  {file:'初中/天平方程模型.html',title:'天平方程模型',grade:'初中',topic:'方程与代数',diff:'中',prio:'A',cogn:'变换',desc:'用天平模型演示方程的等量变换，理解方程解法的本质'},
+  {file:'初中/不等式数轴工具.html',title:'不等式数轴工具',grade:'初中',topic:'不等式',diff:'低',prio:'A',cogn:'比较',desc:'用数轴高亮区间展示不等式解集，理解解集与数轴的对应'},
+  {file:'初中/一次函数滑杆实验室.html',title:'一次函数滑杆实验室',grade:'初中',topic:'函数',diff:'中',prio:'A',cogn:'变换',desc:'k/b滑杆联动直线图形、值表和公式，理解一次函数参数意义'},
+  {file:'初中/二次函数参数实验室.html',title:'二次函数参数实验室',grade:'初中',topic:'函数与图像',diff:'中',prio:'A',cogn:'变换',desc:'a、b、c三参数滑杆实时联动抛物线，理解各参数的几何意义'},
+  {file:'初中/反比例函数.html',title:'反比例函数',grade:'初中',topic:'函数',diff:'中',prio:'B',cogn:'变换',desc:'k值滑杆实时改变双曲线形态，理解反比例系数k的几何意义和渐近线'},
+  {file:'初中/勾股定理拼图证明器.html',title:'勾股定理拼图证明器',grade:'初中',topic:'勾股定理',diff:'中',prio:'A',cogn:'分解',desc:'拼图动画证明a²+b²=c²，理解勾股定理的几何本质'},
+  {file:'初中/全等三角形拖拽验证器.html',title:'全等三角形拖拽验证器',grade:'初中',topic:'三角形',diff:'中',prio:'A',cogn:'变换',desc:'SSS/SAS/ASA/AAS四种判定条件，拖拽一个三角形叠合到另一个，验证完全重合'},
+  {file:'初中/相似三角形缩放器.html',title:'相似三角形缩放器',grade:'初中',topic:'相似三角形',diff:'中',prio:'A',cogn:'缩放',desc:'拖动缩放比例实时联动两三角形，理解相似的本质：形状不变，大小等比缩放'},
+  {file:'初中/平行线与角关系.html',title:'平行线与角关系',grade:'初中',topic:'平行线',diff:'低',prio:'A',cogn:'比较',desc:'拖动截线角度，实时高亮同位角/内错角/同旁内角，理解平行线中角的关系'},
+  {file:'初中/轴对称折叠.html',title:'轴对称折叠',grade:'初中',topic:'轴对称',diff:'低',prio:'A',cogn:'变换',desc:'拖动对称轴和图形顶点，实时显示关于任意直线的对称图形，理解轴对称的本质'},
+  {file:'初中/平移旋转动画.html',title:'平移与旋转变换',grade:'初中',topic:'图形变换',diff:'低',prio:'A',cogn:'变换',desc:'拖动控制平移量和旋转角度，动画展示图形变换，理解变换的本质'},
+  {file:'初中/二元方程组交点.html',title:'二元方程组交点',grade:'初中',topic:'方程组',diff:'中',prio:'A',cogn:'比较',desc:'两直线实时联动，交点就是方程组的解，理解代数与几何的统一'},
+  {file:'初中/三角函数坡度.html',title:'三角函数坡度实验室',grade:'初中',topic:'三角函数',diff:'中',prio:'A',cogn:'比较',desc:'拖动坡度角，实时显示sin/cos/tan的值和直角三角形，建立三角函数的直觉'},
+  {file:'初中/圆周角切线.html',title:'圆周角与切线定理',grade:'初中',topic:'圆',diff:'中',prio:'B',cogn:'比较',desc:'拖动圆周上的点，实时验证圆周角=圆心角/2，并展示切线与半径的垂直关系'},
+  {file:'初中/概率树状图.html',title:'概率树状图',grade:'初中',topic:'概率',diff:'中',prio:'A',cogn:'累积',desc:'交互式树图展示多步概率，路径相乘、末端相加，理解独立事件的概率计算'},
+  {file:'初中/掷骰子抽球概率模拟器.html',title:'掷骰子抽球概率模拟器',grade:'初中',topic:'概率',diff:'低',prio:'A',cogn:'模拟',desc:'多次重复实验，频率逐渐稳定于理论概率，理解实验频率与理论概率的关系'},
+  {file:'初中/方差波动可视化.html',title:'方差与波动',grade:'初中',topic:'统计',diff:'中',prio:'B',cogn:'比较',desc:'拖动数据点，实时更新均值/方差/标准差，理解波动程度的度量'},
+  {file:'初中/几何体表面积探索器.html',title:'几何体表面积探索器',grade:'初中',topic:'几何体',diff:'中',prio:'B',cogn:'分解',desc:'旋转展开三维几何体，理解表面积的计算原理'},
+  {file:'初中/合并同类项归类器.html',title:'合并同类项归类器',grade:'初中',topic:'代数式',diff:'低',prio:'B',cogn:'分解',desc:'拖动代数项卡片到对应类别，同类项自动合并并显示结果，理解合并同类项的本质'},
+  {file:'初中/平方根面积模型.html',title:'平方根面积模型',grade:'初中',topic:'实数',diff:'中',prio:'B',cogn:'变换',desc:'正方形面积与边长互相转化，拖动改变面积，直观理解√n就是面积为n的正方形边长'},
+  {file:'初中/角关系动态观察器.html',title:'角关系动态观察器',grade:'初中',topic:'角',diff:'低',prio:'B',cogn:'比较',desc:'拖动角度，实时高亮对顶角/补角/余角，动中不变直观验证角的关系定理'},
+  // 高中
+  {file:'高中/集合交并补可视化.html',title:'集合交并补可视化',grade:'高中',topic:'集合',diff:'低',prio:'B',cogn:'比较',desc:'韦恩图动态高亮A∩B/A∪B/A∖B/Aᶜ，拖拽圆改变重叠度，直观理解集合运算'},
+  {file:'高中/函数性质实验室.html',title:'函数性质实验室',grade:'高中',topic:'函数',diff:'中',prio:'A',cogn:'比较',desc:'单调性/奇偶性/最值/零点高亮，拖动区间端点，动态揭示函数的各类性质'},
+  {file:'高中/单位圆三角函数.html',title:'单位圆三角函数',grade:'高中',topic:'三角函数',diff:'高',prio:'A',cogn:'变换',desc:'单位圆旋转角与正弦余弦波形实时联动，建立三角函数的几何直觉'},
+  {file:'高中/三角函数参数变化实验室.html',title:'三角函数参数变化实验室',grade:'高中',topic:'三角函数',diff:'高',prio:'A',cogn:'变换',desc:'A·sin(ωx+φ)+b的振幅、周期、相位三参数对波形的独立影响，滑杆实时观察'},
+  {file:'高中/导数切线动画.html',title:'导数切线动画',grade:'高中',topic:'导数',diff:'中',prio:'A',cogn:'逼近',desc:'割线趋近切线动画演示导数定义，直观理解瞬时变化率'},
+  {file:'高中/单调性与极值实验室.html',title:'单调性与极值实验室',grade:'高中',topic:'导数应用',diff:'高',prio:'A',cogn:'变换',desc:'原函数与导函数双图联动：f\'(x)>0单调递增，f\'(x)=0极值点，f\'(x)<0单调递减'},
+  {file:'高中/优化问题模拟器.html',title:'优化问题模拟器',grade:'高中',topic:'导数应用',diff:'高',prio:'A',cogn:'逼近',desc:'围栏/利润/体积三个优化场景，拖动参数观察目标函数最值，导数=0定位极值点'},
+  {file:'高中/向量加减投影.html',title:'向量加减与投影',grade:'高中',topic:'向量',diff:'中',prio:'A',cogn:'投影',desc:'拖拽箭头做向量加减，实时显示投影与分量，理解向量的几何与代数统一'},
+  {file:'高中/椭圆焦点定义实验室.html',title:'椭圆焦点定义实验室',grade:'高中',topic:'圆锥曲线',diff:'中',prio:'A',cogn:'变换',desc:'拖动椭圆上的点，实时验证到两焦点距离之和为常数2a，理解椭圆的本质定义'},
+  {file:'高中/抛物线焦点准线实验室.html',title:'抛物线焦点准线实验室',grade:'高中',topic:'圆锥曲线',diff:'高',prio:'A',cogn:'变换',desc:'抛物线上的点到焦点距离等于到准线距离，动态拖拽验证定义，调整p值观察曲线变化'},
+  {file:'高中/双曲线渐近线观察器.html',title:'双曲线渐近线观察器',grade:'高中',topic:'圆锥曲线',diff:'高',prio:'B',cogn:'变换',desc:'双曲线x²/a²-y²/b²=1与渐近线y=±(b/a)x，调整a/b观察曲线趋近渐近线的过程'},
+  {file:'高中/圆与直线位置关系实验室.html',title:'圆与直线位置关系实验室',grade:'高中',topic:'解析几何',diff:'中',prio:'A',cogn:'比较',desc:'圆与直线相交/相切/相离的判别，圆心到直线距离d与半径r的大小关系决定位置关系'},
+  {file:'高中/直线方程交互生成器.html',title:'直线方程交互生成器',grade:'高中',topic:'解析几何',diff:'中',prio:'A',cogn:'变换',desc:'点斜式/两点式/截距式三种直线方程形式联动，拖拽关键点实时更新方程'},
+  {file:'高中/复数平面旋转.html',title:'复数平面与旋转',grade:'高中',topic:'复数',diff:'中',prio:'A',cogn:'变换',desc:'拖动复数点，实时显示模和辐角，演示复数乘法=旋转+缩放的几何含义'},
+  {file:'高中/等差等比数列比较器.html',title:'等差等比数列比较器',grade:'高中',topic:'数列',diff:'中',prio:'A',cogn:'比较',desc:'并排对比等差与等比数列的点列、条形和公式，理解线性增长与指数增长的本质差异'},
+  {file:'高中/递推数列动画器.html',title:'递推数列动画器',grade:'高中',topic:'数列',diff:'中',prio:'A',cogn:'累积',desc:'递推数列a(n+1)=f(a(n))的蜘蛛网图，直观观察数列收敛/发散/振荡'},
+  {file:'高中/对数指数函数比较.html',title:'对数与指数函数',grade:'高中',topic:'函数',diff:'中',prio:'A',cogn:'比较',desc:'指数函数与对数函数互为反函数，关于y=x对称，动态调整底数观察图形变化'},
+  {file:'高中/指数增长衰减模拟器.html',title:'指数增长衰减模拟器',grade:'高中',topic:'指数函数',diff:'中',prio:'A',cogn:'比较',desc:'底数滑杆控制a^x，多情境建模：细胞分裂/放射衰变/复利，直观对比增长与衰减'},
+  {file:'高中/排列组合计数.html',title:'排列与组合',grade:'高中',topic:'排列组合',diff:'中',prio:'A',cogn:'分解',desc:'动态展示从n个中选r个的排列与组合过程，理解顺序有无的本质区别'},
+  {file:'高中/排列组合树状生成器.html',title:'排列组合树状生成器',grade:'高中',topic:'排列组合',diff:'中',prio:'A',cogn:'分解',desc:'分步展开树图计数，可视化排列vs组合的区别，选多少步乘多少个分支'},
+  {file:'高中/二项式定理展开.html',title:'二项式定理展开',grade:'高中',topic:'二项式定理',diff:'中',prio:'A',cogn:'分解',desc:'帕斯卡三角与二项展开系数的关系，动态展示(a+b)^n的展开项和系数规律'},
+  {file:'高中/古典概率模拟器.html',title:'古典概率模拟器',grade:'高中',topic:'概率',diff:'低',prio:'A',cogn:'模拟',desc:'等可能样本空间可视化：抛硬币、掷骰子、摸球实验，理论概率 vs 频率统计对比'},
+  {file:'高中/一元二次不等式图像解题器.html',title:'一元二次不等式图像解题器',grade:'高中',topic:'不等式',diff:'中',prio:'A',cogn:'变换',desc:'抛物线开口+x轴交点动态联动，高亮区间即解集，三种判别式情况全覆盖'},
+  {file:'高中/散点图与回归直线实验室.html',title:'散点图与回归直线实验室',grade:'高中',topic:'统计',diff:'中',prio:'A',cogn:'逼近',desc:'点击添加数据点，最小二乘回归直线实时更新，可视化残差平方和最小化原理'},
+  {file:'高中/函数式表图联动器.html',title:'函数式—表—图联动器',grade:'高中',topic:'函数',diff:'中',prio:'A',cogn:'变换',desc:'公式/值表/图像三联动，调节参数时三种表示同步更新，点击值表行高亮对应图像点'},
+  {file:'高中/立方体截面可视化工具.html',title:'立方体截面可视化工具',grade:'高中',topic:'立体几何',diff:'高',prio:'A',cogn:'分解',desc:'用平面切割正方体，动画展示6种截面形状（三角形到正六边形），理解截面形状与切割方式的关系'},
+  {file:'高中/点线面平行垂直实验室.html',title:'点线面平行垂直实验室',grade:'高中',topic:'立体几何',diff:'高',prio:'A',cogn:'变换',desc:'三维空间中点线面的平行与垂直关系可视化，拖动旋转棱柱，高亮展示6大空间关系定理'},
+  {file:'高中/三角恒等变换演示器.html',title:'三角恒等变换演示器',grade:'高中',topic:'三角函数',diff:'高',prio:'B',cogn:'变换',desc:'单位圆上动态演示加法公式、二倍角和辅助角公式，用线段长度直观理解三角恒等式'},
+  {file:'高中/三视图联动器.html',title:'三视图联动器',grade:'高中',topic:'立体几何',diff:'高',prio:'B',cogn:'变换',desc:'6种几何体的三维旋转与正视图/侧视图/俯视图实时联动，拖拽旋转立体感受三视图关系'},
+  {file:'高中/抽样误差可视化工具.html',title:'抽样误差可视化工具',grade:'高中',topic:'统计',diff:'中',prio:'B',cogn:'模拟',desc:'重复抽样模拟：样本均值分布的直方图与理论曲线σ/√n对比，直观理解抽样误差'},
+  {file:'高中/充分必要条件判断器.html',title:'充分必要条件判断器',grade:'高中',topic:'逻辑',diff:'中',prio:'C',cogn:'比较',desc:'8种命题示例，韦恩图展示P与Q的包含关系，表格显示P→Q和Q→P的真假，判断充分/必要/充要条件'},
+  {file:'高中/分段函数编辑器.html',title:'分段函数编辑器',grade:'高中',topic:'函数',diff:'中',prio:'B',cogn:'变换',desc:'可视化编辑分段函数的每段表达式和区间，实时绘图，理解端点开闭和连续性'},
+  {file:'高中/基本不等式面积模型.html',title:'基本不等式面积模型',grade:'高中',topic:'不等式',diff:'中',prio:'B',cogn:'比较',desc:'矩形面积模型直观展示AM-GM不等式：(a+b)/2≥√(ab)，等号当且仅当a=b成立'},
+  {file:'高中/幂函数同屏比较器.html',title:'幂函数同屏比较器',grade:'高中',topic:'函数',diff:'中',prio:'B',cogn:'比较',desc:'多条幂函数y=xⁿ同屏叠图比较，选择不同指数，理解正负整数和分数指数的图像特征'},
+  {file:'高中/弧度制转换器.html',title:'弧度制转换器',grade:'高中',topic:'三角函数',diff:'低',prio:'B',cogn:'变换',desc:'拖动角度，角度制与弧度制实时联动，弧长直观展示弧度的物理含义'},
+  {file:'高中/数列求和堆叠图工具.html',title:'数列求和堆叠图工具',grade:'高中',topic:'数列',diff:'中',prio:'B',cogn:'累积',desc:'前n项和Sn的条形堆叠图，直观理解等差/等比数列求和公式，点击查看每一项的贡献'},
+  {file:'高中/点到直线距离演示器.html',title:'点到直线距离演示器',grade:'高中',topic:'解析几何',diff:'中',prio:'B',cogn:'变换',desc:'拖动点和直线，实时计算点到直线距离，垂线动画高亮，公式d=|Ax₀+By₀+C|/√(A²+B²)可视化'},
+  // 大学
+  {file:'大学/ε-δ极限实验室.html',title:'ε-δ极限实验室',grade:'大学',topic:'极限',diff:'高',prio:'A',cogn:'逼近',desc:'拖动ε带宽度，自动求出δ并高亮验证，直观理解极限的严格ε-δ定义'},
+  {file:'大学/数列收敛发散对比器.html',title:'数列收敛发散对比器',grade:'大学',topic:'数列极限',diff:'中',prio:'A',cogn:'比较',desc:'多种数列动态生成点列，误差带ε收缩，直观感受收敛和发散的区别'},
+  {file:'大学/黎曼和逼近积分.html',title:'黎曼和逼近积分',grade:'大学',topic:'积分',diff:'中',prio:'A',cogn:'逼近',desc:'用左/右矩形逼近曲线下面积，理解定积分作为黎曼和极限的本质'},
+  {file:'大学/定积分累积量动画器.html',title:'定积分累积量动画器',grade:'大学',topic:'积分',diff:'高',prio:'A',cogn:'累积',desc:'双面板：上方f(x)的累积面积实时填充，下方F(x)=∫f(t)dt同步增长，体现微积分基本定理'},
+  {file:'大学/原函数导函数联动器.html',title:'原函数导函数联动器',grade:'大学',topic:'微积分',diff:'高',prio:'A',cogn:'变换',desc:'上图原函数F(x)，下图导函数f(x)，拖动x₀处的切线实时联动两图，体验FTC'},
+  {file:'大学/局部线性近似实验室.html',title:'局部线性近似实验室',grade:'大学',topic:'微分',diff:'中',prio:'A',cogn:'逼近',desc:'局部放大曲线直到切线与曲线无法区分，直观理解线性近似的精度与误差'},
+  {file:'大学/泰勒展开逼近实验室.html',title:'泰勒展开逼近实验室',grade:'大学',topic:'级数',diff:'高',prio:'A',cogn:'逼近',desc:'阶数滑杆动态增加多项式项，观察泰勒多项式如何逐步逼近原函数'},
+  {file:'大学/牛顿法迭代动画器.html',title:'牛顿法迭代动画器',grade:'大学',topic:'数值分析',diff:'中',prio:'A',cogn:'逼近',desc:'牛顿法求根：从初始点出发，切线与x轴的交点逐步逼近方程根'},
+  {file:'大学/微分方程方向场工具.html',title:'微分方程方向场工具',grade:'大学',topic:'微分方程',diff:'高',prio:'A',cogn:'模拟',desc:'dy/dx=f(x,y)的方向场可视化，点击设置初值画解曲线，理解ODE几何意义'},
+  {file:'大学/矩阵变换网格.html',title:'矩阵变换网格',grade:'大学',topic:'线性代数',diff:'中',prio:'A',cogn:'变换',desc:'2×2矩阵作用于平面网格，直观理解线性变换的几何含义'},
+  {file:'大学/向量与线性组合实验室.html',title:'向量与线性组合实验室',grade:'大学',topic:'线性代数',diff:'中',prio:'A',cogn:'累积',desc:'拖拽基向量和系数，可视化线性组合c₁v₁+c₂v₂的张成空间，理解线性相关与独立'},
+  {file:'大学/特征值特征向量实验室.html',title:'特征值特征向量实验室',grade:'大学',topic:'线性代数',diff:'高',prio:'A',cogn:'变换',desc:'矩阵变换后方向不变的向量=特征向量，伸缩比=特征值，动态旋转找特征方向'},
+  {file:'大学/正交投影与最小二乘实验室.html',title:'正交投影与最小二乘实验室',grade:'大学',topic:'线性代数',diff:'高',prio:'A',cogn:'逼近',desc:'b向列空间的正交投影=最小二乘解，残差向量⊥列空间，可视化Ax=b无解→Ax̂=b̂'},
+  {file:'大学/PCA几何直观实验室.html',title:'PCA几何直观实验室',grade:'大学',topic:'线性代数/统计',diff:'高',prio:'A',cogn:'变换',desc:'二维散点，拖动主成分方向，实时显示投影后方差，找到最大方差方向即PC1'},
+  {file:'大学/梯度与方向导数实验室.html',title:'梯度与方向导数实验室',grade:'大学',topic:'多元微积分',diff:'高',prio:'A',cogn:'变换',desc:'等高线图上拖动点，梯度箭头实时更新，方向导数随角度变化的极坐标图'},
+  {file:'大学/多元函数等高线联动器.html',title:'多元函数等高线联动器',grade:'大学',topic:'多元微积分',diff:'高',prio:'A',cogn:'变换',desc:'等高线热图+3D透视投影联动，拖动点观察截面，体现f(x,y)的几何意义'},
+  {file:'大学/拉格朗日乘数几何实验室.html',title:'拉格朗日乘数几何实验室',grade:'大学',topic:'多元优化',diff:'高',prio:'A',cogn:'逼近',desc:'等高线与约束曲线动态相切，拖动约束条件，直觉理解拉格朗日条件∇f=λ∇g'},
+  {file:'大学/梯度下降路径实验室.html',title:'梯度下降路径实验室',grade:'大学',topic:'优化',diff:'高',prio:'A',cogn:'逼近',desc:'在损失曲面上点击起点，动画展示梯度下降的路径，理解学习率与收敛的关系'},
+  {file:'大学/中心极限定理模拟器.html',title:'中心极限定理模拟器',grade:'大学',topic:'概率统计',diff:'高',prio:'A',cogn:'累积',desc:'重复抽样模拟CLT，任意分布的样本均值趋向正态分布'},
+  {file:'大学/正态分布面积概率工具.html',title:'正态分布面积概率工具',grade:'大学',topic:'概率统计',diff:'低',prio:'A',cogn:'累积',desc:'正态分布N(μ,σ²)的阴影面积即概率，调整μ/σ和区间实时计算P(a≤X≤b)'},
+  {file:'大学/常见分布参数实验室.html',title:'常见分布参数实验室',grade:'大学',topic:'概率统计',diff:'中',prio:'A',cogn:'比较',desc:'正态/泊松/二项/指数四种分布，调整参数实时观察PMF/PDF形态和统计特征'},
+  {file:'大学/条件概率与贝叶斯更新器.html',title:'条件概率与贝叶斯更新器',grade:'大学',topic:'概率统计',diff:'中',prio:'A',cogn:'累积',desc:'面积图可视化条件概率P(A|B)，贝叶斯定理动态更新先验到后验'},
+  {file:'大学/假设检验可视化器.html',title:'假设检验可视化器',grade:'大学',topic:'假设检验',diff:'高',prio:'A',cogn:'比较',desc:'采样分布+拒绝域阴影，拖动检验统计量感受p值，α=0.05/0.01切换，双侧/单侧切换'},
+  {file:'大学/置信区间覆盖率实验室.html',title:'置信区间覆盖率实验室',grade:'大学',topic:'统计推断',diff:'高',prio:'A',cogn:'累积',desc:'多次抽样可视化：每次画出95%置信区间，红色=未覆盖真实均值，覆盖率趋近95%'},
+  {file:'大学/图论最短路径动画器.html',title:'图论最短路径动画器',grade:'大学',topic:'图论',diff:'中',prio:'A',cogn:'模拟',desc:'BFS/Dijkstra动态逐步扩展，节点颜色显示访问状态，边权可调，最短路径高亮'},
+  {file:'大学/极坐标玫瑰曲线.html',title:'极坐标与玫瑰曲线',grade:'大学',topic:'极坐标',diff:'中',prio:'B',cogn:'变换',desc:'极坐标参数实时调整，玫瑰曲线/螺线等优美曲线动画绘制，理解极坐标与直角坐标的联系'},
+  {file:'大学/间断点分类展示器.html',title:'间断点分类展示器',grade:'大学',topic:'微积分',diff:'中',prio:'B',cogn:'比较',desc:'4类间断点（可去/跳跃/无穷/振荡）并排对比，空心/实心圆标注极限与函数值差异'},
+  {file:'大学/二分法区间收缩器.html',title:'二分法区间收缩器',grade:'大学',topic:'数值分析',diff:'中',prio:'B',cogn:'累积',desc:'逐步执行二分法求根，蓝色区间每步收缩一半，迭代表显示收敛过程，直观理解O((b-a)/2ⁿ)收敛率'},
+  {file:'大学/傅里叶级数波形分解器.html',title:'傅里叶级数波形分解器',grade:'大学',topic:'数学分析',diff:'高',prio:'B',cogn:'累积',desc:'方波/锯齿波/三角波的谐波叠加动画，N滑杆控制谐波数，观察吉布斯现象与逼近过程'},
+  {file:'大学/马尔可夫链状态转移模拟器.html',title:'马尔可夫链状态转移模拟器',grade:'大学',topic:'概率论',diff:'高',prio:'B',cogn:'模拟',desc:'状态转移图与分布柱状图联动，逐步或自动演化，观察状态分布如何趋向稳态'},
+  {file:'大学/熵与分布不确定性实验室.html',title:'熵与分布不确定性实验室',grade:'大学',topic:'概率论',diff:'中',prio:'B',cogn:'比较',desc:'拖动概率条直接改变分布，实时计算Shannon熵，直观理解均匀分布熵最大、确定分布熵为零'},
+  {file:'大学/向量场与流线实验室.html',title:'向量场与流线实验室',grade:'大学',topic:'多元微积分',diff:'高',prio:'B',cogn:'变换',desc:'8种经典向量场的粒子流线动画，速度决定颜色，直观感受源场/旋场/鞍场的几何结构'},
+  {file:'大学/树与递归可视化器.html',title:'树与递归可视化器',grade:'大学',topic:'离散数学',diff:'中',prio:'B',cogn:'累积',desc:'斐波那契/阶乘/归并排序/汉诺塔递归调用树逐层展开动画，节点颜色标识递归深度'},
+  {file:'大学/欧拉法Runge-Kutta对比器.html',title:'欧拉法/Runge-Kutta对比器',grade:'大学',topic:'常微分方程',diff:'高',prio:'B',cogn:'比较',desc:'Euler/Heun/RK4三方法解同一ODE的精度对比，步长滑杆调节，误差表量化差异'},
+  {file:'大学/高斯消元过程可视化.html',title:'高斯消元过程可视化',grade:'大学',topic:'线性代数',diff:'中',prio:'B',cogn:'变换',desc:'逐步执行高斯消元和回代，增广矩阵单元格颜色标识主元/消去行/归零元，理解消元本质'},
+  {file:'大学/旋转体体积生成器.html',title:'旋转体体积生成器',grade:'大学',topic:'微积分',diff:'高',prio:'B',cogn:'变换',desc:'函数绕x轴旋转生成3D旋转体，左图圆盘法矩形，右图3D透视渲染，拖拽观察旋转体结构'},
+  {file:'大学/级数部分和收敛器.html',title:'级数部分和收敛器',grade:'大学',topic:'数学分析',diff:'中',prio:'B',cogn:'累积',desc:'6种级数的部分和折线图，收敛级数趋向极限（绿虚线），发散级数趋向无穷，比较收敛速率'},
+  {file:'大学/阻尼振动模拟器.html',title:'阻尼振动模拟器',grade:'大学',topic:'常微分方程',diff:'高',prio:'B',cogn:'模拟',desc:'弹簧质量系统的欠阻尼/临界/过阻尼三种情况动画，参数k/c/m滑杆实时切换，包络线展示'},
+  {file:'大学/初值问题解曲线实验室.html',title:'初值问题解曲线实验室',grade:'大学',topic:'常微分方程',diff:'高',prio:'B',cogn:'变换',desc:'方向场背景上点击设置初值，RK4正反向积分画解曲线，多初值对比理解ODE解族结构'},
+  {file:'大学/散度旋度直观演示器.html',title:'散度旋度直观演示器',grade:'大学',topic:'多元微积分',diff:'高',prio:'B',cogn:'变换',desc:'散度用微元体积膨胀粒子动画，旋度用微元旋转粒子环，5种向量场实例直观展示'},
+  {file:'大学/向量空间张成器.html',title:'向量空间张成器',grade:'大学',topic:'线性代数',diff:'高',prio:'B',cogn:'变换',desc:'拖拽基向量端点改变方向，线性相关时span退化为直线，线性无关时蓝色填满整个平面'},
+  {file:'大学/对角化直觉演示器.html',title:'对角化直觉演示器',grade:'大学',topic:'线性代数',diff:'高',prio:'B',cogn:'变换',desc:'4种矩阵的特征方向与伸缩倍率动画，单位圆→变换椭圆，标准基→特征基坐标系对比'},
+  {file:'大学/Gram-Schmidt正交化动画.html',title:'Gram-Schmidt正交化动画',grade:'大学',topic:'线性代数',diff:'高',prio:'B',cogn:'变换',desc:'逐步动画展示投影→减法→归一化，4步揭示正交化过程，理解QR分解的几何核心'},
+  {file:'大学/二重积分区域剖分器.html',title:'二重积分区域剖分器',grade:'大学',topic:'多元微积分',diff:'高',prio:'B',cogn:'累积',desc:'矩形网格细分演示二重黎曼和，N×N柱体叠加，旋转角滑杆调整三维视角，误差实时显示'},
+];
+
+const GRADE_ORDER = {'小学':0,'初中':1,'高中':2,'大学':3};
+const COGN_ORDER = {'变换':0,'比较':1,'分解':2,'逼近':3,'累积':4,'缩放':5,'投影':6,'模拟':7};
+const DIFF_ORDER = {'低':0,'中':1,'高':2};
+
+let filters = {grade:'', diff:'', cogn:''};
+let sortBy = 'grade';
+let searchQuery = '';
+let activeFile = null;
+let viewMode = 'grid'; // 'grid' | 'sidebar'
+
+function setView(mode){
+  viewMode = mode;
+  document.body.classList.toggle('view-grid', mode === 'grid');
+  document.querySelectorAll('.view-btn').forEach(b=>b.classList.toggle('active', b.dataset.view === mode));
+  if(mode === 'grid'){ activeFile = null; }
+  render();
+}
+
+function openPreview(t){
+  if(viewMode === 'grid'){
+    window.open(t.file, '_blank');
+    return;
+  }
+  activeFile = t.file;
+  const isMobile = window.innerWidth <= 720;
+  if(isMobile){
+    document.getElementById('modalTitle').textContent = t.title;
+    document.getElementById('modalNewTab').href = t.file;
+    document.getElementById('modalFrame').src = t.file;
+    document.getElementById('previewModal').classList.add('open');
+  } else {
+    document.getElementById('previewTitle').textContent = t.title;
+    document.getElementById('previewNewTab').href = t.file;
+    const tagsEl = document.getElementById('previewTags');
+    tagsEl.innerHTML = `<span class="tag tag-grade-${t.grade}" style="font-size:10px;padding:2px 7px;border-radius:10px;">${t.grade}</span>
+      <span class="tag tag-diff-${t.diff}" style="font-size:10px;padding:2px 7px;border-radius:10px;">难度${t.diff}</span>`;
+    const loader = document.getElementById('previewLoader');
+    const frame = document.getElementById('previewFrame');
+    loader.classList.remove('hidden');
+    frame.onload = ()=>{ loader.classList.add('hidden'); };
+    frame.src = t.file;
+    document.getElementById('previewEmpty').style.display = 'none';
+    document.getElementById('previewActive').style.display = 'flex';
+  }
+  render();
+}
+
+function closeModal(){
+  document.getElementById('previewModal').classList.remove('open');
+  document.getElementById('modalFrame').src = '';
+}
+
+// Default to grid view on load
+document.body.classList.add('view-grid');
+
+function render(){
+  let items = TOOLS.filter(t=>{
+    if(filters.grade && t.grade !== filters.grade) return false;
+    if(filters.diff && t.diff !== filters.diff) return false;
+    if(filters.cogn && t.cogn !== filters.cogn) return false;
+    if(searchQuery){
+      const q = searchQuery.toLowerCase();
+      if(!t.title.toLowerCase().includes(q) && !t.desc.toLowerCase().includes(q) && !t.topic.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  if(sortBy === 'grade'){
+    items.sort((a,b)=>(GRADE_ORDER[a.grade]||0)-(GRADE_ORDER[b.grade]||0) || a.title.localeCompare(b.title,'zh'));
+  } else if(sortBy === 'prio'){
+    items.sort((a,b)=>a.prio.localeCompare(b.prio)||a.title.localeCompare(b.title,'zh'));
+  } else if(sortBy === 'cogn'){
+    items.sort((a,b)=>(COGN_ORDER[a.cogn]||9)-(COGN_ORDER[b.cogn]||9)||a.title.localeCompare(b.title,'zh'));
+  } else {
+    items.sort((a,b)=>a.title.localeCompare(b.title,'zh'));
+  }
+
+  const grid = document.getElementById('grid');
+  const noRes = document.getElementById('noResults');
+  const info = document.getElementById('resultsInfo');
+  info.textContent = `显示 ${items.length} / ${TOOLS.length} 个工具`;
+  document.getElementById('countBadge').textContent = TOOLS.length + '个工具';
+
+  if(items.length === 0){
+    grid.innerHTML = '';
+    noRes.style.display = 'block';
+    return;
+  }
+  noRes.style.display = 'none';
+
+  // Group by section if sorting by grade or cogn
+  let html = '';
+  let lastGroup = null;
+
+  items.forEach(t=>{
+    let group = sortBy==='grade'?t.grade : sortBy==='cogn'?t.cogn : null;
+    if(group && group !== lastGroup){
+      lastGroup = group;
+      const groupLabel = sortBy==='grade' ? `${group}（${items.filter(x=>x.grade===group).length}个）` : `认知：${group}`;
+      html += `<div><div class="section-header">${groupLabel}</div></div>`;
+    }
+    const diffClass = `tag-diff-${t.diff}`;
+    const gradeClass = `tag-grade-${t.grade}`;
+    const isSelected = t.file === activeFile;
+    html += `
+      <div class="card${isSelected?' selected':''}" data-file="${t.file}" onclick="openPreview(${JSON.stringify(t).replace(/"/g,'&quot;')})">
+        <div class="thumb">
+          <div class="thumb-ph">加载预览…</div>
+          <iframe data-src="${t.file}" scrolling="no" tabindex="-1"></iframe>
+        </div>
+        <div class="card-body">
+          <div class="card-header">
+            <div class="card-title">${t.title}</div>
+            <div class="card-actions">
+              <span class="card-prio prio-${t.prio}">优先${t.prio}</span>
+              <a class="card-open-btn" href="${t.file}" target="_blank" onclick="event.stopPropagation()" title="新标签打开">↗</a>
+            </div>
+          </div>
+          <div class="card-desc">${t.desc}</div>
+          <div class="card-tags">
+            <span class="tag ${gradeClass}">${t.grade}</span>
+            <span class="tag tag-topic">${t.topic}</span>
+            <span class="tag ${diffClass}">难度${t.diff}</span>
+            <span class="tag tag-cogn">🧠${t.cogn}</span>
+          </div>
+        </div>
+      </div>`;
+  });
+  grid.innerHTML = html;
+  requestAnimationFrame(()=>{ updateThumbScales(); initThumbObserver(); });
+}
+
+// ── Thumbnail lazy-load + scale ──
+let thumbObserver = null;
+
+function updateThumbScales(){
+  document.querySelectorAll('.thumb').forEach(t=>{
+    const scale = (t.offsetWidth / 800).toFixed(4);
+    t.style.setProperty('--ts', scale);
+  });
+}
+
+function initThumbObserver(){
+  if(thumbObserver) thumbObserver.disconnect();
+  thumbObserver = new IntersectionObserver(entries=>{
+    entries.forEach(e=>{
+      if(!e.isIntersecting) return;
+      const iframe = e.target;
+      if(iframe.dataset.src){
+        iframe.src = iframe.dataset.src;
+        delete iframe.dataset.src;
+        iframe.onload = ()=>{
+          const ph = iframe.previousElementSibling;
+          if(ph && ph.classList.contains('thumb-ph')) ph.style.display='none';
+        };
+      }
+      thumbObserver.unobserve(iframe);
+    });
+  },{rootMargin:'400px'});
+  document.querySelectorAll('.thumb iframe[data-src]').forEach(f=>thumbObserver.observe(f));
+}
+
+window.addEventListener('resize', updateThumbScales);
+
+// Filter buttons
+document.querySelectorAll('.filter-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const group = btn.dataset.group;
+    const value = btn.dataset.value;
+    document.querySelectorAll(`.filter-btn[data-group="${group}"]`).forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    filters[group] = value;
+    render();
+  });
+});
+
+// Sort buttons
+document.querySelectorAll('.sort-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.sort-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    sortBy = btn.dataset.sort;
+    render();
+  });
+});
+
+// Search
+document.getElementById('searchInput').addEventListener('input',e=>{
+  searchQuery = e.target.value.trim();
+  render();
+});
+
+render();
+requestAnimationFrame(()=>{ updateThumbScales(); initThumbObserver(); });
+</script>
+</body>
+</html>

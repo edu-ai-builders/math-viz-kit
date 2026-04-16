@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>平均分与除法 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="除法">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="A">
+  <meta name="cognitive" content="分解">
+  <meta name="desc" content="动画演示糖果平均分组，理解除法是等分的过程">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;
+      --blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;
+      --teal:#0f6e56;--teal-light:#e1f5ee;
+      --amber:#854f0b;--amber-light:#faeeda;
+      --radius:12px;--radius-sm:8px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:700px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:700px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:6px;}
+    .sl-label{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .problem{background:var(--blue-light);border:2px solid var(--blue);border-radius:var(--radius);padding:14px 18px;text-align:center;font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    canvas{width:100%;height:320px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .btn{padding:12px;border:none;border-radius:var(--radius);font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;transition:all .2s;}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-primary:hover{background:var(--blue-dark);}
+    .btn-secondary{background:var(--surface);color:var(--blue);border:2px solid var(--blue);}
+    .btn-secondary:hover{background:var(--blue-light);}
+    .answer{background:var(--teal-light);border:2px solid var(--teal);border-radius:var(--radius);padding:14px 18px;text-align:center;font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--teal);opacity:0;transition:opacity .5s;}
+    .answer.show{opacity:1;}
+    .fb{background:var(--amber-light);border-left:4px solid var(--amber);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;opacity:0;transition:opacity .5s;}
+    .fb.show{opacity:1;}
+    @media(max-width:500px){.controls{grid-template-columns:1fr;}.btns{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 除法 · 认知动作：分解</div>
+  <h1>平均分与除法</h1>
+  <p class="sub">把糖果平均分给小朋友，看分的过程，理解除法的含义</p>
+</header>
+<main>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-label">🍬 糖果总数</div>
+      <div class="sl-val" id="totalVal">12</div>
+      <input type="range" id="totalSl" min="2" max="24" value="12">
+    </div>
+    <div class="sl-row">
+      <div class="sl-label">👧 小朋友人数</div>
+      <div class="sl-val" id="groupVal">3</div>
+      <input type="range" id="groupSl" min="2" max="6" value="3">
+    </div>
+  </div>
+  <div class="problem" id="problem">12 ÷ 3 = ?</div>
+  <canvas id="cvs"></canvas>
+  <div class="btns">
+    <button class="btn btn-primary" id="animBtn" onclick="startDistribute()">▶ 开始分糖果</button>
+    <button class="btn btn-secondary" onclick="resetAll()">重置</button>
+  </div>
+  <div class="answer" id="answer"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+// ── 0. 教学法标注 ────────────────────────────────────
+// 认知动作：分解
+// V1 动态跃迁：糖果逐个飞入各碗，分配过程可见，静态图无法做到
+// V3 分步揭示：每轮分一颗，答案最后揭示
+// V5 操作先于符号：先看动画分糖，再显示除法算式
+// V6 动作-数学一致：糖果向碗方向移动 = 数量归属
+// V7 单一认知动作：只做"分解"（等分）
+// V8 概念反馈：揭示"除法=把总量平均分成几份，每份多少"
+
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',amberL:'#faeeda',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let total=12,groups=3,distributed=0,animId=null;
+// Bowl counts
+let bowls=[];
+// Candy positions (for animation)
+let flyingCandy=null;
+
+// Colors for groups
+const groupColors=['#2a5c8f','#0f6e56','#854f0b','#7b3fa0','#b84040','#1a7a8a'];
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=320*dpr; ctx.scale(dpr,dpr); cvs.style.height='320px';
+}
+
+function bowlPositions(W,H){
+  const positions=[];
+  const bowlY=H-70;
+  for(let i=0;i<groups;i++){
+    positions.push({x:W*(i+1)/(groups+1), y:bowlY});
+  }
+  return positions;
+}
+
+function candySourcePos(W){
+  return {x:W/2, y:30};
+}
+
+function drawBowl(x,y,count,color,idx){
+  const w=50,h=28;
+  // Bowl shape
+  ctx.fillStyle=color+'33';
+  ctx.strokeStyle=color; ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.ellipse(x,y,w/2,h/2,0,0,Math.PI);
+  ctx.fill(); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x-w/2,y); ctx.lineTo(x+w/2,y); ctx.stroke();
+  // Person emoji approximation
+  ctx.fillStyle=C.ink; ctx.font=`20px serif`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('👧',x,y-h/2-4);
+  // Count badge
+  ctx.fillStyle=color; ctx.font=`bold 18px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(count,x,y+h*0.2);
+  // Person label
+  ctx.fillStyle=C.ink2; ctx.font=`11px 'Noto Sans SC',sans-serif`;
+  ctx.fillText(`第${idx+1}人`,x,y+35);
+}
+
+function drawCandy(x,y,color,size=14,alpha=1){
+  ctx.save(); ctx.globalAlpha=alpha;
+  ctx.fillStyle=color;
+  ctx.beginPath(); ctx.arc(x,y,size,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.4)';
+  ctx.beginPath(); ctx.arc(x-size*0.25,y-size*0.25,size*0.3,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(x,y,size,0,Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawCandyStack(x,y,count,color){
+  const perRow=5, itemSize=11, gap=3;
+  let drawn=0;
+  for(let r=0;r<Math.ceil(count/perRow);r++){
+    for(let c=0;c<perRow&&drawn<count;c++,drawn++){
+      drawCandy(x-perRow*(itemSize+gap)/2+c*(itemSize+gap)+itemSize,y-r*(itemSize+gap*1.5)-itemSize,color,itemSize);
+    }
+  }
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=320;
+  ctx.clearRect(0,0,W,H);
+
+  const bps=bowlPositions(W,H);
+  const src=candySourcePos(W);
+  const remaining=total-distributed;
+
+  // Title
+  ctx.fillStyle=C.ink2; ctx.font=`13px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='top';
+  const round=distributed===0?0:Math.floor((distributed-1)/groups)+1;
+  const totalRounds=Math.ceil(total/groups);
+  if(distributed>0&&distributed<total) ctx.fillText(`第 ${round}/${totalRounds} 轮分配`,W/2,6);
+  else if(distributed===0) ctx.fillText('糖果堆好了，点"开始分糖果"',W/2,6);
+  else ctx.fillText('全部分完！',W/2,6);
+
+  // Candy pile at top
+  if(remaining>0) {
+    const pileX=W/2, pileY=src.y+20;
+    ctx.fillStyle=C.ink2; ctx.font=`bold 13px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(`剩余 ${remaining} 颗`,pileX,pileY-5);
+    drawCandyStack(pileX,pileY+18,Math.min(remaining,15),C.amber);
+    if(remaining>15){
+      ctx.fillStyle=C.amber; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='top';
+      ctx.fillText(`+${remaining-15}`,pileX,pileY+42);
+    }
+  }
+
+  // Bowls
+  bps.forEach((pos,i)=>{
+    drawBowl(pos.x,pos.y,bowls[i]||0,groupColors[i%groupColors.length],i);
+  });
+
+  // Flying candy animation
+  if(flyingCandy) {
+    const {x,y,color}=flyingCandy;
+    drawCandy(x,y,color,13,0.9);
+  }
+}
+
+function startDistribute(){
+  if(animId) return;
+  if(distributed>=total){resetAll();return;}
+  document.getElementById('animBtn').disabled=true;
+  document.getElementById('animBtn').textContent='分配中…';
+  distributeNext();
+}
+
+function distributeNext(){
+  if(distributed>=total) {onDone();return;}
+  const W=cvs.getBoundingClientRect().width, H=320;
+  const bps=bowlPositions(W,H);
+  const src={x:W/2,y:50};
+  const targetGroup=distributed%groups;
+  const target=bps[targetGroup];
+  const dur=400, st=performance.now();
+
+  function tick(now){
+    const p=Math.min(1,(now-st)/dur);
+    const ease=1-Math.pow(1-p,2);
+    const x=src.x+(target.x-src.x)*ease;
+    const y=src.y+(target.y-src.y)*ease-Math.sin(p*Math.PI)*40;
+    flyingCandy={x,y,color:groupColors[targetGroup%groupColors.length]};
+    draw();
+    if(p<1) animId=requestAnimationFrame(tick);
+    else {
+      flyingCandy=null;
+      bowls[targetGroup]=(bowls[targetGroup]||0)+1;
+      distributed++;
+      draw();
+      const delay=total<=12?250:total<=20?180:120;
+      animId=setTimeout(distributeNext,delay);
+    }
+  }
+  animId=requestAnimationFrame(tick);
+}
+
+function onDone(){
+  animId=null;
+  const quo=Math.floor(total/groups), rem=total%groups;
+  const ans=document.getElementById('answer'), fb=document.getElementById('fb');
+  // PEDAGOGY V5: equation shows only after animation
+  ans.textContent=rem===0?`${total} ÷ ${groups} = ${quo}`:`${total} ÷ ${groups} = ${quo} ……余 ${rem}`;
+  ans.classList.add('show');
+  // PEDAGOGY V8: reveals mathematical meaning
+  if(rem===0) {
+    fb.innerHTML=`你把 <strong>${total}</strong> 颗糖平均分给了 <strong>${groups}</strong> 人，每人得到 <strong>${quo}</strong> 颗。<br>除法的含义就是：把总量平均分成几份，每份是多少。<br><strong>${total} ÷ ${groups} = ${quo}</strong>，可以用乘法验算：${groups} × ${quo} = ${total}。`;
+  } else {
+    fb.innerHTML=`你把 <strong>${total}</strong> 颗糖尽量平均分给了 <strong>${groups}</strong> 人，每人得到 <strong>${quo}</strong> 颗，还剩 <strong>${rem}</strong> 颗分不下去（这叫余数）。<br><strong>${total} ÷ ${groups} = ${quo} 余 ${rem}</strong>`;
+  }
+  fb.classList.add('show');
+  document.getElementById('animBtn').textContent='重新分配';
+  document.getElementById('animBtn').disabled=false;
+}
+
+function resetAll(){
+  if(animId){clearTimeout(animId);cancelAnimationFrame(animId);animId=null;}
+  distributed=0; bowls=new Array(groups).fill(0); flyingCandy=null;
+  document.getElementById('answer').classList.remove('show');
+  document.getElementById('fb').classList.remove('show');
+  document.getElementById('animBtn').textContent='▶ 开始分糖果';
+  document.getElementById('animBtn').disabled=false;
+  draw();
+}
+
+function updateParams(){
+  total=parseInt(document.getElementById('totalSl').value);
+  groups=parseInt(document.getElementById('groupSl').value);
+  document.getElementById('totalVal').textContent=total;
+  document.getElementById('groupVal').textContent=groups;
+  document.getElementById('problem').textContent=`${total} ÷ ${groups} = ?`;
+  resetAll();
+}
+
+document.getElementById('totalSl').addEventListener('input',updateParams);
+document.getElementById('groupSl').addEventListener('input',updateParams);
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>有余数除法 · 数学可视化</title>
+  <meta name="grade" content="小学">
+  <meta name="topic" content="除法">
+  <meta name="difficulty" content="低">
+  <meta name="priority" content="B">
+  <meta name="cognitive" content="分解">
+  <meta name="desc" content="动画演示带余数的分组过程，理解余数的含义">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f7f6f2;--surface:#fff;--ink:#1a1814;--ink2:#6b6860;--ink3:#a8a69f;--border:#e4e2da;--blue:#2a5c8f;--blue-light:#e8f0f8;--blue-dark:#0c447c;--teal:#0f6e56;--teal-light:#e1f5ee;--amber:#854f0b;--amber-light:#faeeda;--radius:12px;--radius-sm:8px;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);font-family:'Noto Sans SC',sans-serif;color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    header{width:100%;max-width:680px;padding:24px 24px 0;}
+    .badge{font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 12px;display:inline-block;margin-bottom:8px;}
+    h1{font-size:22px;font-weight:700;}
+    .sub{font-size:13px;color:var(--ink2);margin-top:4px;}
+    main{width:100%;max-width:680px;padding:16px 24px 32px;display:flex;flex-direction:column;gap:12px;}
+    .controls{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .sl-row{display:flex;flex-direction:column;gap:6px;}
+    .sl-label{font-size:13px;color:var(--ink2);}
+    .sl-val{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    input[type=range]{accent-color:var(--blue);cursor:pointer;width:100%;}
+    .problem{background:var(--blue-light);border:2px solid var(--blue);border-radius:var(--radius);padding:12px 18px;text-align:center;font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--blue);}
+    canvas{width:100%;height:280px;display:block;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);}
+    .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .btn{padding:12px;border:none;border-radius:var(--radius);font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;transition:all .2s;}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-primary:hover{background:var(--blue-dark);}
+    .btn-secondary{background:var(--surface);color:var(--blue);border:2px solid var(--blue);}
+    .btn-secondary:hover{background:var(--blue-light);}
+    .result{background:var(--amber-light);border:2px solid var(--amber);border-radius:var(--radius);padding:12px 18px;text-align:center;font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--amber);opacity:0;transition:opacity .5s;}
+    .result.show{opacity:1;}
+    .fb{background:var(--teal-light);border-left:4px solid var(--teal);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;line-height:1.7;opacity:0;transition:opacity .5s;}
+    .fb.show{opacity:1;}
+    @media(max-width:500px){.controls{grid-template-columns:1fr;}.btns{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="badge">小学 · 除法 · 有余数</div>
+  <h1>有余数除法</h1>
+  <p class="sub">把积木分组，看"分不完"剩下的是什么——余数</p>
+</header>
+<main>
+  <div class="controls">
+    <div class="sl-row">
+      <div class="sl-label">🧱 积木总数</div>
+      <div class="sl-val" id="totalV">13</div>
+      <input type="range" id="totalSl" min="3" max="30" value="13">
+    </div>
+    <div class="sl-row">
+      <div class="sl-label">📦 每组几个</div>
+      <div class="sl-val" id="groupV">4</div>
+      <input type="range" id="groupSl" min="2" max="9" value="4">
+    </div>
+  </div>
+  <div class="problem" id="problem">13 ÷ 4 = ?</div>
+  <canvas id="cvs"></canvas>
+  <div class="btns">
+    <button class="btn btn-primary" id="animBtn" onclick="startAnim()">▶ 开始分组</button>
+    <button class="btn btn-secondary" onclick="resetAll()">重置</button>
+  </div>
+  <div class="result" id="result"></div>
+  <div class="fb" id="fb"></div>
+</main>
+<script>
+const cvs=document.getElementById('cvs');
+const ctx=cvs.getContext('2d');
+const C={blue:'#2a5c8f',blueL:'#e8f0f8',teal:'#0f6e56',tealL:'#e1f5ee',amber:'#854f0b',amberL:'#faeeda',ink:'#1a1814',ink2:'#6b6860',ink3:'#a8a69f',border:'#e4e2da',bg:'#f7f6f2',surf:'#fff'};
+
+let total=13,groupSize=4,placed=0,animId=null;
+const BS=28, GAP=4;
+
+function setup(){
+  const r=cvs.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  cvs.width=r.width*dpr; cvs.height=280*dpr; ctx.scale(dpr,dpr); cvs.style.height='280px';
+}
+
+function draw(){
+  const W=cvs.getBoundingClientRect().width, H=280;
+  ctx.clearRect(0,0,W,H);
+  const quotient=Math.floor(total/groupSize), remainder=total%groupSize;
+  const numFullGroups=Math.floor(placed/groupSize);
+  const inCurrentGroup=placed%groupSize;
+  const isRemainder=(placed>quotient*groupSize);
+
+  // Draw complete groups
+  const groupW=groupSize*(BS+GAP)-GAP+12;
+  const startX=20, groupY=50;
+
+  for(let g=0;g<=numFullGroups;g++){
+    const isComplete=(g<numFullGroups)||(placed>=total&&g===numFullGroups&&remainder===0);
+    const gx=startX+g*(groupW+16);
+    // Group box
+    ctx.fillStyle=isComplete?C.blueL:C.bg;
+    ctx.strokeStyle=isComplete?C.blue:C.border; ctx.lineWidth=isComplete?2:1;
+    const blocksInGroup=g<numFullGroups?groupSize:inCurrentGroup;
+    const bh=(blocksInGroup>0||isComplete)?BS+8:20;
+    ctx.beginPath(); ctx.roundRect(gx-6,groupY-8,groupW+12,BS+24,6); ctx.fill(); ctx.stroke();
+    // Group label
+    ctx.fillStyle=isComplete?C.blue:C.ink3; ctx.font=`11px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(`第${g+1}组`,gx+groupW/2-6,groupY-10);
+    // Blocks in group
+    for(let b=0;b<groupSize;b++){
+      const bx=gx+b*(BS+GAP);
+      if((g<numFullGroups)||(g===numFullGroups&&b<inCurrentGroup)) {
+        ctx.fillStyle=C.blue; ctx.strokeStyle='rgba(0,0,0,0.1)'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.roundRect(bx,groupY,BS,BS,4); ctx.fill(); ctx.stroke();
+      } else {
+        ctx.fillStyle=C.bg; ctx.strokeStyle=C.border; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.roundRect(bx,groupY,BS,BS,4); ctx.fill(); ctx.stroke();
+        ctx.fillStyle=C.ink3; ctx.font=`10px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(`${b+1}`,bx+BS/2,groupY+BS/2);
+      }
+    }
+  }
+
+  // Remainder box (if any and placed is done)
+  if(placed>=quotient*groupSize&&remainder>0){
+    const remX=startX+quotient*(groupW+16);
+    const remPlaced=Math.min(placed-quotient*groupSize,remainder);
+    ctx.fillStyle=C.amberL; ctx.strokeStyle=C.amber; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.roundRect(remX-6,groupY-8,remainder*(BS+GAP)+6,BS+24,6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=C.amber; ctx.font=`11px 'Noto Sans SC',sans-serif`; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText('余数',remX+(remainder*(BS+GAP))/2-GAP/2,groupY-10);
+    for(let b=0;b<remainder;b++){
+      const bx=remX+b*(BS+GAP);
+      if(b<remPlaced){
+        ctx.fillStyle=C.amber; ctx.strokeStyle='rgba(0,0,0,0.1)'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.roundRect(bx,groupY,BS,BS,4); ctx.fill(); ctx.stroke();
+      } else {
+        ctx.fillStyle=C.bg; ctx.strokeStyle=C.border+'88'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.roundRect(bx,groupY,BS,BS,4); ctx.fill(); ctx.stroke();
+      }
+    }
+  }
+
+  // Source pile
+  const srcY=160;
+  const remaining=total-placed;
+  if(remaining>0){
+    ctx.fillStyle=C.ink2; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='left'; ctx.textBaseline='bottom';
+    ctx.fillText(`待分配：${remaining} 个`,20,srcY-4);
+    const perRow=10;
+    for(let i=0;i<Math.min(remaining,20);i++){
+      const bx=20+(i%perRow)*(BS+GAP), by=srcY+Math.floor(i/perRow)*(BS+GAP);
+      ctx.fillStyle=C.ink3; ctx.strokeStyle=C.border; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.roundRect(bx,by,BS,BS,4); ctx.fill(); ctx.stroke();
+    }
+    if(remaining>20){
+      ctx.fillStyle=C.ink3; ctx.font=`12px 'Noto Sans SC',sans-serif`; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText(`+${remaining-20}`,20+(10)*(BS+GAP),srcY+BS/2);
+    }
+  }
+
+  // Progress text
+  if(placed>0&&placed<=total){
+    ctx.fillStyle=C.blue; ctx.font=`bold 13px 'JetBrains Mono',monospace`; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(`已分 ${placed}/${total}`,W/2,H-22);
+  }
+}
+
+function startAnim(){
+  if(animId)return;
+  if(placed>=total){resetAll();return;}
+  document.getElementById('animBtn').disabled=true;
+  document.getElementById('animBtn').textContent='分组中…';
+  const quota=Math.floor(total/groupSize), rem=total%groupSize;
+  const interval=Math.max(60,180-total*2);
+  function tick(){
+    placed=Math.min(placed+1,total);
+    draw();
+    if(placed<total) animId=setTimeout(tick,interval);
+    else { animId=null; onDone(); }
+  }
+  animId=setTimeout(tick,100);
+}
+
+function onDone(){
+  const q=Math.floor(total/groupSize), r=total%groupSize;
+  const res=document.getElementById('result'), fb=document.getElementById('fb');
+  res.textContent=r===0?`${total} ÷ ${groupSize} = ${q}`:`${total} ÷ ${groupSize} = ${q} ……余 ${r}`;
+  res.classList.add('show');
+  if(r===0){
+    fb.innerHTML=`正好分完！${total} 个积木分成 <strong>${q}</strong> 组，每组 <strong>${groupSize}</strong> 个，<strong>没有剩余</strong>。<br>验算：${groupSize} × ${q} = ${total} ✓`;
+  } else {
+    fb.innerHTML=`分成了 <strong>${q}</strong> 组，每组 <strong>${groupSize}</strong> 个，还剩 <strong>${r}</strong> 个分不下去，这就是<strong>余数</strong>。<br>验算：${groupSize} × ${q} + ${r} = ${groupSize*q} + ${r} = ${total} ✓<br>余数 ${r} < 除数 ${groupSize}（余数一定比除数小！）`;
+  }
+  fb.classList.add('show');
+  document.getElementById('animBtn').textContent='重新分组';
+  document.getElementById('animBtn').disabled=false;
+}
+
+function resetAll(){
+  if(animId){clearTimeout(animId);animId=null;}
+  placed=0;
+  document.getElementById('result').classList.remove('show');
+  document.getElementById('fb').classList.remove('show');
+  document.getElementById('animBtn').textContent='▶ 开始分组';
+  document.getElementById('animBtn').disabled=false;
+  draw();
+}
+
+function update(){
+  total=parseInt(document.getElementById('totalSl').value);
+  groupSize=parseInt(document.getElementById('groupSl').value);
+  document.getElementById('totalV').textContent=total;
+  document.getElementById('groupV').textContent=groupSize;
+  document.getElementById('problem').textContent=`${total} ÷ ${groupSize} = ?`;
+  resetAll();
+}
+
+document.getElementById('totalSl').addEventListener('input',update);
+document.getElementById('groupSl').addEventListener('input',update);
+window.addEventListener('resize',()=>{setup();draw();});
+setup(); draw();
+</script>
+</body>
+</html>
